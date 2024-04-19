@@ -1,6 +1,8 @@
-# Dojo Subnet Web API
+# Dojo Subnet API
 
-Repository for our Dojo Subnet web interface API. 
+Repository for our Dojo Subnet APIs.
+
+This mainly consists of our authentication services, and human task services.
 
 ## Features
 
@@ -16,7 +18,17 @@ Repository for our Dojo Subnet web interface API.
 
 ## Run Locally
 
-Clone the project
+Currently the repo is structured to house multiple microservices, where each of the microservices' `main` functions are in `/cmd/service_name/main.go`
+
+### To run auth service
+```bash
+go run /cmd/auth/main.go
+```
+
+### To run task service
+```bash
+go run /cmd/task/main.go
+```
 
 ## Deploy to Production
 
