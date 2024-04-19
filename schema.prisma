@@ -1,0 +1,92 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+generator db {
+    provider = "go run github.com/steebchen/prisma-client-go"
+}
+
+model ExternalUser {
+    id         String   @id @default(cuid())
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+    name       String
+    email      String
+    isVerified Boolean  @default(false)
+}
+
+enum NetworkUserType {
+    MINER
+    VALIDATOR
+}
+
+model NetworkUser {
+    id          String          @id @default(cuid())
+    createdAt   DateTime        @default(now())
+    updatedAt   DateTime        @updatedAt
+    coldkey     String
+    hotkey      String
+    apiKey      String
+    keyExpireAt DateTime
+    ipAddress   String
+    userType    NetworkUserType
+    isVerified  Boolean
+    tasks       Task[]
+}
+
+enum TaskStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    EXPIRED
+}
+
+enum TaskModality {
+    CODE_GENERATION
+    CONVERSATION
+    TEXT_TO_IMAGE
+}
+
+model Task {
+    id            String       @id @default(cuid())
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+    title         String
+    body          String
+    modality      TaskModality
+    expireAt      DateTime
+    criteria      Json
+    taskData      Json
+    status        TaskStatus
+    maxResults    Int
+    taskResults   TaskResult[]
+    NetworkUser   NetworkUser? @relation(fields: [networkUserId], references: [id])
+    networkUserId String?
+}
+
+enum ResultStatus {
+    PENDING
+    COMPLETED
+}
+
+model TaskResult {
+    id           String       @id @default(cuid())
+    createdAt    DateTime     @default(now())
+    updatedAt    DateTime     @updatedAt
+    status       ResultStatus
+    resultData   Json
+    Task         Task         @relation(fields: [taskId], references: [id])
+    taskId       String
+    DojoWorker   DojoWorker   @relation(fields: [dojoWorkerId], references: [id])
+    dojoWorkerId String
+}
+
+model DojoWorker {
+    id            String       @id @default(cuid())
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+    walletAddress String
+    chainId       String
+    taskResults   TaskResult[]
+}

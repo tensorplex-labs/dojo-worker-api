@@ -13,10 +13,19 @@ This mainly consists of our authentication services, and human task services.
 
 ## Tech Stack
 
-**Server:** Tech4, Tech5, Tech6
+**Server:**
+- Gin for web
+- Zerolog for logging
+- Prisma Go ORM
 
 
 ## Run Locally
+
+```bash
+# setup local db
+go run github.com/steebchen/prisma-client-go generate
+go run github.com/steebchen/prisma-client-go db push
+```
 
 Currently the repo is structured to house multiple microservices, where each of the microservices' `main` functions are in `/cmd/service_name/main.go`
 
