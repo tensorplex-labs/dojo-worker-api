@@ -34,10 +34,10 @@ func GetValidatorMinStake() int {
 
 // TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
-	SubnetId         int
-	ValidatorHotkeys []string
-	MinerHotkeys     []string
-	AxonInfos        []AxonInfo
+	SubnetId               int
+	ActiveValidatorHotkeys []string
+	ActiveMinerHotkeys     []string
+	ActiveAxonInfos        []AxonInfo
 }
 
 type GlobalState struct {
@@ -58,6 +58,37 @@ func NewSubnetStateSubscriber() *SubnetStateSubscriber {
 	}
 }
 
+func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
+	if hotkey == "" {
+		log.Fatal().Msg("Hotkey is empty, cannot remove from active validators/miners/axons")
+		return
+	}
+
+	// clear from active validators if found
+	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+		if hotkey == vhotkey {
+			s.SubnetState.ActiveValidatorHotkeys = append(s.SubnetState.ActiveValidatorHotkeys[:i], s.SubnetState.ActiveValidatorHotkeys[i+1:]...)
+			break
+		}
+	}
+
+	// clear from active miners if found
+	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+		if hotkey == mhotkey {
+			s.SubnetState.ActiveMinerHotkeys = append(s.SubnetState.ActiveMinerHotkeys[:i], s.SubnetState.ActiveMinerHotkeys[i+1:]...)
+			break
+		}
+	}
+
+	// clear from axon infos
+	for i, axonInfo := range s.SubnetState.ActiveAxonInfos {
+		if hotkey == axonInfo.Hotkey {
+			s.SubnetState.ActiveAxonInfos = append(s.SubnetState.ActiveAxonInfos[:i], s.SubnetState.ActiveAxonInfos[i+1:]...)
+			break
+		}
+	}
+}
+
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	// execute once then enter go routine
 	axonInfos, err := s.substrateService.GetAllAxons(subnetId)
@@ -66,7 +97,7 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 		return &SubnetState{}
 	}
 
-	subnetState := SubnetState{SubnetId: subnetId, AxonInfos: axonInfos}
+	subnetState := SubnetState{SubnetId: subnetId, ActiveAxonInfos: axonInfos}
 	// overkill to have 256 slots, but it's fine
 	minerHotkeys := make([]string, 1024)
 	validatorHotkeys := make([]string, 1024)
@@ -82,14 +113,23 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 		}
 		s.GlobalState.HotkeyStakes[axonInfo.Hotkey] = stake
 
+		isRegistered, err := s.substrateService.CheckIsRegistered(subnetId, axonInfo.Hotkey)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error checking if hotkey is registered")
+		}
+		if !isRegistered {
+			log.Warn().Msgf("Hotkey %s is not registered", axonInfo.Hotkey)
+			s.OnNonRegisteredFound(axonInfo.Hotkey)
+		}
+
 		if stake > float64(ValidatorMinStake) {
 			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
 		} else {
 			minerHotkeys = append(minerHotkeys, axonInfo.Hotkey)
 		}
 	}
-	subnetState.ValidatorHotkeys = validatorHotkeys
-	subnetState.MinerHotkeys = minerHotkeys
+	subnetState.ActiveValidatorHotkeys = validatorHotkeys
+	subnetState.ActiveMinerHotkeys = minerHotkeys
 	return &subnetState
 }
 
