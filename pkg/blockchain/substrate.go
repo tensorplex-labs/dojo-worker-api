@@ -31,16 +31,8 @@ type StorageResponse struct {
 	Value       interface{} `json:"value"`
 }
 
-type SubnetState struct {
-	SubnetId         int
-	ValidatorHotkeys []string
-	MinerHotkeys     []string
-	AxonInfos        []AxonInfo
-}
-
 type SubstrateService struct {
 	substrateApiUrl string
-	SubnetInfos     map[int]SubnetState
 }
 
 type AxonInfo struct {
@@ -219,32 +211,4 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 		return false, fmt.Errorf("error converting storage response value to bool for hotkey %s", hotkey)
 	}
 	return storageResponseValue, nil
-}
-
-func (s *SubstrateService) SubscribeAxonInfos(subnetId int) error {
-	ticker := time.NewTicker(112 * BlockTimeInSeconds * time.Second)
-	// execute once then enter go routine
-	subnetInfos := make(map[int]SubnetState)
-	axonInfos, err := s.GetAllAxons(subnetId)
-	subnetInfos[subnetId] = SubnetState{SubnetId: subnetId, AxonInfos: axonInfos}
-	s.SubnetInfos = subnetInfos
-
-	if err != nil {
-		log.Error().Err(err).Msg("Error getting all axons")
-		return err
-	}
-
-	go func() {
-		for range ticker.C {
-			axonInfos, err := s.GetAllAxons(subnetId)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting all axons")
-				return
-			}
-
-			// update subnet info
-			s.SubnetInfos[subnetId] = SubnetState{SubnetId: subnetId, AxonInfos: axonInfos}
-		}
-	}()
-	return nil
 }
