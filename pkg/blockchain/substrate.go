@@ -31,7 +31,7 @@ type StorageResponse struct {
 	Value       interface{} `json:"value"`
 }
 
-type SubnetInfo struct {
+type SubnetState struct {
 	SubnetId         int
 	ValidatorHotkeys []string
 	MinerHotkeys     []string
@@ -40,7 +40,7 @@ type SubnetInfo struct {
 
 type SubstrateService struct {
 	substrateApiUrl string
-	SubnetInfos     map[int]SubnetInfo
+	SubnetInfos     map[int]SubnetState
 }
 
 type AxonInfo struct {
@@ -224,9 +224,9 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 func (s *SubstrateService) SubscribeAxonInfos(subnetId int) error {
 	ticker := time.NewTicker(112 * BlockTimeInSeconds * time.Second)
 	// execute once then enter go routine
-	subnetInfos := make(map[int]SubnetInfo)
+	subnetInfos := make(map[int]SubnetState)
 	axonInfos, err := s.GetAllAxons(subnetId)
-	subnetInfos[subnetId] = SubnetInfo{SubnetId: subnetId, AxonInfos: axonInfos}
+	subnetInfos[subnetId] = SubnetState{SubnetId: subnetId, AxonInfos: axonInfos}
 	s.SubnetInfos = subnetInfos
 
 	if err != nil {
@@ -243,7 +243,7 @@ func (s *SubstrateService) SubscribeAxonInfos(subnetId int) error {
 			}
 
 			// update subnet info
-			s.SubnetInfos[subnetId] = SubnetInfo{SubnetId: subnetId, AxonInfos: axonInfos}
+			s.SubnetInfos[subnetId] = SubnetState{SubnetId: subnetId, AxonInfos: axonInfos}
 		}
 	}()
 	return nil
