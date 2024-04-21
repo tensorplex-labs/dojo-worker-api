@@ -1,11 +1,12 @@
 package main
 
 import (
-	"dojo-api/pkg/blockchain"
 	"flag"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"dojo-api/pkg/blockchain"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,12 +25,16 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
 
-	service := blockchain.NewSubstrateService()
+	// TODO write unit tests??
+	// service := blockchain.NewSubstrateService()
 	// fmt.Println(service.GetMaxUID(1))
 	// fmt.Println(service.GetMaxUID(2))
 	// fmt.Println(service.GetAllAxons(21))
 	// fmt.Println(service.CheckIsRegistered(21, "***REMOVED***"))
-	service.SubscribeAxonInfos(21)
+	// service.SubscribeAxonInfos(21)
+	// fmt.Println(service.TotalHotkeyStake("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
+	subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+	subnetSubscriber.SubscribeSubnetState(21)
 
 	// wait for interrupt signal to gracefully shutdown the program
 	quit := make(chan os.Signal, 1)

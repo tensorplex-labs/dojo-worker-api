@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -175,15 +176,18 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 			continue
 		}
 		axonInfo, err := s.GetAxonInfo(subnetId, hotkey)
-		if err != nil {
-			log.Error().Err(err).Msgf("Error getting axon info for hotkey %s", hotkey)
-			continue
+		if axonInfo == nil {
+			axonInfo = &AxonInfo{}
 		}
 
-		// process our axon infos here
-		axonInfo.IpAddress = utils.IpDecimalToDotted(axonInfo.IpDecimal)
 		axonInfo.Hotkey = hotkey
 		axonInfo.Uid = uid
+
+		if err == nil {
+			axonInfo.IpAddress = utils.IpDecimalToDotted(axonInfo.IpDecimal)
+		} else {
+			log.Error().Err(err).Msgf("Error getting axon info for hotkey %s", hotkey)
+		}
 
 		axonInfos = append(axonInfos, *axonInfo)
 
@@ -211,4 +215,90 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 		return false, fmt.Errorf("error converting storage response value to bool for hotkey %s", hotkey)
 	}
 	return storageResponseValue, nil
+}
+
+func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
+	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
+	params := url.Values{}
+	params.Add("keys[]", hotkey)
+	storageResponse, err := DoGetRequest(path, params)
+	if err != nil {
+		log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s", hotkey)
+		return 0, err
+	}
+	totalHotkeyStake, err := strconv.Atoi(storageResponse.Value.(string))
+	if err != nil {
+		log.Error().Err(err).Msgf("Error converting total hotkey stake to int for hotkey %s", hotkey)
+		return 0, err
+	}
+
+	runtimeSpec, err := s.RuntimeSpec()
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting runtime spec")
+		return 0, err
+	}
+
+	for i, tokenSymbol := range runtimeSpec.Properties.TokenSymbol {
+		if tokenSymbol == "TAO" {
+			tokenDecimals, err := strconv.Atoi(runtimeSpec.Properties.TokenDecimals[i])
+			if err != nil {
+				log.Error().Err(err).Msg("Error converting token decimals to int")
+				return 0, err
+			}
+			parsedStake := float64(totalHotkeyStake) / math.Pow10(tokenDecimals)
+			log.Info().Msgf("Hotkey: %+v, raw stake: %+v, parsed stake: %+v", hotkey, totalHotkeyStake, parsedStake)
+			return parsedStake, nil
+		}
+	}
+	return 0, errors.New("TAO token not found in runtime spec")
+}
+
+type ChainType struct {
+	Live interface{} `json:"live"`
+}
+
+type Properties struct {
+	IsEthereum    bool     `json:"isEthereum"`
+	Ss58Format    string   `json:"ss58Format"`
+	TokenDecimals []string `json:"tokenDecimals"`
+	TokenSymbol   []string `json:"tokenSymbol"`
+}
+
+type At struct {
+	Height string `json:"height"`
+	Hash   string `json:"hash"`
+}
+
+type RuntimeSpec struct {
+	At                 At         `json:"at"`
+	AuthoringVersion   string     `json:"authoringVersion"`
+	TransactionVersion string     `json:"transactionVersion"`
+	ImplVersion        string     `json:"implVersion"`
+	SpecName           string     `json:"specName"`
+	SpecVersion        string     `json:"specVersion"`
+	ChainType          ChainType  `json:"chainType"`
+	Properties         Properties `json:"properties"`
+}
+
+func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
+	path := fmt.Sprintf("http://%s/runtime/spec", s.substrateApiUrl)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var runtimeSpec RuntimeSpec
+	err = json.Unmarshal(body, &runtimeSpec)
+	if err != nil {
+		log.Error().Err(err).Msg("Error unmarshalling runtime spec")
+		return nil, err
+	}
+	return &runtimeSpec, nil
 }
