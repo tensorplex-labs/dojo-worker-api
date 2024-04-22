@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -91,32 +93,28 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 }
 
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
-	// execute once then enter go routine
 	axonInfos, err := s.substrateService.GetAllAxons(subnetId)
-	log.Info().Msgf("AxonInfos length: %+v", len(axonInfos))
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting all axons")
 		return &SubnetState{}
 	}
 
 	subnetState := SubnetState{SubnetId: subnetId, ActiveAxonInfos: axonInfos}
-	// overkill to have 1024 slots, but it's fine
-	minerHotkeys := make([]string, 1024)
-	validatorHotkeys := make([]string, 1024)
-	mutex := &sync.Mutex{}
+	minerHotkeys := make([]string, 0)
+	validatorHotkeys := make([]string, 0)
 
 	hotkeyToStake := make(map[string]float64)
 	hotkeyToIsRegistered := make(map[string]bool)
 
-	// get all data inside of a go routine
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+
 	for _, axonInfo := range axonInfos {
 		wg.Add(1)
-		log.Debug().Msgf("AxonInfo: %+v", axonInfo)
 		go func(currAxonInfo AxonInfo) {
 			defer wg.Done()
 			if currAxonInfo.Hotkey == "" {
-				log.Warn().Msgf("AxonInfo empty hotkey, %+v", currAxonInfo)
+				log.Trace().Msgf("AxonInfo empty hotkey, %+v", currAxonInfo)
 				return
 			}
 			stake, err := s.substrateService.TotalHotkeyStake(currAxonInfo.Hotkey)
@@ -125,19 +123,14 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 				return
 			}
 
-			mutex.Lock()
-			// s.GlobalState.HotkeyStakes[currentAxonInfo.Hotkey] = stake
-			hotkeyToStake[currAxonInfo.Hotkey] = stake
-			mutex.Unlock()
-
-			log.Info().Msgf("Hotkey to stake map: %+v", hotkeyToStake)
-
 			isRegistered, err := s.substrateService.CheckIsRegistered(subnetId, currAxonInfo.Hotkey)
 			if err != nil {
-				log.Fatal().Err(err).Msg("Error checking if hotkey is registered")
+				log.Error().Err(err).Msg("Error checking if hotkey is registered")
+				return
 			}
 
 			mutex.Lock()
+			hotkeyToStake[currAxonInfo.Hotkey] = stake
 			hotkeyToIsRegistered[currAxonInfo.Hotkey] = isRegistered
 			mutex.Unlock()
 
@@ -149,46 +142,36 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	}
 	wg.Wait()
 
-	log.Info().Msgf("Reading hotkey stakes and registration data to determine subnet state...")
-	log.Info().Msgf("Hotkey to stake: %+v", hotkeyToStake)
-	log.Info().Msgf("Hotkey to registered: %+v", hotkeyToIsRegistered)
 	for _, axonInfo := range axonInfos {
-		// TODO FIX WHY MAPS EMPTY HERE
-		stake, ok := hotkeyToStake[axonInfo.Hotkey]
-		if !ok {
-			log.Warn().Msgf("Hotkey %s not found in hotkey to stake map", axonInfo.Hotkey)
+		if axonInfo.Hotkey == "" {
 			continue
 		}
 
-		isRegistered, ok := hotkeyToIsRegistered[axonInfo.Hotkey]
-		if !ok {
-			log.Warn().Msgf("Hotkey %s not found in hotkey to registered map", axonInfo.Hotkey)
-			continue
-		}
+		stake := hotkeyToStake[axonInfo.Hotkey]
 
-		if !isRegistered {
-			continue
-		}
-
-		// determine miners and validators
 		if stake > float64(ValidatorMinStake) {
 			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
 		} else {
 			minerHotkeys = append(minerHotkeys, axonInfo.Hotkey)
 		}
-
 	}
 
 	subnetState.ActiveValidatorHotkeys = validatorHotkeys
 	subnetState.ActiveMinerHotkeys = minerHotkeys
-	log.Info().Msgf("Miner hotkeys: %+v", minerHotkeys)
-	log.Info().Msgf("Validator hotkeys: %+v", validatorHotkeys)
 	return &subnetState
 }
 
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	ticker := time.NewTicker(112 * BlockTimeInSeconds * time.Second)
 	s.SubnetState = s.GetSubnetState(subnetId)
+
+	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
+	if err != nil {
+		log.Error().Err(err).Msg("Error pretty printing subnet state")
+	} else {
+		fmt.Println("Subnet State:")
+		fmt.Println(string(prettySubnetState))
+	}
 
 	go func() {
 		for range ticker.C {
