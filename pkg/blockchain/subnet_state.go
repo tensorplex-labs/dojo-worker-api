@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -148,7 +147,6 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 		}
 
 		stake := hotkeyToStake[axonInfo.Hotkey]
-
 		if stake > float64(ValidatorMinStake) {
 			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
 		} else {
@@ -169,8 +167,8 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Error pretty printing subnet state")
 	} else {
-		fmt.Println("Subnet State:")
-		fmt.Println(string(prettySubnetState))
+		log.Debug().Msgf("Subnet State:")
+		log.Debug().Msgf(string(prettySubnetState))
 	}
 
 	go func() {

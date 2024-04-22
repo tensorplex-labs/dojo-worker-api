@@ -47,9 +47,9 @@ type AxonInfo struct {
 	Placeholder2 string `json:"placeholder2"`
 
 	// additional fields we need, to store it in a more organized manner
-	IpAddress string `json:"-"`
-	Hotkey    string `json:"-"`
-	Uid       int    `json:"-"`
+	IpAddress string `json:"ipAddress"`
+	Hotkey    string `json:"hotkey"`
+	Uid       int    `json:"uid"`
 }
 
 func NewSubstrateService() *SubstrateService {
@@ -166,7 +166,7 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 		return nil, err
 	}
 
-	var allAxonInfos []AxonInfo = make([]AxonInfo, maxUid)
+	var allAxonInfos []AxonInfo = make([]AxonInfo, 0)
 	axonInfoChan := make(chan AxonInfo)
 	go func() {
 		wg := sync.WaitGroup{}
@@ -182,10 +182,11 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 					return
 				}
 				axonInfo, _ := s.GetAxonInfo(subnetId, hotkey)
-				if axonInfo != nil {
-					currAxonInfo = *axonInfo
+				// no axon info so avoid putting it onto the channel
+				if axonInfo == nil {
+					return
 				}
-
+				currAxonInfo = *axonInfo
 				currAxonInfo.Hotkey = hotkey
 				currAxonInfo.Uid = neuronUid
 
