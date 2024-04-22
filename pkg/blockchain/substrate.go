@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"time"
+	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -166,37 +166,46 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 		return nil, err
 	}
 
-	var axonInfos []AxonInfo = make([]AxonInfo, maxUid)
-	// TODO figure out if there's a way to batch this call
-	for uid := 0; uid < maxUid; uid++ {
-		// perform actions here
-		hotkey, err := s.GetHotkeyByUid(subnetId, uid)
-		if err != nil {
-			log.Error().Err(err).Msgf("Error getting hotkey for uid %d", uid)
-			continue
+	var allAxonInfos []AxonInfo = make([]AxonInfo, maxUid)
+	axonInfoChan := make(chan AxonInfo)
+	go func() {
+		wg := sync.WaitGroup{}
+		for uid := 0; uid < maxUid; uid++ {
+			wg.Add(1)
+			go func(neuronUid int) {
+				defer wg.Done()
+
+				currAxonInfo := AxonInfo{}
+				hotkey, err := s.GetHotkeyByUid(subnetId, neuronUid)
+				if err != nil {
+					log.Error().Err(err).Msgf("Error getting hotkey for uid %d", neuronUid)
+					return
+				}
+				axonInfo, _ := s.GetAxonInfo(subnetId, hotkey)
+				if axonInfo != nil {
+					currAxonInfo = *axonInfo
+				}
+
+				currAxonInfo.Hotkey = hotkey
+				currAxonInfo.Uid = neuronUid
+
+				// place it in the channel
+				axonInfoChan <- currAxonInfo
+			}(uid)
 		}
-		axonInfo, err := s.GetAxonInfo(subnetId, hotkey)
-		if axonInfo == nil {
-			axonInfo = &AxonInfo{}
+		wg.Wait()
+		close(axonInfoChan)
+	}()
+
+	for axonInfo := range axonInfoChan {
+		ipAddress := utils.IpDecimalToDotted(axonInfo.IpDecimal)
+		if ipAddress != "" {
+			axonInfo.IpAddress = ipAddress
 		}
-
-		axonInfo.Hotkey = hotkey
-		axonInfo.Uid = uid
-
-		if err == nil {
-			axonInfo.IpAddress = utils.IpDecimalToDotted(axonInfo.IpDecimal)
-		} else {
-			log.Error().Err(err).Msgf("Error getting axon info for hotkey %s", hotkey)
-		}
-
-		axonInfos = append(axonInfos, *axonInfo)
-
-		log.Info().Msgf("Axon info for uid %d: %+v", uid, axonInfo)
-		// add sleep... be nice
-		time.Sleep(time.Millisecond * 500)
+		log.Info().Msgf("Axon info for uid %d: %+v", axonInfo.Uid, axonInfo)
+		allAxonInfos = append(allAxonInfos, axonInfo)
 	}
-
-	return axonInfos, nil
+	return allAxonInfos, nil
 }
 
 func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool, error) {
