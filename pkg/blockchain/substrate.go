@@ -156,7 +156,7 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 		return nil, err
 	}
 
-	log.Info().Msgf("Axon info for hotkey %s: %+v", hotkey, axonInfoValue)
+	log.Debug().Msgf("Axon info for hotkey %s: %+v", hotkey, axonInfoValue)
 	return &axonInfoValue, nil
 }
 
@@ -202,7 +202,7 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 		if ipAddress != "" {
 			axonInfo.IpAddress = ipAddress
 		}
-		log.Info().Msgf("Axon info for uid %d: %+v", axonInfo.Uid, axonInfo)
+		log.Debug().Msgf("Axon info for uid %d: %+v", axonInfo.Uid, axonInfo)
 		allAxonInfos = append(allAxonInfos, axonInfo)
 	}
 	return allAxonInfos, nil
@@ -255,7 +255,7 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 				return 0, err
 			}
 			parsedStake := float64(totalHotkeyStake) / math.Pow10(tokenDecimals)
-			log.Info().Msgf("Hotkey: %+v, raw stake: %+v, parsed stake: %+v", hotkey, totalHotkeyStake, parsedStake)
+			log.Debug().Msgf("Hotkey: %+v, raw stake: %+v, parsed stake: %+v", hotkey, totalHotkeyStake, parsedStake)
 			return parsedStake, nil
 		}
 	}
