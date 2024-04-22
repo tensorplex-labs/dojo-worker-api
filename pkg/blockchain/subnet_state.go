@@ -160,7 +160,7 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 }
 
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
-	ticker := time.NewTicker(112 * BlockTimeInSeconds * time.Second)
+	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
 	s.SubnetState = s.GetSubnetState(subnetId)
 
 	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
