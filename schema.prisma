@@ -60,6 +60,8 @@ model Task {
     taskData      Json
     status        TaskStatus
     maxResults    Int
+    numResults    Int
+    totalYield    Float
     taskResults   TaskResult[]
     NetworkUser   NetworkUser? @relation(fields: [networkUserId], references: [id])
     networkUserId String?
@@ -71,15 +73,20 @@ enum ResultStatus {
 }
 
 model TaskResult {
-    id           String       @id @default(cuid())
-    createdAt    DateTime     @default(now())
-    updatedAt    DateTime     @updatedAt
-    status       ResultStatus
-    resultData   Json
-    Task         Task         @relation(fields: [taskId], references: [id])
-    taskId       String
-    DojoWorker   DojoWorker   @relation(fields: [dojoWorkerId], references: [id])
-    dojoWorkerId String
+    id             String       @id @default(cuid())
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+    status         ResultStatus
+    resultData     Json
+    Task           Task         @relation(fields: [taskId], references: [id])
+    taskId         String
+    DojoWorker     DojoWorker   @relation(fields: [dojoWorkerId], references: [id])
+    dojoWorkerId   String
+    stakeAmount    Float?
+    potentialYield Float?
+    potentialLoss  Float?
+    finalisedYield Float?
+    finalisedLoss  Float?
 }
 
 model DojoWorker {
