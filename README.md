@@ -21,6 +21,15 @@ This mainly consists of our authentication services, and human task services.
 
 ## Run Locally
 
+In order to setup the database connection, you can utilze docker compose to setup a local postgres instance.
+You will need to install Docker and Docker Compose.
+Make sure to update the .env file with the correct credentials.
+
+```bash
+docker-compose up -d
+```
+
+
 ```bash
 # setup local db
 go run github.com/steebchen/prisma-client-go generate
