@@ -1,0 +1,10 @@
+@url = http://localhost:3000
+
+###
+POST {{url}}/api/login/auth
+Content-Type: application/json
+
+{
+    "walletAddress":"12345678",
+    "signature": "238792392342934"
+}
