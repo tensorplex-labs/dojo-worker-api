@@ -5,6 +5,6 @@ POST {{url}}/api/login/auth
 Content-Type: application/json
 
 {
-    "walletAddress":"12345678",
-    "signature": "238792392342934"
+    "walletAddress":"0x05aa1aab5dD8e1DF303CA1C9cb6E3F5d745b8389",
+    "signature": "0x4dc9ecadfdfc36e3e10e64e465472e5729d8a6614c67d42cbd55bef845c18afc14c2bb79ef416c5bffc7276726e74770015415ce2821eb7bf5ee0d8562af011b1c"
 }
