@@ -7,9 +7,9 @@ import (
 func LoginRoutes(router *gin.Engine) {
 
 	// Grouping routes
-	apiGroup := router.Group("/api")
+	workerApiGroup := router.Group("/api/worker")
     {
-    	apiGroup.POST("/login/auth", LoginMiddleware(), LoginController)
+    	workerApiGroup.POST("/login/auth", LoginMiddleware(), LoginController)
     }
 }
  

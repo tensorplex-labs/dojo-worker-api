@@ -14,7 +14,7 @@ func main() {
         log.Fatal("Error loading .env file")
     }
 
-    port := os.Getenv("PORT")
+    port := os.Getenv("SERVER_PORT")
     if port == "" {
         port = "8080" // Default port if not specified
     }

@@ -4,30 +4,34 @@ import (
     "github.com/gin-gonic/gin"
     "dojo-api/pkg/orm"
     "net/http"
+    "github.com/rs/zerolog/log"
 )
 
 func LoginController(c *gin.Context) {
     walletAddressInterface, _ := c.Get("WalletAddress")
-    signatureInterface, _ := c.Get("Signature")
+    chainIdInterface, _ := c.Get("ChainId")
 	token, _ := c.Get("JWTToken")
 
     walletAddress, ok := walletAddressInterface.(string)
     if !ok {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wallet address"})
+        log.Error().Msg("Invalid wallet address provided")
+        c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid wallet address"})
         return
     }
-    signature, ok := signatureInterface.(string)
+    chainId, ok := chainIdInterface.(string)
     if !ok {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+        log.Error().Msg("Invalid signature provided")
+        c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid signature"})
         return
     }
     
     workerService := orm.NewDojoWorkerService()
-    _, err := workerService.CreateDojoWorker(walletAddress, signature)
+    _, err := workerService.CreateDojoWorker(walletAddress, chainId)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create worker"})
+        log.Error().Err(err).Msg("Failed to create worker")
+        c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create worker"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"token": token})
+    log.Info().Str("walletAddress", walletAddress).Msg("Worker created successfully")
+    c.JSON(http.StatusOK, gin.H{"success": true, "body": token})
 }
-
