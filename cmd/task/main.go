@@ -1,32 +1,58 @@
 package main
 
 import (
-	"os"
+	"dojo-api/pkg/task"
+	"dojo-api/utils"
 	"fmt"
-    "github.com/gin-gonic/gin"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-    port := os.Getenv("PORT")
+	port := os.Getenv("PORT")
 	fmt.Println("Using port:", port)
-    if port == "" {
-        port = "4001" // default to 4001 if no environment variable is set
-    }
-    port = ":" + port 
+	if port == "" {
+		port = "4001" // default to 4001 if no environment variable is set
+	}
+	port = ":" + port
 
 	router := gin.Default()
 
-    // Hello World 
-    router.GET("/hello-world", func(c *gin.Context) {
-        c.JSON(200, gin.H{
-            "message": "Hello World",
-        })
-    })
+	// Hello World
+	router.GET("/hello-world", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Hello World",
+		})
+	})
 
-    // Task creation endpoint
-    // router.POST("/api/v1/create-task", func(c *gin.Context) {
-  
-    // })
+	// Define the GET endpoint
+	taskService := task.NewTaskService()
 
-    router.Run(port) // Default listens on :8080
+	router.GET("/api/v1/get-task/:task-id", func(c *gin.Context) {
+		taskID := c.Param("task-id")
+		task, err := taskService.GetTaskById(c.Request.Context(), taskID)
+
+		if err != nil {
+			// utils.(c, http.StatusNotFound, http.StatusNotFound, err.Error())
+			log.Println(err)
+			utils.ErrorHandler(c, http.StatusNotFound, err.Error())
+			return
+		}
+
+		if task == nil {
+			utils.ErrorHandler(c, http.StatusAccepted, "Task not found")
+			return
+		}
+
+		// Successful response
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    task,
+		})
+	})
+
+	router.Run(port)
 }

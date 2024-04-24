@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,4 +30,15 @@ func IpDecimalToDotted(decimalIP interface{}) string {
 	b3 := (ipInt >> 24) & 0xff
 
 	return fmt.Sprintf("%d.%d.%d.%d", b3, b2, b1, b0)
+}
+
+// refactor this to middleware
+func ErrorHandler(c *gin.Context, statusCode int, message string) {
+	c.JSON(statusCode, gin.H{
+		"success": false,
+		"error": gin.H{
+			"code":    statusCode,
+			"message": message,
+		},
+	})
 }

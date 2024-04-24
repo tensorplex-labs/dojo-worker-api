@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/task ./cmd/task/main.go"
+bin = "./tmp/task"
+include_ext = ["go", "tmpl", "tpl", "html"]
+exclude_dir = ["assets", "tmp", "vendor"]
+
+[log]
+time = true
+
+[color]
+main = "yellow"
+watcher = "cyan"
+build = "green"
+runner = "magenta"
