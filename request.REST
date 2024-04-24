@@ -6,5 +6,7 @@ Content-Type: application/json
 
 {
     "walletAddress":"0x05aa1aab5dD8e1DF303CA1C9cb6E3F5d745b8389",
-    "chainId": "2"
+    "chainId": "2",
+    "message": "Some random message",
+    "signature": "0xc1d45d5813feec1d6d9ec004dce1b100d59bd49bf8520d897beacb40600194cb242d710297e6407ae72228219d2e6b6dfa390ff979695f287b4a5c6186d2dcf900"
 }

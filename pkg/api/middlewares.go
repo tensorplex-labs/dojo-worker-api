@@ -9,11 +9,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
 	"math/big"
+	"github.com/ethereum/go-ethereum/crypto"
     
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"time"
+	"strings"
 )
 
 // AuthMiddleware checks if the request is authenticated
@@ -28,7 +31,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
 		tokenString := token[7:]
 		claims := &jwt.RegisteredClaims{}
 		parsedToken, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -67,6 +69,8 @@ func LoginMiddleware() gin.HandlerFunc {
 		}
 		walletAddress, walletExists := requestMap["walletAddress"]
 		chainId, chainIdExists := requestMap["chainId"]
+		signature, signatureExists := requestMap["signature"]
+		message, messageExists := requestMap["message"]
 
 		if !walletExists {
 			log.Error().Msg("walletAddress is required")
@@ -78,6 +82,28 @@ func LoginMiddleware() gin.HandlerFunc {
 		if !chainIdExists {
 			log.Error().Msg("chainId is required")
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "chainId is required"})
+			c.Abort()
+			return
+		}
+
+		if !messageExists {
+			log.Error().Msg("message is required")
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "message is required"})
+			c.Abort()
+			return
+		}
+
+		if !signatureExists {
+			log.Error().Msg("signature is required")
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "signature is required"})
+			c.Abort()
+			return
+		}
+
+		verified, err := verifySignature(walletAddress, message, signature)
+		if err != nil || !verified {
+			log.Error().Err(err).Msg("Invalid signature")
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid signature"})
 			c.Abort()
 			return
 		}
@@ -169,4 +195,43 @@ func verifyEthereumAddress(address string) (bool, error) {
 	log.Info().Str("address", address).Msg("Ethereum address verified successfully")
 	// If balance retrieval was successful and the balance is equal to or greater than 0, the address is considered valid
 	return true, nil
+}
+
+func verifySignature(walletAddress, message, signatureHex string) (bool, error) {
+    // Remove the 0x prefix if present
+    signatureHex = strings.TrimPrefix(signatureHex, "0x")
+
+    // Decode the hex-encoded signature
+    signatureBytes, err := hex.DecodeString(signatureHex)
+    if err != nil {
+        log.Error().Err(err).Str("signatureHex", signatureHex).Msg("Failed to decode signature")
+        return false, fmt.Errorf("failed to decode signature: %v", err)
+    }
+
+    // Adjust the V value in the signature (last byte) to be 0 or 1
+    if signatureBytes[64] >= 27 {
+        signatureBytes[64] -= 27
+    }
+
+    // Hash the message to get the message digest as expected by SigToPub
+    msgHash := crypto.Keccak256Hash([]byte(message))
+
+    // Recover the public key from the signature
+    pubKey, err := crypto.SigToPub(msgHash.Bytes(), signatureBytes)
+    if err != nil {
+        log.Error().Err(err).Str("messageHash", msgHash.Hex()).Msg("Failed to recover public key")
+        return false, fmt.Errorf("failed to recover public key: %v", err)
+    }
+
+    // Convert the recovered public key to an Ethereum address
+    recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
+
+    // Compare the recovered address with the wallet address
+    if !strings.EqualFold(recoveredAddr, walletAddress) {
+        log.Error().Str("recoveredAddress", recoveredAddr).Str("walletAddress", walletAddress).Msg("Recovered address does not match wallet address")
+        return false, fmt.Errorf("recovered address %s does not match wallet address %s", recoveredAddr, walletAddress)
+    }
+
+    log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
+    return true, nil 
 }
