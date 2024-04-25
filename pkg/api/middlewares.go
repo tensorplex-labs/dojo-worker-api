@@ -4,19 +4,19 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
-	"math/big"
-	"github.com/ethereum/go-ethereum/crypto"
-    
+
 	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"time"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // AuthMiddleware checks if the request is authenticated
@@ -142,8 +142,9 @@ func LoginMiddleware() gin.HandlerFunc {
 
 func generateJWT(walletAddress string) (string, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
+	tokenExpiry, _ := strconv.Atoi(os.Getenv("TOKEN_EXPIRY"))
 	claims := &jwt.RegisteredClaims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(tokenExpiry) * time.Hour)),
 		Issuer:    "dojo-api",
 		Subject:   walletAddress,
 	}
@@ -180,58 +181,46 @@ func verifyEthereumAddress(address string) (bool, error) {
 		return false, err
 	}
 
-	// Convert balance to a big.Int to check if it's greater than 0
-	balanceBigInt, ok := new(big.Int).SetString(balance[2:], 16) // Remove the 0x prefix and parse
-	if !ok {
-		log.Error().Msg("Failed to parse balance")
-		return false, fmt.Errorf("failed to parse balance")
-	}
-
-	if balanceBigInt.Cmp(big.NewInt(0)) < 0 {
-		log.Error().Msg("Address has a negative Ether balance")
-		return false, fmt.Errorf("address has a negative Ether balance")
-	}
-
 	log.Info().Str("address", address).Msg("Ethereum address verified successfully")
 	// If balance retrieval was successful and the balance is equal to or greater than 0, the address is considered valid
 	return true, nil
 }
 
 func verifySignature(walletAddress, message, signatureHex string) (bool, error) {
-    // Remove the 0x prefix if present
-    signatureHex = strings.TrimPrefix(signatureHex, "0x")
+	// Remove the 0x prefix if present
+	signatureHex = strings.TrimPrefix(signatureHex, "0x")
 
-    // Decode the hex-encoded signature
-    signatureBytes, err := hex.DecodeString(signatureHex)
-    if err != nil {
-        log.Error().Err(err).Str("signatureHex", signatureHex).Msg("Failed to decode signature")
-        return false, fmt.Errorf("failed to decode signature: %v", err)
-    }
+	// Decode the hex-encoded signature
+	signatureBytes, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		log.Error().Err(err).Str("signatureHex", signatureHex).Msg("Failed to decode signature")
+		return false, fmt.Errorf("failed to decode signature: %v", err)
+	}
 
-    // Adjust the V value in the signature (last byte) to be 0 or 1
-    if signatureBytes[64] >= 27 {
-        signatureBytes[64] -= 27
-    }
+	// Adjust the V value in the signature (last byte) to be 0 or 1
+	if signatureBytes[64] >= 27 {
+		signatureBytes[64] -= 27
+	}
 
-    // Hash the message to get the message digest as expected by SigToPub
-    msgHash := crypto.Keccak256Hash([]byte(message))
+	// Hash the message to get the message digest as expected by SigToPub
+	msgHash := crypto.Keccak256Hash([]byte(message))
 
-    // Recover the public key from the signature
-    pubKey, err := crypto.SigToPub(msgHash.Bytes(), signatureBytes)
-    if err != nil {
-        log.Error().Err(err).Str("messageHash", msgHash.Hex()).Msg("Failed to recover public key")
-        return false, fmt.Errorf("failed to recover public key: %v", err)
-    }
+	// Recover the public key from the signature
+	pubKey, err := crypto.SigToPub(msgHash.Bytes(), signatureBytes)
+	if err != nil {
+		log.Error().Err(err).Str("messageHash", msgHash.Hex()).Msg("Failed to recover public key")
+		return false, fmt.Errorf("failed to recover public key: %v", err)
+	}
 
-    // Convert the recovered public key to an Ethereum address
-    recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
+	// Convert the recovered public key to an Ethereum address
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
 
-    // Compare the recovered address with the wallet address
-    if !strings.EqualFold(recoveredAddr, walletAddress) {
-        log.Error().Str("recoveredAddress", recoveredAddr).Str("walletAddress", walletAddress).Msg("Recovered address does not match wallet address")
-        return false, fmt.Errorf("recovered address %s does not match wallet address %s", recoveredAddr, walletAddress)
-    }
+	// Compare the recovered address with the wallet address
+	if !strings.EqualFold(recoveredAddr, walletAddress) {
+		log.Error().Str("recoveredAddress", recoveredAddr).Str("walletAddress", walletAddress).Msg("Recovered address does not match wallet address")
+		return false, fmt.Errorf("recovered address %s does not match wallet address %s", recoveredAddr, walletAddress)
+	}
 
-    log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
-    return true, nil 
+	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
+	return true, nil
 }
