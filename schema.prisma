@@ -101,15 +101,17 @@ model DojoWorker {
     task_results         TaskResult[]
     current_stake_amount Float?
     worker_partners      WorkerPartner[]
+
+    @@unique([wallet_address, chain_id])
 }
 
 model WorkerPartner {
     id                  String     @id @default(cuid())
     created_at          DateTime   @default(now())
     updated_at          DateTime   @updatedAt
-    MinerId             MinerUser  @relation(fields: [miner_id], references: [id])
+    MinerUser           MinerUser  @relation(fields: [miner_id], references: [id])
     miner_id            String
-    WorkerId            DojoWorker @relation(fields: [worker_id], references: [id])
+    DojoWorker          DojoWorker @relation(fields: [worker_id], references: [id])
     worker_id           String
     is_delete_by_miner  Boolean    @default(false)
     is_active_by_worker Boolean    @default(true)
