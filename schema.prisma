@@ -16,10 +16,10 @@ model ExternalUser {
     is_verified Boolean  @default(false)
 }
 
-enum NetworkUserType {
-    MINER
-    VALIDATOR
-}
+// enum NetworkUserType {
+//     MINER
+//     VALIDATOR
+// }
 
 enum TaskStatus {
     IN_PROGRESS
@@ -34,43 +34,45 @@ enum TaskResultStatus {
 
 enum TaskType {
     CODE_GENERATION
-    CONVERSATION
+    DIALOGUE
     TEXT_TO_IMAGE
 }
 
-model NetworkUser {
+model MinerUser {
     id                String          @id @default(cuid())
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
     coldkey           String
-    hotkey            String          @unique
+    hotkey            String
     api_key           String
     api_key_expire_at DateTime
-    // make ipAddress optional since validators may not serve axons
-    ip_address        String?
-    user_type         NetworkUserType
+    // not necessary anymore since GET APIs must be public
+    // ip_address        String?
+    // user_type         NetworkUserType
     is_verified       Boolean         @default(false)
     tasks             Task[]
     worker_partners   WorkerPartner[]
+
+    @@unique([hotkey, api_key])
 }
 
 model Task {
-    id              String       @id @default(cuid())
-    created_at      DateTime     @default(now())
-    updated_at      DateTime     @updatedAt
-    expire_at       DateTime
-    title           String
-    body            String
-    type            TaskType
-    criteria        Json
-    task_data       Json
-    status          TaskStatus
-    max_results     Int
-    num_results     Int
-    total_reward    Float
-    task_results    TaskResult[]
-    NetworkUser     NetworkUser? @relation(fields: [network_user_Id], references: [id])
-    network_user_Id String?
+    id            String       @id @default(cuid())
+    created_at    DateTime     @default(now())
+    updated_at    DateTime     @updatedAt
+    expire_at     DateTime
+    title         String
+    body          String
+    type          TaskType
+    // criteria        Json
+    task_data     Json
+    status        TaskStatus
+    max_results   Int
+    num_results   Int
+    total_reward  Float?
+    task_results  TaskResult[]
+    MinerUser     MinerUser?   @relation(fields: [miner_user_id], references: [id])
+    miner_user_id String?
 }
 
 model TaskResult {
@@ -81,8 +83,8 @@ model TaskResult {
     result_data      Json
     Task             Task             @relation(fields: [task_id], references: [id])
     task_id          String
-    DojoWorker       DojoWorker       @relation(fields: [dojo_worker_id], references: [id])
-    dojo_worker_id   String
+    DojoWorker       DojoWorker       @relation(fields: [worker_id], references: [id])
+    worker_id        String
     stake_amount     Float?
     potential_reward Float?
     potential_loss   Float?
@@ -91,24 +93,24 @@ model TaskResult {
 }
 
 model DojoWorker {
-    id                    String          @id @default(cuid())
-    created_at            DateTime        @default(now())
-    updated_at            DateTime        @updatedAt
-    wallet_address        String
-    chain_id              String
-    task_results          TaskResult[]
-    current_stake_amount  Float
-    network_user_partners WorkerPartner[]
+    id                   String          @id @default(cuid())
+    created_at           DateTime        @default(now())
+    updated_at           DateTime        @updatedAt
+    wallet_address       String
+    chain_id             String
+    task_results         TaskResult[]
+    current_stake_amount Float?
+    worker_partners      WorkerPartner[]
 }
 
 model WorkerPartner {
-    id                  String      @id @default(cuid())
-    created_at          DateTime    @default(now())
-    updated_at          DateTime    @updatedAt
-    MinerId             NetworkUser @relation(fields: [miner_id], references: [id])
+    id                  String     @id @default(cuid())
+    created_at          DateTime   @default(now())
+    updated_at          DateTime   @updatedAt
+    MinerId             MinerUser  @relation(fields: [miner_id], references: [id])
     miner_id            String
-    WorkerId            DojoWorker  @relation(fields: [worker_id], references: [id])
+    WorkerId            DojoWorker @relation(fields: [worker_id], references: [id])
     worker_id           String
-    is_delete_by_miner  Boolean
-    is_active_by_worker Boolean
+    is_delete_by_miner  Boolean    @default(false)
+    is_active_by_worker Boolean    @default(true)
 }
