@@ -23,6 +23,10 @@ func CreateTaskController(c *gin.Context) {
 	if err := c.BindJSON(&requestBody); err != nil {
 		// DO SOMETHING WITH THE ERROR
 		logger.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
+		response["success"] = false
+		response["body"] = nil
+		response["error"] = fmt.Sprintf("Error binding request body: %v", err)
+		c.JSON(400, response)
 	}
 	taskService := task.NewTaskService()
 	msg, err := taskService.CreateTask(requestBody, networkUserId.(string))
