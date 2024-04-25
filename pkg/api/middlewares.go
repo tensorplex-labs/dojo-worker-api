@@ -5,6 +5,7 @@ import (
 	"dojo-api/db"
 	"github.com/rs/zerolog/log"
 	"context"
+	"dojo-api/utils"
 )
 
 func UserAuthMiddleware() gin.HandlerFunc {
@@ -25,7 +26,7 @@ func verifyApiKey(apiKey string) string{
 	// Check if the API key is valid
 	client := db.NewClient()
 	ctx := context.Background()
-	logger := GetLogger()
+	logger := utils.GetLogger()
 	defer func() {
         if err := client.Prisma.Disconnect(); err != nil {
             logger.Error().Msgf("Error disconnecting: %v", err)
