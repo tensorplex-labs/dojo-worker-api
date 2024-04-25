@@ -10,18 +10,18 @@ import (
 func LoginController(c *gin.Context) {
     walletAddressInterface, _ := c.Get("WalletAddress")
     chainIdInterface, _ := c.Get("ChainId")
-	token, _ := c.Get("JWTToken")
+    token, _ := c.Get("JWTToken")
 
     walletAddress, ok := walletAddressInterface.(string)
     if !ok {
         log.Error().Msg("Invalid wallet address provided")
-        c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid wallet address"})
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid wallet address"))
         return
     }
     chainId, ok := chainIdInterface.(string)
     if !ok {
         log.Error().Msg("Invalid signature provided")
-        c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid signature"})
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid signature"))
         return
     }
     
@@ -29,9 +29,9 @@ func LoginController(c *gin.Context) {
     _, err := workerService.CreateDojoWorker(walletAddress, chainId)
     if err != nil {
         log.Error().Err(err).Msg("Failed to create worker")
-        c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create worker"})
+        c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
         return
     }
     log.Info().Str("walletAddress", walletAddress).Msg("Worker created successfully")
-    c.JSON(http.StatusOK, gin.H{"success": true, "body": token})
+    c.JSON(http.StatusOK, defaultSuccessResponse(token))
 }

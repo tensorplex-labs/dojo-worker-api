@@ -27,7 +27,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		token := c.GetHeader("Authorization")
 		if token == "" {
 			log.Error().Msg("No Authorization token provided")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "unauthorized"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("unauthorized"))
 			c.Abort()
 			return
 		}
@@ -39,14 +39,14 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		if err != nil || !parsedToken.Valid {
 			log.Error().Err(err).Msg("Invalid token")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("invalid token"))
 			c.Abort()
 			return
 		}
 
 		if claims.ExpiresAt.Unix() < time.Now().Unix() {
 			log.Error().Msg("Token expired")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "token expired"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("token expired"))
 			c.Abort()
 			return
 		}
@@ -63,7 +63,7 @@ func LoginMiddleware() gin.HandlerFunc {
 		var requestMap map[string]string
 		if err := c.BindJSON(&requestMap); err != nil {
 			log.Error().Err(err).Msg("Invalid request body")
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request body"})
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
 			c.Abort()
 			return
 		}
@@ -74,28 +74,28 @@ func LoginMiddleware() gin.HandlerFunc {
 
 		if !walletExists {
 			log.Error().Msg("walletAddress is required")
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "walletAddress is required"})
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("walletAddress is required"))
 			c.Abort()
 			return
 		}
 
 		if !chainIdExists {
 			log.Error().Msg("chainId is required")
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "chainId is required"})
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("chainId is required"))
 			c.Abort()
 			return
 		}
 
 		if !messageExists {
 			log.Error().Msg("message is required")
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "message is required"})
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("message is required"))
 			c.Abort()
 			return
 		}
 
 		if !signatureExists {
 			log.Error().Msg("signature is required")
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "signature is required"})
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("signature is required"))
 			c.Abort()
 			return
 		}
@@ -103,7 +103,7 @@ func LoginMiddleware() gin.HandlerFunc {
 		verified, err := verifySignature(walletAddress, message, signature)
 		if err != nil || !verified {
 			log.Error().Err(err).Msg("Invalid signature")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid signature"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("Invalid signature"))
 			c.Abort()
 			return
 		}
@@ -111,14 +111,14 @@ func LoginMiddleware() gin.HandlerFunc {
 		valid, err := verifyEthereumAddress(walletAddress)
 		if err != nil {
 			log.Error().Err(err).Msg("Error verifying Ethereum address")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Error verifying Ethereum address"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("Error verifying Ethereum address"))
 			c.Abort()
 			return
 		}
 
 		if !valid {
 			log.Error().Msg("Invalid Ethereum address")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid Ethereum address"})
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("Invalid Ethereum address"))
 			c.Abort()
 			return
 		}
@@ -127,7 +127,7 @@ func LoginMiddleware() gin.HandlerFunc {
 		token, err := generateJWT(walletAddress)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to generate token")
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to generate token"})
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to generate token"))
 			c.Abort()
 			return
 		}
