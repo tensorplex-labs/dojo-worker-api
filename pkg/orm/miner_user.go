@@ -8,18 +8,18 @@ import (
 	"time"
 )
 
-type MinerUserTypeORM struct {
+type MinerUserORM struct {
 	dbClient *db.PrismaClient
 }
 
-func MinerUserService() *MinerUserTypeORM {
+func NewMinerUserService() *MinerUserORM {
 	client := NewPrismaClient()
-	return &MinerUserTypeORM{
+	return &MinerUserORM{
 		dbClient: client,
 	}
 }
 
-func (s *MinerUserTypeORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
+func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Coldkey.Set(coldkey),
@@ -37,7 +37,7 @@ func (s *MinerUserTypeORM) CreateUser(coldkey string, hotkey string, apiKey stri
 	return createdUser, nil
 }
 
-func (s *MinerUserTypeORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
+func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key cannot be an empty string")
 	}
@@ -47,6 +47,21 @@ func (s *MinerUserTypeORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, e
 	).Exec(ctx)
 	if err != nil {
 		log.Printf("Error retrieving user by API key: %v", err)
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error) {
+	if hotkey == "" {
+		return nil, fmt.Errorf("hotkey cannot be an empty string")
+	}
+	ctx := context.Background()
+	user, err := s.dbClient.MinerUser.FindFirst(
+		db.MinerUser.Hotkey.Equals(hotkey),
+	).Exec(ctx)
+	if err != nil {
+		log.Printf("Error retrieving user by hotkey: %v", err)
 		return nil, err
 	}
 	return user, nil
