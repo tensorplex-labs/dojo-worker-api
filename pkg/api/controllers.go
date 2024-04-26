@@ -259,7 +259,7 @@ func MinerLoginController(c *gin.Context) {
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
 
-	minerUserService := orm.NewMinerUserService()
+	minerUserService := orm.MinerUserService()
 	_, err := minerUserService.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")

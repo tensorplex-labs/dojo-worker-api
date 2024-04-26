@@ -8,18 +8,18 @@ import (
 	"time"
 )
 
-type MinerUserORM struct {
+type MinerUserTypeORM struct {
 	dbClient *db.PrismaClient
 }
 
-func NewMinerUserService() *MinerUserORM {
+func MinerUserService() *MinerUserTypeORM {
 	client := NewPrismaClient()
-	return &MinerUserORM{
+	return &MinerUserTypeORM{
 		dbClient: client,
 	}
 }
 
-func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
+func (s *MinerUserTypeORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Coldkey.Set(coldkey),
@@ -37,7 +37,7 @@ func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, 
 	return createdUser, nil
 }
 
-func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
+func (s *MinerUserTypeORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key cannot be an empty string")
 	}
