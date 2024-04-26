@@ -15,7 +15,7 @@ type TaskRequest struct {
 }
 
 type TaskData struct {
-	Prompt    string         `json:"prompt"`
+	Prompt    string         `json:"prompt,omitempty"`
 	Dialogue  []dialogueData `json:"dialogue,omitempty"`
 	Responses []taskResponse `json:"responses,omitempty"`
 	Task      string         `json:"task"`
