@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/orm"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -11,7 +13,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"dojo-api/pkg/orm"
 
 	"context"
 	"encoding/hex"
@@ -177,7 +178,7 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 		var expiry time.Time
 		if found {
 			verified = true
-			var err error 
+			var err error
 			apiKey, expiry, err = generateRandomApiKey()
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to generate random API key")
@@ -292,7 +293,6 @@ func generateRandomApiKey() (string, time.Time, error) {
 	expiry := time.Now().Add(24 * time.Hour)
 	return apiKey.String(), expiry, nil
 }
-
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
