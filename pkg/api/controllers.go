@@ -51,7 +51,6 @@ func LoginController(c *gin.Context) {
 // POST /api/v1/tasks
 func CreateTaskController(c *gin.Context) {
 	var requestBody utils.TaskRequest
-	var logger = utils.GetLogger()
 	response := make(map[string]interface{})
 	response["success"] = false
 	response["body"] = nil
@@ -64,7 +63,7 @@ func CreateTaskController(c *gin.Context) {
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		// DO SOMETHING WITH THE ERROR
-		logger.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
 		response["error"] = fmt.Sprintf("Error binding request body: %v", err)
 		c.JSON(400, response)
 	}
@@ -199,7 +198,6 @@ type WorkerTask struct {
 // PUT/api/v1/tasks/{task-id}
 func SubmitWorkerTaskController(c *gin.Context) {
 	var requestBody WorkerTask
-	var logger = utils.GetLogger()
 
 	// Get the task id from the path
 	c.Bind(&requestBody)
@@ -211,8 +209,8 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	dojoWorkerId := requestBody.DojoWorkerId
 	taskId := c.Param("task-id")
 
-	logger.Info().Msg(fmt.Sprintf("Dojo Worker ID: %v", dojoWorkerId))
-	logger.Info().Msg(fmt.Sprintf("Task ID: %v", taskId))
+	log.Info().Msg(fmt.Sprintf("Dojo Worker ID: %v", dojoWorkerId))
+	log.Info().Msg(fmt.Sprintf("Task ID: %v", taskId))
 
 	task_service := task.NewTaskService()
 	// Get a context.Context object from the gin context
@@ -221,26 +219,26 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	// Get corresponding task and dojoworker data
 	worker, err := task_service.GetDojoWorkerById(ctx, dojoWorkerId)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error getting DojoWorker: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error getting DojoWorker: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	// print the worker data
-	logger.Info().Msg(fmt.Sprintf("Dojo Worker by id Data pulled: %v", worker))
+	log.Info().Msg(fmt.Sprintf("Dojo Worker by id Data pulled: %v", worker))
 
 	task, err := task_service.GetTaskById(ctx, taskId)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error getting Task: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error getting Task: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	// print the task data
-	logger.Info().Msg(fmt.Sprintf("Task Data by id pulled: %v", task))
+	log.Info().Msg(fmt.Sprintf("Task Data by id pulled: %v", task))
 
 	// Update the task with the result data
 	numResults, err := task_service.UpdateTaskResultData(ctx, taskId, dojoWorkerId, requestBody.ResultData)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error updating task: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error updating task: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

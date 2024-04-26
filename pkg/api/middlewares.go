@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"dojo-api/db"
-	"dojo-api/utils"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -245,10 +244,9 @@ func verifyApiKey(apiKey string) string {
 	// Check if the API key is valid
 	client := db.NewClient()
 	ctx := context.Background()
-	logger := utils.GetLogger()
 	defer func() {
 		if err := client.Prisma.Disconnect(); err != nil {
-			logger.Error().Msgf("Error disconnecting: %v", err)
+			log.Error().Msgf("Error disconnecting: %v", err)
 		}
 	}()
 	client.Prisma.Connect()
