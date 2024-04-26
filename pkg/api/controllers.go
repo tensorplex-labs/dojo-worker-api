@@ -250,3 +250,19 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "body": gin.H{"numResults": numResults}, "error": nil})
 
 }
+
+func MinerController(c *gin.Context) {
+	apiKey := c.Request.Header.Get("X-API-KEY")
+
+	minerUserORM := orm.NewMinerUserORM()
+	minerUser, _ := minerUserORM.GetByApiKey(apiKey)
+	if minerUser == nil {
+		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+		return
+	}
+
+	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
+		"minerUserId": minerUser.ID,
+	}))
+}
