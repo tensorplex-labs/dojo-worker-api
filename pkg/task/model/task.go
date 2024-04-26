@@ -17,16 +17,22 @@ type TaskResponse struct {
 	MaxResults int           `json:"maxResults"`
 }
 
-// {
-// 	"success": true,
-// 	"body": {
-// 	  "taskId": "123",
-// 	  "title": "Task Title",
-// 	  "body": "Detailed task description",
-// 	  "expireAt": "YYYY-MM-DD HH:MM:SS",
-// 	  "taskData": [....],
-// 	  "status": "Pending",
-// 	  "maxResults": 10
-// 	},
-// 	"error": null
-//   }
+type SortField string
+
+const (
+	SortCreatedAt    SortField = "createdAt"
+	SortNumResult    SortField = "numResult"
+	SortHighestYield SortField = "highestYield"
+)
+
+type Pagination struct {
+	Page       int `json:"pageNumber"`
+	Limit      int `json:"pageSize"`
+	TotalPages int `json:"totalPages"`
+	TotalItems int `json:"totalItems"`
+}
+
+type TaskPagination struct {
+	Tasks      []TaskResponse `json:"tasks"`
+	Pagination Pagination     `json:"pagination"`
+}
