@@ -11,6 +11,7 @@ func LoginRoutes(router *gin.Engine) {
     {
     	workerApiGroup.POST("/login/auth", LoginMiddleware(), LoginController)
 		workerApiGroup.POST("/tasks/", UserAuthMiddleware(), CreateTaskController)
+		workerApiGroup.PUT("/tasks/:task-id", SubmitWorkerTaskController)
     }
 }
  
