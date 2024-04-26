@@ -4,7 +4,6 @@ import (
 	"dojo-api/pkg/task"
 	"dojo-api/utils"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -40,14 +39,12 @@ func main() {
 		task, err := taskService.GetTaskById(c.Request.Context(), taskID)
 
 		if err != nil {
-			// utils.(c, http.StatusNotFound, http.StatusNotFound, err.Error())
-			log.Println(err)
-			utils.ErrorHandler(c, http.StatusNotFound, err.Error())
+			utils.ErrorHandler(c, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
 		if task == nil {
-			utils.ErrorHandler(c, http.StatusAccepted, "Task not found")
+			utils.ErrorHandler(c, http.StatusNotFound, "Task not found")
 			return
 		}
 
