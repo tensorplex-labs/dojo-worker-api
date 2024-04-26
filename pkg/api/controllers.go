@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
-func LoginController(c *gin.Context) {
+func WorkerLoginController(c *gin.Context) {
 	walletAddressInterface, _ := c.Get("WalletAddress")
 	chainIdInterface, _ := c.Get("ChainId")
 	token, _ := c.Get("JWTToken")
@@ -249,4 +250,26 @@ func SubmitWorkerTaskController(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "body": gin.H{"numResults": numResults}, "error": nil})
 
+}
+
+func MinerLoginController(c *gin.Context) {
+	verified, _ := c.Get("verified")
+	hotkey, _ := c.Get("hotkey")
+	coldkey, _ := c.Get("coldkey")
+	apiKey, _ := c.Get("apiKey")
+	expiry, _ := c.Get("expiry")
+
+	minerUserService := orm.NewMinerUserService()
+	_, err := minerUserService.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to save network user")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
+		return
+	}
+
+	if verified.(bool) {
+		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
+	} else {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
+	}
 }

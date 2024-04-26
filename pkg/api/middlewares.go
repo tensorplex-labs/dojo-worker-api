@@ -24,7 +24,7 @@ import (
 )
 
 // AuthMiddleware checks if the request is authenticated
-func AuthMiddleware() gin.HandlerFunc {
+func WorkerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		jwtSecret := os.Getenv("JWT_SECRET")
@@ -284,16 +284,6 @@ func verifySignature(walletAddress, message, signatureHex string) (bool, error) 
 	return true, nil
 }
 
-// generate random api key genration function with expiry set to 24 hours from now
-func generateRandomApiKey() (string, time.Time, error) {
-	apiKey, err := uuid.NewRandom()
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
-	}
-	expiry := time.Now().Add(24 * time.Hour)
-	return apiKey.String(), expiry, nil
-}
-
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-KEY")
@@ -321,4 +311,13 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 		c.Set("user", user)
 		c.Next()
 	}
+}
+
+func generateRandomApiKey() (string, time.Time, error) {
+	apiKey, err := uuid.NewRandom()
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
+	}
+	expiry := time.Now().Add(24 * time.Hour)
+	return apiKey.String(), expiry, nil
 }
