@@ -3,21 +3,22 @@ package api
 import (
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/rs/zerolog/log"
+	"context"
 	"dojo-api/db"
 	"dojo-api/utils"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 )
 
 // AuthMiddleware checks if the request is authenticated
@@ -231,7 +232,7 @@ func UserAuthMiddleware() gin.HandlerFunc {
 		apiKey := c.Request.Header.Get("X-API-KEY")
 
 		if userId := verifyApiKey(apiKey); userId != "" {
-			c.Set("networkUserID", userId)
+			c.Set("minerUserID", userId)
 			c.Next()
 		} else {
 			c.JSON(401, gin.H{"error": "Unauthorized"})
@@ -240,25 +241,25 @@ func UserAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func verifyApiKey(apiKey string) string{
+func verifyApiKey(apiKey string) string {
 	// Check if the API key is valid
 	client := db.NewClient()
 	ctx := context.Background()
 	logger := utils.GetLogger()
 	defer func() {
-        if err := client.Prisma.Disconnect(); err != nil {
-            logger.Error().Msgf("Error disconnecting: %v", err)
-        }
-    }()
+		if err := client.Prisma.Disconnect(); err != nil {
+			logger.Error().Msgf("Error disconnecting: %v", err)
+		}
+	}()
 	client.Prisma.Connect()
-    apiKeyModel, err := client.NetworkUser.FindFirst(
-        db.NetworkUser.APIKey.Equals(apiKey),
-    ).Exec(ctx)
+	apiKeyModel, err := client.MinerUser.FindFirst(
+		db.MinerUser.APIKey.Equals(apiKey),
+	).Exec(ctx)
 
 	if err != nil {
 		log.Error().Msgf("Error finding API key: %v", err)
 		return ""
-    }
+	}
 
 	if apiKeyModel == nil {
 		return ""
