@@ -49,7 +49,7 @@ func MinerLoginController(c *gin.Context) {
 	_, err := networkUserService.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
 		return
 	}
 
