@@ -8,92 +8,111 @@ generator db {
 }
 
 model ExternalUser {
-    id         String   @id @default(cuid())
-    createdAt  DateTime @default(now())
-    updatedAt  DateTime @updatedAt
-    name       String
-    email      String
-    isVerified Boolean  @default(false)
+    id          String   @id @default(cuid())
+    created_at  DateTime @default(now())
+    updated_at  DateTime @updatedAt
+    name        String
+    email       String
+    is_verified Boolean  @default(false)
 }
 
-enum NetworkUserType {
-    MINER
-    VALIDATOR
-}
-
-model NetworkUser {
-    id          String          @id @default(cuid())
-    createdAt   DateTime        @default(now())
-    updatedAt   DateTime        @updatedAt
-    coldkey     String
-    hotkey      String
-    apiKey      String
-    keyExpireAt DateTime
-    ipAddress   String
-    userType    NetworkUserType
-    isVerified  Boolean
-    tasks       Task[]
-}
+// enum NetworkUserType {
+//     MINER
+//     VALIDATOR
+// }
 
 enum TaskStatus {
-    PENDING
-    PROCESSING
+    IN_PROGRESS
     COMPLETED
     EXPIRED
 }
 
-enum TaskModality {
+enum TaskResultStatus {
+    IN_PROGRESS
+    COMPLETED
+}
+
+enum TaskType {
     CODE_GENERATION
-    CONVERSATION
+    DIALOGUE
     TEXT_TO_IMAGE
+}
+
+model MinerUser {
+    id                String          @id @default(cuid())
+    created_at        DateTime        @default(now())
+    updated_at        DateTime        @updatedAt
+    coldkey           String
+    hotkey            String
+    api_key           String
+    api_key_expire_at DateTime
+    // not necessary anymore since GET APIs must be public
+    // ip_address        String?
+    // user_type         NetworkUserType
+    is_verified       Boolean         @default(false)
+    tasks             Task[]
+    worker_partners   WorkerPartner[]
+
+    @@unique([hotkey, api_key])
 }
 
 model Task {
     id            String       @id @default(cuid())
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
+    created_at    DateTime     @default(now())
+    updated_at    DateTime     @updatedAt
+    expire_at     DateTime
     title         String
     body          String
-    modality      TaskModality
-    expireAt      DateTime
-    criteria      Json
-    taskData      Json
+    type          TaskType
+    // criteria        Json
+    task_data     Json
     status        TaskStatus
-    maxResults    Int
-    numResults    Int
-    totalYield    Float
-    taskResults   TaskResult[]
-    NetworkUser   NetworkUser? @relation(fields: [networkUserId], references: [id])
-    networkUserId String?
-}
-
-enum ResultStatus {
-    PENDING
-    COMPLETED
+    max_results   Int
+    num_results   Int
+    total_reward  Float?
+    task_results  TaskResult[]
+    MinerUser     MinerUser?   @relation(fields: [miner_user_id], references: [id])
+    miner_user_id String?
 }
 
 model TaskResult {
-    id             String       @id @default(cuid())
-    createdAt      DateTime     @default(now())
-    updatedAt      DateTime     @updatedAt
-    status         ResultStatus
-    resultData     Json
-    Task           Task         @relation(fields: [taskId], references: [id])
-    taskId         String
-    DojoWorker     DojoWorker   @relation(fields: [dojoWorkerId], references: [id])
-    dojoWorkerId   String
-    stakeAmount    Float?
-    potentialYield Float?
-    potentialLoss  Float?
-    finalisedYield Float?
-    finalisedLoss  Float?
+    id               String           @id @default(cuid())
+    created_at       DateTime         @default(now())
+    updated_at       DateTime         @updatedAt
+    status           TaskResultStatus
+    result_data      Json
+    Task             Task             @relation(fields: [task_id], references: [id])
+    task_id          String
+    DojoWorker       DojoWorker       @relation(fields: [worker_id], references: [id])
+    worker_id        String
+    stake_amount     Float?
+    potential_reward Float?
+    potential_loss   Float?
+    finalised_reward Float?
+    finalised_loss   Float?
 }
 
 model DojoWorker {
-    id            String       @id @default(cuid())
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    walletAddress String
-    chainId       String
-    taskResults   TaskResult[]
+    id                   String          @id @default(cuid())
+    created_at           DateTime        @default(now())
+    updated_at           DateTime        @updatedAt
+    wallet_address       String
+    chain_id             String
+    task_results         TaskResult[]
+    current_stake_amount Float?
+    worker_partners      WorkerPartner[]
+
+    @@unique([wallet_address, chain_id])
+}
+
+model WorkerPartner {
+    id                  String     @id @default(cuid())
+    created_at          DateTime   @default(now())
+    updated_at          DateTime   @updatedAt
+    MinerUser           MinerUser  @relation(fields: [miner_id], references: [id])
+    miner_id            String
+    DojoWorker          DojoWorker @relation(fields: [worker_id], references: [id])
+    worker_id           String
+    is_delete_by_miner  Boolean    @default(false)
+    is_active_by_worker Boolean    @default(true)
 }
