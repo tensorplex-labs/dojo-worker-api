@@ -4,11 +4,15 @@ import (
 	"context"
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
+	"math"
+
 	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type TaskService struct {
@@ -22,31 +26,129 @@ func NewTaskService() *TaskService {
 }
 
 type Task struct {
-	Title        string          `json:"title"`
-	Body         string          `json:"body"`
-	Modality     db.TaskModality `json:"modality"`
-	ExpireAt     time.Time       `json:"expireAt"`
-	Criteria     []byte          `json:"criteria"`
-	TaskData     []byte          `json:"taskData"`
-	MaxResults   int             `json:"maxResults"`
-	TotalRewards float64         `json:"totalRewards"`
+	Title        string      `json:"title"`
+	Body         string      `json:"body"`
+	Modality     db.TaskType `json:"modality"`
+	ExpireAt     time.Time   `json:"expireAt"`
+	Criteria     []byte      `json:"criteria"`
+	TaskData     []byte      `json:"taskData"`
+	MaxResults   int         `json:"maxResults"`
+	TotalRewards float64     `json:"totalRewards"`
 }
 
 type TaskResult struct {
-    ID             string      `json:"id"`
-    CreatedAt      time.Time   `json:"createdAt"`
-    UpdatedAt      time.Time   `json:"updatedAt"`
-    Status         string      `json:"status"`
-    ResultData     []byte      `json:"resultData"`
-    TaskID         string      `json:"taskId"`
-    DojoWorkerID   string      `json:"dojoWorkerId"`
-    StakeAmount    *float64    `json:"stakeAmount"`
-    PotentialYield *float64    `json:"potentialYield"`
-    PotentialLoss  *float64    `json:"potentialLoss"`
-    FinalisedYield *float64    `json:"finalisedYield"`
-    FinalisedLoss  *float64    `json:"finalisedLoss"`
+	ID             string    `json:"id"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Status         string    `json:"status"`
+	ResultData     []byte    `json:"resultData"`
+	TaskID         string    `json:"taskId"`
+	DojoWorkerID   string    `json:"dojoWorkerId"`
+	StakeAmount    *float64  `json:"stakeAmount"`
+	PotentialYield *float64  `json:"potentialYield"`
+	PotentialLoss  *float64  `json:"potentialLoss"`
+	FinalisedYield *float64  `json:"finalisedYield"`
+	FinalisedLoss  *float64  `json:"finalisedLoss"`
 }
 
+// get task by id
+func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
+	task, err := taskService.client.Task.FindUnique(db.Task.ID.Equals(id)).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting string to int64")
+		return nil, err
+	}
+	// Ensure task is not nil if Prisma does not handle not found errors automatically
+	if task == nil {
+		return nil, fmt.Errorf("no task found with ID %s", id)
+	}
+
+	return &TaskResponse{
+		ID:         task.ID,
+		Title:      task.Title,
+		Body:       task.Body,
+		ExpireAt:   task.ExpireAt,
+		Type:       task.Type,
+		TaskData:   task.TaskData,
+		Status:     task.Status,
+		MaxResults: task.MaxResults,
+	}, nil
+}
+
+// TODO: Implement yieldMin, yieldMax
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page int, limit int, types []string, sort string) (*TaskPagination, error) {
+	// Calculate offset based on the page and limit
+	offset := (page - 1) * limit
+
+	// Determine the sort order dynamically
+	var sortQuery db.TaskOrderByParam
+	switch sort {
+	case "createdAt":
+		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
+	case "numResults":
+		sortQuery = db.Task.NumResults.Order(db.SortOrderDesc)
+	default:
+		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
+	}
+
+	taskTypes := convertStringToTaskType(types)
+
+	tasks, err := taskService.client.Task.FindMany(
+		db.Task.Type.In(taskTypes),
+	).OrderBy(sortQuery).
+		Skip(offset).
+		Take(limit).
+		Exec(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting tasks by pagination")
+		return nil, err
+	}
+
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no tasks found")
+	}
+
+	// Convert tasks to TaskResponse model
+	var taskResponses []TaskResponse
+	for _, task := range tasks {
+		taskResponse := TaskResponse{
+			ID:         task.ID,
+			Title:      task.Title,
+			Body:       task.Body,
+			Type:       task.Type,
+			ExpireAt:   task.ExpireAt,
+			TaskData:   task.TaskData,
+			Status:     task.Status,
+			MaxResults: task.MaxResults,
+		}
+		taskResponses = append(taskResponses, taskResponse)
+	}
+
+	totalTasks := len(tasks)
+	totalPages := int(math.Ceil(float64(totalTasks) / float64(limit)))
+
+	// Construct pagination metadata
+	pagination := Pagination{
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+		TotalItems: totalTasks,
+	}
+
+	return &TaskPagination{
+		Tasks:      taskResponses,
+		Pagination: pagination,
+	}, nil
+}
+
+func convertStringToTaskType(taskTypes []string) []db.TaskType {
+	var convertedTypes []db.TaskType
+	for _, t := range taskTypes {
+		convertedTypes = append(convertedTypes, db.TaskType(t))
+	}
+	return convertedTypes
+}
 
 // create task
 func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]string, error) {
@@ -61,7 +163,7 @@ func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]s
 	client.Prisma.Connect()
 	var createdIds []string
 	for _, taskInterface := range taskData.TaskData {
-		modality := db.TaskModality(taskInterface.Task)
+		modality := db.TaskType(taskInterface.Task)
 
 		criteriaJSON, err := json.Marshal(taskInterface.Criteria)
 		if err != nil {
@@ -107,18 +209,18 @@ func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]s
 
 func insertTaskData(newTask Task, userid string, client *db.PrismaClient, ctx context.Context) (string, error) {
 	task, err := client.Task.CreateOne(
+		db.Task.ExpireAt.Set(newTask.ExpireAt),
 		db.Task.Title.Set(newTask.Title),
 		db.Task.Body.Set(newTask.Body),
-		db.Task.Modality.Set(newTask.Modality),
-		db.Task.ExpireAt.Set(newTask.ExpireAt),
-		db.Task.Criteria.Set(newTask.Criteria),
+		db.Task.Type.Set(newTask.Modality),
+		// db.Task.Criteria.Set(newTask.Criteria),
 		db.Task.TaskData.Set(newTask.TaskData),
 		db.Task.Status.Set("PENDING"),
 		db.Task.MaxResults.Set(newTask.MaxResults),
 		db.Task.NumResults.Set(0),
-		db.Task.TotalYield.Set(newTask.TotalRewards),
-		db.Task.NetworkUser.Link(
-			db.NetworkUser.ID.Equals(userid),
+		db.Task.TotalReward.Set(newTask.TotalRewards),
+		db.Task.MinerUser.Link(
+			db.MinerUser.ID.Equals(userid),
 		),
 	).Exec(ctx)
 
@@ -148,7 +250,7 @@ func insertTaskResultData(newTaskResult TaskResult, client *db.PrismaClient, ctx
 	return taskResult.ID, err
 }
 
-func (t *TaskService )GetDojoWorkerById(ctx context.Context ,id string) (*db.DojoWorkerModel, error) {
+func (t *TaskService) GetDojoWorkerById(ctx context.Context, id string) (*db.DojoWorkerModel, error) {
 	// print the dojo worker id
 	fmt.Println("Dojo Worker ID: ", id)
 	worker, err := t.client.DojoWorker.FindUnique(
@@ -180,7 +282,7 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
-func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string,dojoWorkerId string, resultData map[string]interface{}) (int, error) {
+func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, dojoWorkerId string, resultData map[string]interface{}) (int, error) {
 
 	// Convert your map to json
 	jsonResultData, err := json.Marshal(resultData)
@@ -189,9 +291,9 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string,do
 	}
 
 	newTaskResultData := TaskResult{
-		Status: "COMPLETED", // Check with evan if it's completed
-		ResultData: jsonResultData,
-		TaskID: taskId,
+		Status:       "COMPLETED", // Check with evan if it's completed
+		ResultData:   jsonResultData,
+		TaskID:       taskId,
 		DojoWorkerID: dojoWorkerId,
 	}
 
@@ -201,14 +303,14 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string,do
 		return 0, err
 	}
 
-    // Increment numResults
-    updatedTask, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskId)).Update(
-        db.Task.NumResults.Increment(1),
-    ).Exec(ctx)
-    if err != nil {
-        return 0, err
-    }
+	// Increment numResults
+	updatedTask, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskId)).Update(
+		db.Task.NumResults.Increment(1),
+	).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
 
-    // If no errors occurred, return the updated numResults and nil
-    return updatedTask.NumResults, nil
+	// If no errors occurred, return the updated numResults and nil
+	return updatedTask.NumResults, nil
 }
