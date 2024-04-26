@@ -4,7 +4,6 @@ import (
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 	"dojo-api/utils"
-	"errors"
 	"fmt"
 	"net/http"
 
