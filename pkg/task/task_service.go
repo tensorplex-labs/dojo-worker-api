@@ -1,15 +1,14 @@
 package task
 
 import (
+	"context"
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
-	"time"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	"time"
 )
 
 type TaskService struct {
@@ -22,15 +21,15 @@ func NewTaskService() *TaskService {
 	}
 }
 
-type Task struct{
-	Title       string      `json:"title"`
-	Body        string      `json:"body"`
-	Modality    db.TaskModality `json:"modality"`
-	ExpireAt    time.Time   `json:"expireAt"`
-	Criteria    []byte      `json:"criteria"`
-	TaskData    []byte `json:"taskData"`
-	MaxResults  int         `json:"maxResults"`
-	TotalRewards float64    `json:"totalRewards"`
+type Task struct {
+	Title        string          `json:"title"`
+	Body         string          `json:"body"`
+	Modality     db.TaskModality `json:"modality"`
+	ExpireAt     time.Time       `json:"expireAt"`
+	Criteria     []byte          `json:"criteria"`
+	TaskData     []byte          `json:"taskData"`
+	MaxResults   int             `json:"maxResults"`
+	TotalRewards float64         `json:"totalRewards"`
 }
 
 type TaskResult struct {
@@ -49,8 +48,8 @@ type TaskResult struct {
 }
 
 
-// create task 
-func (t *TaskService) CreateTask(taskData map[string]interface{}, userid string) ([]string, error){
+// create task
+func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]string, error) {
 	var logger = utils.GetLogger()
 	client := db.NewClient()
 	ctx := context.Background()
@@ -61,50 +60,36 @@ func (t *TaskService) CreateTask(taskData map[string]interface{}, userid string)
 	}()
 	client.Prisma.Connect()
 	var createdIds []string
-	for _, taskInterface := range taskData["taskData"].([]interface{}) {
-		task, ok := taskInterface.(map[string]interface{})
-		if !ok {
-            logger.Error().Msg("Invalid task data format")
-            return nil, errors.New("invalid task data format")
-        }
-        expireAtStr, ok := taskData["expireAt"].(string)
-        if !ok {
-            logger.Error().Msg("Missing or invalid expireAt field")
-            return nil, errors.New("missing or invalid expireAt field")
-        }
-        parsedTime, err := time.Parse(time.DateTime, expireAtStr)
-        if err != nil {
-            logger.Error().Msgf("Error parsing time: %v", err)
-            return nil, errors.New("invalid time format")
-        }
-		modalityStr, ok := task["task"].(string)
-        if !ok {
-            logger.Error().Msg("Missing or invalid modality field")
-            return nil, errors.New("missing or invalid modality field")
-        }
-        modality := db.TaskModality(modalityStr)
+	for _, taskInterface := range taskData.TaskData {
+		modality := db.TaskModality(taskInterface.Task)
 
-		criteriaJSON, err := json.Marshal(task["criteria"])
-        if err != nil {
-            logger.Error().Msgf("Error marshaling criteria: %v", err)
-            return nil, errors.New("invalid criteria format")
-        }
+		criteriaJSON, err := json.Marshal(taskInterface.Criteria)
+		if err != nil {
+			logger.Error().Msgf("Error marshaling criteria: %v", err)
+			return nil, errors.New("invalid criteria format")
+		}
 
-		taskInfoJSON, err := json.Marshal(task["taskData"])
+		taskInfoJSON, err := json.Marshal(taskInterface)
 		if err != nil {
 			logger.Error().Msgf("Error marshaling task data: %v", err)
 			return nil, errors.New("invalid task data format")
 		}
 
+		parsedExpireAt, err := time.Parse(time.DateTime, taskData.ExpireAt.(string))
+		if err != nil {
+			logger.Error().Msgf("Error parsing expireAt: %v", err)
+			return nil, errors.New("invalid expireAt format")
+		}
+
 		newTask := Task{
-			Title: taskData["title"].(string),
-			Body: taskData["body"].(string),
-			Modality: modality,
-			ExpireAt: parsedTime, 
-			Criteria: criteriaJSON,
-			TaskData: taskInfoJSON,
-			MaxResults: int(taskData["maxResults"].(float64)),
-			TotalRewards: taskData["totalRewards"].(float64),
+			Title:        taskData.Title,
+			Body:         taskData.Body,
+			Modality:     modality,
+			ExpireAt:     parsedExpireAt,
+			Criteria:     criteriaJSON,
+			TaskData:     taskInfoJSON,
+			MaxResults:   taskData.MaxResults,
+			TotalRewards: taskData.TotalRewards,
 		}
 
 		id, err := insertTaskData(newTask, userid, client, ctx)
@@ -136,6 +121,14 @@ func insertTaskData(newTask Task, userid string, client *db.PrismaClient, ctx co
 			db.NetworkUser.ID.Equals(userid),
 		),
 	).Exec(ctx)
+
+	if err != nil {
+		return "", err
+	}
+
+	if task == nil {
+		return "", errors.New("failed to create task")
+	}
 
 	return task.ID, err
 }

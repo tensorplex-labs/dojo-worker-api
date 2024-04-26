@@ -7,12 +7,11 @@ import (
 func LoginRoutes(router *gin.Engine) {
 
 	// Grouping routes
-	apiGroup := router.Group("/api")
+	workerApiGroup := router.Group("/api/v1")
     {
-    	apiGroup.POST("/v1/tasks/", UserAuthMiddleware(), CreateTaskController)
+    	workerApiGroup.POST("/login/auth", LoginMiddleware(), LoginController)
+		workerApiGroup.POST("/tasks/", UserAuthMiddleware(), CreateTaskController)
+		workerApiGroup.PUT("/tasks/:task-id", SubmitWorkerTaskController)
     }
-	// Submit a task response by a worker.
-	{
-		apiGroup.PUT("/v1/tasks/:task-id", SubmitWorkerTaskController)
-	}
 }
+ 
