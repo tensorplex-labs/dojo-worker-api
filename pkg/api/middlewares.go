@@ -293,7 +293,7 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		networkUserService := orm.NewMinerUserService()
+		networkUserService := orm.MinerUserService()
 		user, err := networkUserService.GetUserByAPIKey(apiKey)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to retrieve user by API key")
