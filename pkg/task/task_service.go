@@ -6,7 +6,6 @@ import (
 	"dojo-api/pkg/orm"
 	"math"
 
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,13 +150,12 @@ func convertStringToTaskType(taskTypes []string) []db.TaskType {
 }
 
 // create task
-func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]string, error) {
-	var logger = utils.GetLogger()
+func (t *TaskService) CreateTask(taskData TaskRequest, userid string) ([]string, error) {
 	client := db.NewClient()
 	ctx := context.Background()
 	defer func() {
 		if err := client.Prisma.Disconnect(); err != nil {
-			logger.Error().Msgf("Error disconnecting: %v", err)
+			log.Error().Msgf("Error disconnecting: %v", err)
 		}
 	}()
 	client.Prisma.Connect()
@@ -167,19 +165,19 @@ func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]s
 
 		criteriaJSON, err := json.Marshal(taskInterface.Criteria)
 		if err != nil {
-			logger.Error().Msgf("Error marshaling criteria: %v", err)
+			log.Error().Msgf("Error marshaling criteria: %v", err)
 			return nil, errors.New("invalid criteria format")
 		}
 
 		taskInfoJSON, err := json.Marshal(taskInterface)
 		if err != nil {
-			logger.Error().Msgf("Error marshaling task data: %v", err)
+			log.Error().Msgf("Error marshaling task data: %v", err)
 			return nil, errors.New("invalid task data format")
 		}
 
 		parsedExpireAt, err := time.Parse(time.DateTime, taskData.ExpireAt.(string))
 		if err != nil {
-			logger.Error().Msgf("Error parsing expireAt: %v", err)
+			log.Error().Msgf("Error parsing expireAt: %v", err)
 			return nil, errors.New("invalid expireAt format")
 		}
 
@@ -197,7 +195,7 @@ func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]s
 		id, err := insertTaskData(newTask, userid, client, ctx)
 
 		if err != nil {
-			logger.Error().Msgf("Error creating task: %v", err)
+			log.Error().Msgf("Error creating task: %v", err)
 			return nil, err
 		}
 
