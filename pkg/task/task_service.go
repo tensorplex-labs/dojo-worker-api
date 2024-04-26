@@ -6,7 +6,6 @@ import (
 	"dojo-api/pkg/orm"
 	"math"
 
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,7 +150,7 @@ func convertStringToTaskType(taskTypes []string) []db.TaskType {
 }
 
 // create task
-func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]string, error) {
+func (t *TaskService) CreateTask(taskData TaskRequest, userid string) ([]string, error) {
 	client := db.NewClient()
 	ctx := context.Background()
 	defer func() {

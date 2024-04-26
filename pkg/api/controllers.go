@@ -4,7 +4,6 @@ import (
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
-	"dojo-api/utils"
 	"errors"
 	"fmt"
 	"net/http"
@@ -50,7 +49,7 @@ func LoginController(c *gin.Context) {
 
 // POST /api/v1/tasks
 func CreateTaskController(c *gin.Context) {
-	var requestBody utils.TaskRequest
+	var requestBody task.TaskRequest
 	response := make(map[string]interface{})
 	response["success"] = false
 	response["body"] = nil
@@ -90,7 +89,7 @@ func CreateTaskController(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-func validateTaskRequest(taskData utils.TaskRequest) error {
+func validateTaskRequest(taskData task.TaskRequest) error {
 	if taskData.Title == "" {
 		return errors.New("title is required")
 	}
@@ -121,7 +120,7 @@ func validateTaskRequest(taskData utils.TaskRequest) error {
 	return nil
 }
 
-func validateTaskData(taskData utils.TaskData) error {
+func validateTaskData(taskData task.TaskData) error {
 	if taskData.Prompt == "" && len(taskData.Dialogue) == 0 {
 		return errors.New("prompt is required")
 	}
