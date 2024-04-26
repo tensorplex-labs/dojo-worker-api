@@ -3,32 +3,30 @@ package orm
 import (
 	"context"
 	"dojo-api/db"
+	"fmt"
 	"log"
 	"time"
 )
 
-type NetworkUserORM struct {
+type MinerUserORM struct {
 	dbClient *db.PrismaClient
 }
 
-func NewNetworkUserService() *NetworkUserORM {
+func NewMinerUserService() *MinerUserORM {
 	client := NewPrismaClient()
-	return &NetworkUserORM{
+	return &MinerUserORM{
 		dbClient: client,
 	}
 }
 
-func (s *NetworkUserORM) CreateUser() (*db.NetworkUserModel, error) {
+func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
 	ctx := context.Background()
-	// TODO add actual logic
-	createdUser, err := s.dbClient.NetworkUser.CreateOne(
-		db.NetworkUser.Coldkey.Set("asd123"),
-		db.NetworkUser.Hotkey.Set("asd123"),
-		db.NetworkUser.APIKey.Set(""),
-		db.NetworkUser.KeyExpireAt.Set(time.Now().Add(time.Hour*24*7)),
-		db.NetworkUser.IPAddress.Set("asdasd"),
-		db.NetworkUser.UserType.Set(db.NetworkUserTypeValidator),
-		db.NetworkUser.IsVerified.Set(false),
+	createdUser, err := s.dbClient.MinerUser.CreateOne(
+		db.MinerUser.Coldkey.Set(coldkey),
+		db.MinerUser.Hotkey.Set(hotkey),
+		db.MinerUser.APIKey.Set(apiKey),
+		db.MinerUser.APIKeyExpireAt.Set(expiry),
+		db.MinerUser.IsVerified.Set(isVerified),
 	).Exec(ctx)
 
 	if err != nil {
@@ -37,4 +35,19 @@ func (s *NetworkUserORM) CreateUser() (*db.NetworkUserModel, error) {
 	}
 	log.Println("User created successfully")
 	return createdUser, nil
+}
+
+func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
+	if apiKey == "" {
+		return nil, fmt.Errorf("API key cannot be an empty string")
+	}
+	ctx := context.Background()
+	user, err := s.dbClient.MinerUser.FindFirst(
+		db.MinerUser.APIKey.Equals(apiKey),
+	).Exec(ctx)
+	if err != nil {
+		log.Printf("Error retrieving user by API key: %v", err)
+		return nil, err
+	}
+	return user, nil
 }

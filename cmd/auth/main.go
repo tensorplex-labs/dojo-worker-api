@@ -4,6 +4,7 @@ import (
 	"dojo-api/pkg/auth"
 	"dojo-api/pkg/orm"
 	"fmt"
+	"time"
 )
 
 func main() {
@@ -11,6 +12,6 @@ func main() {
 	fmt.Println("Hello, World!")
 	authClient := auth.NewAuthService()
 	fmt.Println(authClient)
-	service := orm.NewNetworkUserService()
-	service.CreateUser()
+	service := orm.NewMinerUserService()
+	service.CreateUser("coldkey123", "hotkey123", "apiKey123", time.Now().Add(24*time.Hour), true)
 }

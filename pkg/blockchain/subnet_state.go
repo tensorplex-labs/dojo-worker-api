@@ -178,3 +178,12 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	}()
 	return nil
 }
+
+func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
+	for i, vhotkey := range s.SubnetState.ActiveMinerHotkeys {
+		if hotkey == vhotkey {
+			return i, true
+		}
+	}
+	return -1, false
+}

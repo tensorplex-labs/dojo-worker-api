@@ -10,3 +10,12 @@ Content-Type: application/json
     "message": "Some random message",
     "signature": "0xc1d45d5813feec1d6d9ec004dce1b100d59bd49bf8520d897beacb40600194cb242d710297e6407ae72228219d2e6b6dfa390ff979695f287b4a5c6186d2dcf900"
 }
+
+###
+POST {{url}}/api/miner/login/auth
+Content-Type: application/json
+
+{
+   "hotkey" : "12356",
+   "coldkey" : "78907"
+}

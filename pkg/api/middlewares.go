@@ -3,12 +3,15 @@ package api
 import (
 	"net/http"
 
+	"dojo-api/pkg/blockchain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"dojo-api/pkg/orm"
 
 	"context"
 	"encoding/hex"
@@ -52,13 +55,13 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		log.Info().Msg("Token authenticated successfully")
-		// Pass the claims to the next middleware/handler
+
 		c.Set("userInfo", claims)
 		c.Next()
 	}
 }
 
-func LoginMiddleware() gin.HandlerFunc {
+func WorkerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var requestMap map[string]string
 		if err := c.BindJSON(&requestMap); err != nil {
@@ -136,6 +139,61 @@ func LoginMiddleware() gin.HandlerFunc {
 		c.Set("JWTToken", token)
 		c.Set("WalletAddress", walletAddress)
 		c.Set("ChainId", chainId)
+		c.Next()
+	}
+}
+
+// login middleware for network user
+func MinerLoginMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var requestMap map[string]string
+		if err := c.BindJSON(&requestMap); err != nil {
+			log.Error().Err(err).Msg("Invalid request body")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
+			c.Abort()
+			return
+		}
+
+		coldkey, coldkeyExists := requestMap["coldkey"]
+		if !coldkeyExists {
+			log.Error().Msg("coldkey is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("coldkey is required"))
+			c.Abort()
+			return
+		}
+
+		hotkey, hotkeyExists := requestMap["hotkey"]
+		if !hotkeyExists {
+			log.Error().Msg("hotkey is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
+			c.Abort()
+			return
+		}
+
+		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
+		var verified bool
+		var apiKey string
+		var expiry time.Time
+		if found {
+			verified = true
+			var err error 
+			apiKey, expiry, err = generateRandomApiKey()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to generate random API key")
+				c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to generate random API key"))
+				c.Abort()
+				return
+			}
+		} else {
+			verified, apiKey, expiry = false, "", time.Time{}
+		}
+
+		c.Set("verified", verified)
+		c.Set("hotkey", hotkey)
+		c.Set("coldkey", coldkey)
+		c.Set("apiKey", apiKey)
+		c.Set("expiry", expiry)
 		c.Next()
 	}
 }
@@ -223,4 +281,44 @@ func verifySignature(walletAddress, message, signatureHex string) (bool, error) 
 
 	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
 	return true, nil
+}
+
+// generate random api key genration function with expiry set to 24 hours from now
+func generateRandomApiKey() (string, time.Time, error) {
+	apiKey, err := uuid.NewRandom()
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
+	}
+	expiry := time.Now().Add(24 * time.Hour)
+	return apiKey.String(), expiry, nil
+}
+
+
+func MinerAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey := c.GetHeader("X-API-KEY")
+		if apiKey == "" {
+			log.Error().Msg("API key is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("API key is required"))
+			c.Abort()
+			return
+		}
+		networkUserService := orm.NewMinerUserService()
+		user, err := networkUserService.GetUserByAPIKey(apiKey)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve user by API key")
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to retrieve user by API key"))
+			c.Abort()
+			return
+		}
+
+		if user.APIKeyExpireAt.Before(time.Now()) {
+			log.Error().Msg("API key has expired")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("API key has expired"))
+			c.Abort()
+			return
+		}
+		c.Set("user", user)
+		c.Next()
+	}
 }
