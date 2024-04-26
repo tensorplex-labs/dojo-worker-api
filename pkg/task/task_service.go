@@ -4,7 +4,6 @@ import (
 	"context"
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
-	"dojo-api/pkg/task/model"
 	"math"
 
 	"dojo-api/utils"
@@ -53,7 +52,7 @@ type TaskResult struct {
 }
 
 // get task by id
-func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*model.TaskResponse, error) {
+func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
 	task, err := taskService.client.Task.FindUnique(db.Task.ID.Equals(id)).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting string to int64")
@@ -64,7 +63,7 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 		return nil, fmt.Errorf("no task found with ID %s", id)
 	}
 
-	return &model.TaskResponse{
+	return &TaskResponse{
 		ID:         task.ID,
 		Title:      task.Title,
 		Body:       task.Body,
@@ -77,7 +76,7 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 }
 
 // TODO: Implement yieldMin, yieldMax
-func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page int, limit int, types []string, sort string) (*model.TaskPagination, error) {
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page int, limit int, types []string, sort string) (*TaskPagination, error) {
 	// Calculate offset based on the page and limit
 	offset := (page - 1) * limit
 
@@ -111,9 +110,9 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 	}
 
 	// Convert tasks to TaskResponse model
-	var taskResponses []model.TaskResponse
+	var taskResponses []TaskResponse
 	for _, task := range tasks {
-		taskResponse := model.TaskResponse{
+		taskResponse := TaskResponse{
 			ID:         task.ID,
 			Title:      task.Title,
 			Body:       task.Body,
@@ -130,14 +129,14 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 	totalPages := int(math.Ceil(float64(totalTasks) / float64(limit)))
 
 	// Construct pagination metadata
-	pagination := model.Pagination{
+	pagination := Pagination{
 		Page:       page,
 		Limit:      limit,
 		TotalPages: totalPages,
 		TotalItems: totalTasks,
 	}
 
-	return &model.TaskPagination{
+	return &TaskPagination{
 		Tasks:      taskResponses,
 		Pagination: pagination,
 	}, nil
