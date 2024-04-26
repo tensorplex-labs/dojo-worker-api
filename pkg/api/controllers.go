@@ -1,16 +1,44 @@
 package api
 
 import (
-	"dojo-api/pkg/task"
+    "github.com/gin-gonic/gin"
+    "dojo-api/pkg/orm"
+    "net/http"
+    "github.com/rs/zerolog/log"
 	"dojo-api/utils"
-	// "encoding/json"
+	"dojo-api/pkg/task"
 	"errors"
 	"fmt"
-	// "reflect"
-	// "time"
-	"github.com/gin-gonic/gin"
-	// "github.com/mitchellh/mapstructure"
 )
+
+func LoginController(c *gin.Context) {
+    walletAddressInterface, _ := c.Get("WalletAddress")
+    chainIdInterface, _ := c.Get("ChainId")
+    token, _ := c.Get("JWTToken")
+
+    walletAddress, ok := walletAddressInterface.(string)
+    if !ok {
+        log.Error().Msg("Invalid wallet address provided")
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid wallet address"))
+        return
+    }
+    chainId, ok := chainIdInterface.(string)
+    if !ok {
+        log.Error().Msg("Invalid signature provided")
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid signature"))
+        return
+    }
+    
+    workerService := orm.NewDojoWorkerService()
+    _, err := workerService.CreateDojoWorker(walletAddress, chainId)
+    if err != nil {
+        log.Error().Err(err).Msg("Failed to create worker")
+        c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
+        return
+    }
+    log.Info().Str("walletAddress", walletAddress).Msg("Worker created successfully")
+    c.JSON(http.StatusOK, defaultSuccessResponse(token))
+}
 
 func CreateTaskController(c *gin.Context) {
 	var requestBody utils.TaskRequest
@@ -146,19 +174,3 @@ func validateTaskData(taskData utils.TaskData) error {
 
 	return nil
 }
-
-// func parseCompletion(completion interface{}) (interface{}, error) {
-// 	switch completion := completion.(type) {
-// 	case string:
-// 		return completion, nil
-// 	case map[string]interface{}:
-// 		var completionStruct utils.Completion
-// 		err := mapstructure.Decode(completion, &completionStruct)
-// 		if err != nil {
-// 			return nil, errors.New("error decoding completion")
-// 		}
-// 		return completionStruct, nil
-// 	default:
-// 		return nil, errors.New("invalid completion format")
-// 	}
-// }
