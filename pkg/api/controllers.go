@@ -4,7 +4,6 @@ import (
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -46,139 +45,41 @@ func LoginController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(token))
 }
 
-// POST /api/v1/tasks
 func CreateTaskController(c *gin.Context) {
-	var requestBody task.TaskRequest
-	response := make(map[string]interface{})
-	response["success"] = false
-	response["body"] = nil
 	minerUserId, exists := c.Get("minerUserID")
 	if !exists {
-		response["error"] = "Unauthorized"
-		c.JSON(401, response)
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		c.Abort()
 		return
 	}
 
+	var requestBody task.TaskRequest
 	if err := c.BindJSON(&requestBody); err != nil {
-		// DO SOMETHING WITH THE ERROR
-		log.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
-		response["error"] = fmt.Sprintf("Error binding request body: %v", err)
-		c.JSON(400, response)
+		log.Error().Err(err).Msg("Invalid request body")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		c.Abort()
+		return
 	}
 
-	err := validateTaskRequest(requestBody)
+	err := task.ValidateTaskRequest(requestBody)
 	if err != nil {
-		response["error"] = fmt.Sprintf("Error validating request: %v", err)
-		c.JSON(400, response)
+		log.Error().Err(err).Msg("Failed to validate task request")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
+		c.Abort()
 		return
 	}
 
 	taskService := task.NewTaskService()
-	msg, err := taskService.CreateTask(requestBody, minerUserId.(string))
+	// TODO you should name this batch create tasks really...
+	msg, err := taskService.BatchCreateTask(requestBody, minerUserId.(string))
 
 	if err != nil {
-		response["error"] = fmt.Sprintf("Error creating task: %v", err)
-		c.JSON(500, response)
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
 		return
 	}
 
-	response["success"] = true
-	response["body"] = msg
-	response["error"] = nil
-	c.JSON(200, response)
-}
-
-func validateTaskRequest(taskData task.TaskRequest) error {
-	if taskData.Title == "" {
-		return errors.New("title is required")
-	}
-
-	if taskData.Body == "" {
-		return errors.New("body is required")
-	}
-
-	if taskData.ExpireAt == "" {
-		return errors.New("expireAt is required")
-	}
-
-	for _, taskInterface := range taskData.TaskData {
-		err := validateTaskData(taskInterface)
-		if err != nil {
-			return err
-		}
-	}
-
-	if taskData.MaxResults == 0 {
-		return errors.New("maxResults is required")
-	}
-
-	if taskData.TotalRewards == 0 {
-		return errors.New("totalRewards is required")
-	}
-
-	return nil
-}
-
-func validateTaskData(taskData task.TaskData) error {
-	if taskData.Prompt == "" && len(taskData.Dialogue) == 0 {
-		return errors.New("prompt is required")
-	}
-
-	if taskData.Task == "" {
-		return errors.New("task is required")
-	}
-	task := taskData.Task
-	if task == "CODE_GENERATION" || task == "TEXT_TO_IMAGE" {
-		for _, taskresponse := range taskData.Responses {
-			var ok bool
-			if task == "CODE_GENERATION" {
-				fmt.Println(taskresponse.Completion)
-				_, ok = taskresponse.Completion.(map[string]interface{})
-			} else if task == "TEXT_TO_IMAGE" {
-				_, ok = taskresponse.Completion.(string)
-			}
-			if !ok {
-				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
-			}
-		}
-
-		if len(taskData.Dialogue) != 0 {
-			return errors.New("dialogue should be empty for code generation and text to image tasks")
-		}
-		// TODO: change to dialogue when schema is updated
-	} else if task == "CONVERSATION" {
-		if len(taskData.Responses) != 0 {
-			return errors.New("responses should be empty for dialogue task")
-		}
-
-		if len(taskData.Dialogue) == 0 {
-			return errors.New("dialogue is required for dialogue task")
-		}
-	} else {
-		return errors.New("invalid task")
-	}
-
-	if len(taskData.Criteria) == 0 {
-		return errors.New("criteria is required")
-	}
-
-	for _, criteria := range taskData.Criteria {
-		if criteria.Type == "" {
-			return errors.New("type is required for criteria")
-		}
-
-		if criteria.Type == "multi-select" || criteria.Type == "ranking" {
-			if len(criteria.Options) == 0 {
-				return errors.New("options is required for multiple choice criteria")
-			}
-		} else if criteria.Type == "score" {
-			if criteria.Min == 0 && criteria.Max == 0 {
-				return errors.New("min or max is required for numeric criteria")
-			}
-		}
-	}
-
-	return nil
+	c.JSON(200, defaultSuccessResponse(msg))
 }
 
 //{

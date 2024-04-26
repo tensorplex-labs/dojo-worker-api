@@ -24,32 +24,6 @@ func NewTaskService() *TaskService {
 	}
 }
 
-type Task struct {
-	Title        string      `json:"title"`
-	Body         string      `json:"body"`
-	Modality     db.TaskType `json:"modality"`
-	ExpireAt     time.Time   `json:"expireAt"`
-	Criteria     []byte      `json:"criteria"`
-	TaskData     []byte      `json:"taskData"`
-	MaxResults   int         `json:"maxResults"`
-	TotalRewards float64     `json:"totalRewards"`
-}
-
-type TaskResult struct {
-	ID             string    `json:"id"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	Status         string    `json:"status"`
-	ResultData     []byte    `json:"resultData"`
-	TaskID         string    `json:"taskId"`
-	DojoWorkerID   string    `json:"dojoWorkerId"`
-	StakeAmount    *float64  `json:"stakeAmount"`
-	PotentialYield *float64  `json:"potentialYield"`
-	PotentialLoss  *float64  `json:"potentialLoss"`
-	FinalisedYield *float64  `json:"finalisedYield"`
-	FinalisedLoss  *float64  `json:"finalisedLoss"`
-}
-
 // get task by id
 func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
 	task, err := taskService.client.Task.FindUnique(db.Task.ID.Equals(id)).Exec(ctx)
@@ -150,15 +124,8 @@ func convertStringToTaskType(taskTypes []string) []db.TaskType {
 }
 
 // create task
-func (t *TaskService) CreateTask(taskData TaskRequest, userid string) ([]string, error) {
-	client := db.NewClient()
+func (s *TaskService) BatchCreateTask(taskData TaskRequest, userId string) ([]string, error) {
 	ctx := context.Background()
-	defer func() {
-		if err := client.Prisma.Disconnect(); err != nil {
-			log.Error().Msgf("Error disconnecting: %v", err)
-		}
-	}()
-	client.Prisma.Connect()
 	var createdIds []string
 	for _, taskInterface := range taskData.TaskData {
 		modality := db.TaskType(taskInterface.Task)
@@ -192,7 +159,7 @@ func (t *TaskService) CreateTask(taskData TaskRequest, userid string) ([]string,
 			TotalRewards: taskData.TotalRewards,
 		}
 
-		id, err := insertTaskData(newTask, userid, client, ctx)
+		id, err := insertTaskData(newTask, userId, s.client, ctx)
 
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
@@ -311,4 +278,97 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, d
 
 	// If no errors occurred, return the updated numResults and nil
 	return updatedTask.NumResults, nil
+}
+
+func ValidateTaskData(taskData TaskData) error {
+	if taskData.Prompt == "" && len(taskData.Dialogue) == 0 {
+		return errors.New("prompt is required")
+	}
+
+	if taskData.Task == "" {
+		return errors.New("task is required")
+	}
+	task := taskData.Task
+	if task == "CODE_GENERATION" || task == "TEXT_TO_IMAGE" {
+		for _, taskresponse := range taskData.Responses {
+			var ok bool
+			if task == "CODE_GENERATION" {
+				fmt.Println(taskresponse.Completion)
+				_, ok = taskresponse.Completion.(map[string]interface{})
+			} else if task == "TEXT_TO_IMAGE" {
+				_, ok = taskresponse.Completion.(string)
+			}
+			if !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
+		}
+
+		if len(taskData.Dialogue) != 0 {
+			return errors.New("dialogue should be empty for code generation and text to image tasks")
+		}
+		// TODO: change to dialogue when schema is updated
+	} else if task == "CONVERSATION" {
+		if len(taskData.Responses) != 0 {
+			return errors.New("responses should be empty for dialogue task")
+		}
+
+		if len(taskData.Dialogue) == 0 {
+			return errors.New("dialogue is required for dialogue task")
+		}
+	} else {
+		return errors.New("invalid task")
+	}
+
+	if len(taskData.Criteria) == 0 {
+		return errors.New("criteria is required")
+	}
+
+	for _, criteria := range taskData.Criteria {
+		if criteria.Type == "" {
+			return errors.New("type is required for criteria")
+		}
+
+		if criteria.Type == "multi-select" || criteria.Type == "ranking" {
+			if len(criteria.Options) == 0 {
+				return errors.New("options is required for multiple choice criteria")
+			}
+		} else if criteria.Type == "score" {
+			if criteria.Min == 0 && criteria.Max == 0 {
+				return errors.New("min or max is required for numeric criteria")
+			}
+		}
+	}
+
+	return nil
+}
+
+func ValidateTaskRequest(taskData TaskRequest) error {
+	if taskData.Title == "" {
+		return errors.New("title is required")
+	}
+
+	if taskData.Body == "" {
+		return errors.New("body is required")
+	}
+
+	if taskData.ExpireAt == "" {
+		return errors.New("expireAt is required")
+	}
+
+	for _, taskInterface := range taskData.TaskData {
+		err := ValidateTaskData(taskInterface)
+		if err != nil {
+			return err
+		}
+	}
+
+	if taskData.MaxResults == 0 {
+		return errors.New("maxResults is required")
+	}
+
+	if taskData.TotalRewards == 0 {
+		return errors.New("totalRewards is required")
+	}
+
+	return nil
 }

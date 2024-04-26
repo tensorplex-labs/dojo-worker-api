@@ -70,3 +70,29 @@ type taskCriteria struct {
 	Min     float64  `json:"min,omitempty"`
 	Max     float64  `json:"max,omitempty"`
 }
+
+type Task struct {
+	Title        string      `json:"title"`
+	Body         string      `json:"body"`
+	Modality     db.TaskType `json:"modality"`
+	ExpireAt     time.Time   `json:"expireAt"`
+	Criteria     []byte      `json:"criteria"`
+	TaskData     []byte      `json:"taskData"`
+	MaxResults   int         `json:"maxResults"`
+	TotalRewards float64     `json:"totalRewards"`
+}
+
+type TaskResult struct {
+	ID             string    `json:"id"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Status         string    `json:"status"`
+	ResultData     []byte    `json:"resultData"`
+	TaskID         string    `json:"taskId"`
+	DojoWorkerID   string    `json:"dojoWorkerId"`
+	StakeAmount    *float64  `json:"stakeAmount"`
+	PotentialYield *float64  `json:"potentialYield"`
+	PotentialLoss  *float64  `json:"potentialLoss"`
+	FinalisedYield *float64  `json:"finalisedYield"`
+	FinalisedLoss  *float64  `json:"finalisedLoss"`
+}
