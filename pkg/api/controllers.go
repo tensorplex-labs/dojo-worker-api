@@ -26,8 +26,8 @@ func LoginController(c *gin.Context) {
 	}
 	chainId, ok := chainIdInterface.(string)
 	if !ok {
-		log.Error().Msg("Invalid signature provided")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid signature"))
+		log.Error().Msg("Invalid chainId provided")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid chainId"))
 		return
 	}
 
@@ -39,9 +39,8 @@ func LoginController(c *gin.Context) {
 			log.Error().Err(err).Msg("Failed to create worker")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
 			return
-		} else {
-			log.Warn().Err(err).Msg("Worker already exists")
 		}
+		log.Warn().Err(err).Msg("Worker already exists")
 	}
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 	c.JSON(http.StatusOK, defaultSuccessResponse(token))
