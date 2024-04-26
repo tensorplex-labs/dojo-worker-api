@@ -1,6 +1,7 @@
 package api
 
 import (
+	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 	"dojo-api/utils"
@@ -33,12 +34,17 @@ func LoginController(c *gin.Context) {
 
 	workerService := orm.NewDojoWorkerService()
 	_, err := workerService.CreateDojoWorker(walletAddress, chainId)
+	_, alreadyExists := db.IsErrUniqueConstraint(err)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
-		return
+		if !alreadyExists {
+			log.Error().Err(err).Msg("Failed to create worker")
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
+			return
+		} else {
+			log.Warn().Err(err).Msg("Worker already exists")
+		}
 	}
-	log.Info().Str("walletAddress", walletAddress).Msg("Worker created successfully")
+	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 	c.JSON(http.StatusOK, defaultSuccessResponse(token))
 }
 
