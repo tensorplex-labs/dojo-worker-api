@@ -11,9 +11,12 @@ func LoginRoutes(router *gin.Engine) {
 		worker := apiV1.Group("/worker")
 		{
 			worker.POST("/login/auth", LoginMiddleware(), LoginController)
+			// TODO verify that worker is logged in
+			worker.POST("/partner", AuthMiddleware(), WorkerPartnerController)
 		}
 		apiV1.POST("/tasks/", UserAuthMiddleware(), CreateTaskController)
 		apiV1.PUT("/tasks/:task-id", SubmitWorkerTaskController)
+
 		miner := apiV1.Group("/miner")
 		{
 			miner.GET(":hotkey", MinerController)

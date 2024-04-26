@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -263,6 +264,43 @@ func MinerController(c *gin.Context) {
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
-		"minerUserId": minerUser.ID,
+		"minerId": minerUser.ID,
 	}))
+}
+
+func WorkerPartnerController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	worker, err := orm.NewDojoWorkerService().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	var requestBody struct {
+		MinerId string `json:"minerId"`
+	}
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, requestBody.MinerId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse("successfully created worker-miner partnership"))
 }
