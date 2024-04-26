@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 )
 
 // special init func that gets called for setting up all configs at the start
@@ -28,8 +30,9 @@ func init() {
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
 
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).With().Caller().Logger()
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	trace := flag.Bool("trace", false, "sets log level to trace")
 	flag.Parse()
@@ -81,4 +84,14 @@ func ErrorHandler(c *gin.Context, statusCode int, message string) {
 			"message": message,
 		},
 	})
+}
+
+// Parse ISO8601 date string to time.Time
+func ParseDate(date string) *time.Time {
+	parsedDate, err := time.Parse(time.RFC3339, date)
+	if err != nil {
+		log.Error().Stack().Err(err).Msg("Error parsing date")
+		return nil
+	}
+	return &parsedDate
 }

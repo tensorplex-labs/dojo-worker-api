@@ -70,8 +70,7 @@ func CreateTaskController(c *gin.Context) {
 	}
 
 	taskService := task.NewTaskService()
-	// TODO you should name this batch create tasks really...
-	msg, err := taskService.BatchCreateTask(requestBody, minerUserId.(string))
+	taskIds, err := taskService.CreateTasks(requestBody, minerUserId.(string))
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -79,7 +78,7 @@ func CreateTaskController(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, defaultSuccessResponse(msg))
+	c.JSON(200, defaultSuccessResponse(taskIds))
 }
 
 //{

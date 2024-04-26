@@ -4,12 +4,13 @@ import (
 	"context"
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 	"math"
+	"time"
 
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -123,81 +124,71 @@ func convertStringToTaskType(taskTypes []string) []db.TaskType {
 	return convertedTypes
 }
 
-// create task
-func (s *TaskService) BatchCreateTask(taskData TaskRequest, userId string) ([]string, error) {
-	ctx := context.Background()
-	var createdIds []string
-	for _, taskInterface := range taskData.TaskData {
-		modality := db.TaskType(taskInterface.Task)
+func IsValidTaskType(taskType TaskType) bool {
+	if taskType == TaskTypeCodeGen || taskType == TaskTypeTextToImage || taskType == TaskTypeDialogue {
+		return true
+	}
+	return false
+}
 
-		criteriaJSON, err := json.Marshal(taskInterface.Criteria)
+func IsValidCriteriaType(criteriaType CriteriaType) bool {
+	if criteriaType == CriteriaTypeMultiSelect || criteriaType == CriteriaTypeRanking || criteriaType == CriteriaTypeScore {
+		return true
+	}
+	return false
+}
+
+// create task
+func (s *TaskService) CreateTasks(request TaskRequest, minerUserId string) ([]string, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var taskIds []string
+	taskORM := orm.NewTaskORM()
+	for _, currTask := range request.TaskData {
+		taskType := TaskType(currTask.Task)
+
+		_, err := json.Marshal(currTask.Criteria)
 		if err != nil {
-			log.Error().Msgf("Error marshaling criteria: %v", err)
+			log.Error().Err(err).Msgf("Error marshaling criteria")
 			return nil, errors.New("invalid criteria format")
 		}
 
-		taskInfoJSON, err := json.Marshal(taskInterface)
+		taskData, err := json.Marshal(currTask)
 		if err != nil {
-			log.Error().Msgf("Error marshaling task data: %v", err)
+			log.Error().Err(err).Msgf("Error marshaling task data")
 			return nil, errors.New("invalid task data format")
 		}
 
-		parsedExpireAt, err := time.Parse(time.DateTime, taskData.ExpireAt.(string))
-		if err != nil {
-			log.Error().Msgf("Error parsing expireAt: %v", err)
+		expireAt := utils.ParseDate(request.ExpireAt.(string))
+		if expireAt == nil {
+			log.Error().Msg("Error parsing expireAt")
 			return nil, errors.New("invalid expireAt format")
 		}
 
-		newTask := Task{
-			Title:        taskData.Title,
-			Body:         taskData.Body,
-			Modality:     modality,
-			ExpireAt:     parsedExpireAt,
-			Criteria:     criteriaJSON,
-			TaskData:     taskInfoJSON,
-			MaxResults:   taskData.MaxResults,
-			TotalRewards: taskData.TotalRewards,
+		taskToCreate := db.InnerTask{
+			ExpireAt:   *expireAt,
+			Title:      request.Title,
+			Body:       request.Body,
+			Type:       db.TaskType(taskType),
+			TaskData:   taskData,
+			MaxResults: request.MaxResults,
+			NumResults: 0,
+			Status:     db.TaskStatusInProgress,
 		}
 
-		id, err := insertTaskData(newTask, userId, s.client, ctx)
+		if request.TotalRewards > 0 {
+			taskToCreate.TotalReward = &request.TotalRewards
+		}
 
+		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
 			return nil, err
 		}
 
-		createdIds = append(createdIds, fmt.Sprintf("Task created with ID: %s", id))
+		taskIds = append(taskIds, task.ID)
 	}
-
-	return createdIds, nil
-}
-
-func insertTaskData(newTask Task, userid string, client *db.PrismaClient, ctx context.Context) (string, error) {
-	task, err := client.Task.CreateOne(
-		db.Task.ExpireAt.Set(newTask.ExpireAt),
-		db.Task.Title.Set(newTask.Title),
-		db.Task.Body.Set(newTask.Body),
-		db.Task.Type.Set(newTask.Modality),
-		// db.Task.Criteria.Set(newTask.Criteria),
-		db.Task.TaskData.Set(newTask.TaskData),
-		db.Task.Status.Set("PENDING"),
-		db.Task.MaxResults.Set(newTask.MaxResults),
-		db.Task.NumResults.Set(0),
-		db.Task.TotalReward.Set(newTask.TotalRewards),
-		db.Task.MinerUser.Link(
-			db.MinerUser.ID.Equals(userid),
-		),
-	).Exec(ctx)
-
-	if err != nil {
-		return "", err
-	}
-
-	if task == nil {
-		return "", errors.New("failed to create task")
-	}
-
-	return task.ID, err
+	return taskIds, nil
 }
 
 func insertTaskResultData(newTaskResult TaskResult, client *db.PrismaClient, ctx context.Context) (string, error) {
@@ -281,23 +272,35 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, d
 }
 
 func ValidateTaskData(taskData TaskData) error {
-	if taskData.Prompt == "" && len(taskData.Dialogue) == 0 {
-		return errors.New("prompt is required")
-	}
-
 	if taskData.Task == "" {
 		return errors.New("task is required")
 	}
+
+	if !IsValidTaskType(taskData.Task) {
+		return fmt.Errorf("unsupported task: %v", taskData.Task)
+	}
+
+	if taskData.Task == TaskTypeDialogue {
+		if len(taskData.Dialogue) == 0 {
+			return errors.New("dialogue cannot be empty")
+		}
+	} else {
+		if taskData.Prompt == "" {
+			return errors.New("prompt is required")
+		}
+	}
+
 	task := taskData.Task
-	if task == "CODE_GENERATION" || task == "TEXT_TO_IMAGE" {
+	if task == TaskTypeCodeGen || task == TaskTypeTextToImage {
 		for _, taskresponse := range taskData.Responses {
 			var ok bool
-			if task == "CODE_GENERATION" {
+			if task == TaskTypeCodeGen {
 				fmt.Println(taskresponse.Completion)
 				_, ok = taskresponse.Completion.(map[string]interface{})
-			} else if task == "TEXT_TO_IMAGE" {
+			} else if task == TaskTypeTextToImage {
 				_, ok = taskresponse.Completion.(string)
 			}
+
 			if !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -306,8 +309,7 @@ func ValidateTaskData(taskData TaskData) error {
 		if len(taskData.Dialogue) != 0 {
 			return errors.New("dialogue should be empty for code generation and text to image tasks")
 		}
-		// TODO: change to dialogue when schema is updated
-	} else if task == "CONVERSATION" {
+	} else if task == TaskTypeDialogue {
 		if len(taskData.Responses) != 0 {
 			return errors.New("responses should be empty for dialogue task")
 		}
@@ -315,8 +317,6 @@ func ValidateTaskData(taskData TaskData) error {
 		if len(taskData.Dialogue) == 0 {
 			return errors.New("dialogue is required for dialogue task")
 		}
-	} else {
-		return errors.New("invalid task")
 	}
 
 	if len(taskData.Criteria) == 0 {
@@ -328,13 +328,21 @@ func ValidateTaskData(taskData TaskData) error {
 			return errors.New("type is required for criteria")
 		}
 
-		if criteria.Type == "multi-select" || criteria.Type == "ranking" {
+		if !IsValidCriteriaType(criteria.Type) {
+			return errors.New("unsupported criteria")
+		}
+
+		if criteria.Type == CriteriaTypeMultiSelect || criteria.Type == CriteriaTypeRanking {
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-		} else if criteria.Type == "score" {
+		} else if criteria.Type == CriteriaTypeScore {
 			if criteria.Min == 0 && criteria.Max == 0 {
 				return errors.New("min or max is required for numeric criteria")
+			}
+
+			if criteria.Min >= criteria.Max {
+				return errors.New("min must be less than max")
 			}
 		}
 	}
@@ -342,31 +350,31 @@ func ValidateTaskData(taskData TaskData) error {
 	return nil
 }
 
-func ValidateTaskRequest(taskData TaskRequest) error {
-	if taskData.Title == "" {
+func ValidateTaskRequest(request TaskRequest) error {
+	if request.Title == "" {
 		return errors.New("title is required")
 	}
 
-	if taskData.Body == "" {
+	if request.Body == "" {
 		return errors.New("body is required")
 	}
 
-	if taskData.ExpireAt == "" {
+	if request.ExpireAt == "" {
 		return errors.New("expireAt is required")
 	}
 
-	for _, taskInterface := range taskData.TaskData {
-		err := ValidateTaskData(taskInterface)
+	for _, currTask := range request.TaskData {
+		err := ValidateTaskData(currTask)
 		if err != nil {
 			return err
 		}
 	}
 
-	if taskData.MaxResults == 0 {
+	if request.MaxResults == 0 {
 		return errors.New("maxResults is required")
 	}
 
-	if taskData.TotalRewards == 0 {
+	if request.TotalRewards == 0 {
 		return errors.New("totalRewards is required")
 	}
 

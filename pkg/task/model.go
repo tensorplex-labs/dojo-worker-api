@@ -47,40 +47,45 @@ type TaskRequest struct {
 }
 
 type TaskData struct {
-	Prompt    string         `json:"prompt"`
-	Dialogue  []dialogueData `json:"dialogue,omitempty"`
-	Responses []taskResponse `json:"responses,omitempty"`
-	Task      string         `json:"task"`
-	Criteria  []taskCriteria `json:"criteria"`
+	Prompt    string          `json:"prompt"`
+	Dialogue  []Message       `json:"dialogue,omitempty"`
+	Responses []ModelResponse `json:"responses,omitempty"`
+	Task      TaskType        `json:"task"`
+	Criteria  []Criteria      `json:"criteria"`
 }
 
-type taskResponse struct {
+type TaskType string
+
+const (
+	TaskTypeCodeGen     TaskType = TaskType(db.TaskTypeCodeGeneration)
+	TaskTypeDialogue    TaskType = TaskType(db.TaskTypeDialogue)
+	TaskTypeTextToImage TaskType = TaskType(db.TaskTypeTextToImage)
+)
+
+type ModelResponse struct {
 	Model      string      `json:"model"`
 	Completion interface{} `json:"completion"`
 }
 
-type dialogueData struct {
+type Message struct {
 	Role    string `json:"role"`
 	Message string `json:"message"`
 }
 
-type taskCriteria struct {
-	Type    string   `json:"type"`
-	Options []string `json:"options,omitempty"`
-	Min     float64  `json:"min,omitempty"`
-	Max     float64  `json:"max,omitempty"`
+type Criteria struct {
+	Type    CriteriaType `json:"type"`
+	Options []string     `json:"options,omitempty"`
+	Min     float64      `json:"min,omitempty"`
+	Max     float64      `json:"max,omitempty"`
 }
 
-type Task struct {
-	Title        string      `json:"title"`
-	Body         string      `json:"body"`
-	Modality     db.TaskType `json:"modality"`
-	ExpireAt     time.Time   `json:"expireAt"`
-	Criteria     []byte      `json:"criteria"`
-	TaskData     []byte      `json:"taskData"`
-	MaxResults   int         `json:"maxResults"`
-	TotalRewards float64     `json:"totalRewards"`
-}
+type CriteriaType string
+
+const (
+	CriteriaTypeRanking     CriteriaType = "ranking"
+	CriteriaTypeMultiSelect CriteriaType = "multi-select"
+	CriteriaTypeScore       CriteriaType = "score"
+)
 
 type TaskResult struct {
 	ID             string    `json:"id"`
