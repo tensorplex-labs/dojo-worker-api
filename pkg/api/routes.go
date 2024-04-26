@@ -11,4 +11,8 @@ func LoginRoutes(router *gin.Engine) {
     {
     	apiGroup.POST("/v1/tasks/", UserAuthMiddleware(), CreateTaskController)
     }
+	// Submit a task response by a worker.
+	{
+		apiGroup.PUT("/v1/tasks/:task-id", SubmitWorkerTaskController)
+	}
 }
