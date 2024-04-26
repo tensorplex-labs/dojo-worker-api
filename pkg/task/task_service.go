@@ -96,8 +96,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 
 	tasks, err := taskService.client.Task.FindMany(
 		db.Task.Type.In(taskTypes),
-		sortQuery,
-	).
+	).OrderBy(sortQuery).
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
