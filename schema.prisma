@@ -52,6 +52,7 @@ model MinerUser {
     is_verified       Boolean         @default(false)
     tasks             Task[]
     worker_partners   WorkerPartner[]
+    subscription_key  String          @unique @default(uuid())
 
     @@unique([hotkey, api_key])
 }
@@ -106,13 +107,15 @@ model DojoWorker {
 }
 
 model WorkerPartner {
-    id                  String     @id @default(uuid())
-    created_at          DateTime   @default(now())
-    updated_at          DateTime   @updatedAt
-    MinerUser           MinerUser  @relation(fields: [miner_id], references: [id])
-    miner_id            String
-    DojoWorker          DojoWorker @relation(fields: [worker_id], references: [id])
-    worker_id           String
-    is_delete_by_miner  Boolean    @default(false)
-    is_active_by_worker Boolean    @default(true)
+    id                     String     @id @default(uuid())
+    created_at             DateTime   @default(now())
+    updated_at             DateTime   @updatedAt
+    MinerUser              MinerUser  @relation(fields: [miner_subscription_key], references: [subscription_key])
+    miner_subscription_key String
+    DojoWorker             DojoWorker @relation(fields: [worker_id], references: [id])
+    worker_id              String
+    is_delete_by_miner     Boolean    @default(false)
+    is_active_by_worker    Boolean    @default(true)
+
+    @@unique([miner_subscription_key, worker_id])
 }
