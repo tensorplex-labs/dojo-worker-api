@@ -3,10 +3,11 @@ package orm
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"dojo-api/db"
+
+	"github.com/rs/zerolog/log"
 )
 
 type MinerUserORM struct {
@@ -30,10 +31,10 @@ func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, 
 		db.MinerUser.IsVerified.Set(isVerified),
 	).Exec(ctx)
 	if err != nil {
-		log.Printf("Error creating user: %v", err)
+		log.Error().Err(err).Msgf("Error creating user")
 		return nil, err
 	}
-	log.Println("User created successfully")
+	log.Info().Msg("User created successfully")
 	return createdUser, nil
 }
 
@@ -46,7 +47,7 @@ func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error
 		db.MinerUser.APIKey.Equals(apiKey),
 	).Exec(ctx)
 	if err != nil {
-		log.Printf("Error retrieving user by API key: %v", err)
+		log.Error().Err(err).Msg("Error retrieving user by API key")
 		return nil, err
 	}
 	return user, nil
@@ -61,7 +62,7 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 		db.MinerUser.Hotkey.Equals(hotkey),
 	).Exec(ctx)
 	if err != nil {
-		log.Printf("Error retrieving user by hotkey: %v", err)
+		log.Error().Err(err).Msg("Error retrieving user by hotkey")
 		return nil, err
 	}
 	return user, nil
