@@ -1,6 +1,8 @@
 package task
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"dojo-api/db"
@@ -47,9 +49,8 @@ type CreateTaskRequest struct {
 	TotalRewards float64     `json:"totalRewards"`
 }
 type SubmitTaskResultRequest struct {
-	TaskId       string                 `json:"taskId"`
-	DojoWorkerId string                 `json:"dojoWorkerId"`
-	ResultData   map[string]interface{} `json:"resultData"`
+	TaskId     string                 `json:"taskId"`
+	ResultData map[string]interface{} `json:"resultData"`
 }
 
 type TaskData struct {
@@ -92,3 +93,59 @@ const (
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
 )
+
+type ResultItem struct {
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
+}
+
+type ResultData []ResultItem
+
+type (
+	ScoreValue       float64
+	RankingValue     map[string]string
+	MultiSelectValue []string
+)
+
+// UnmarshalJSON implements the json.Unmarshaler interface for ResultItem,
+// allowing for custom unmarshalling logic based on the type of value.
+func (r *ResultItem) UnmarshalJSON(data []byte) error {
+	// Helper struct to avoid recursion into UnmarshalJSON
+	type tempResultItem struct {
+		Type  string          `json:"type"`
+		Value json.RawMessage `json:"value"`
+	}
+	var i tempResultItem
+	if err := json.Unmarshal(data, &i); err != nil {
+		return err
+	}
+
+	r.Type = i.Type
+
+	tempType := CriteriaType(i.Type)
+
+	switch tempType {
+	case CriteriaTypeScore:
+		var v ScoreValue
+		if err := json.Unmarshal(i.Value, &v); err != nil {
+			return err
+		}
+		r.Value = v
+	case CriteriaTypeRanking:
+		var v RankingValue
+		if err := json.Unmarshal(i.Value, &v); err != nil {
+			return err
+		}
+		r.Value = v
+	case CriteriaTypeMultiSelect:
+		var v MultiSelectValue
+		if err := json.Unmarshal(i.Value, &v); err != nil {
+			return err
+		}
+		r.Value = v
+	default:
+		return fmt.Errorf("unknown type: %s", i.Type)
+	}
+
+	return nil
+}

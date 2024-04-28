@@ -16,18 +16,21 @@ import (
 )
 
 type TaskService struct {
-	client *db.PrismaClient
+	taskORM       *orm.TaskORM
+	taskResultORM *orm.TaskResultORM
 }
 
 func NewTaskService() *TaskService {
 	return &TaskService{
-		client: orm.NewPrismaClient(),
+		taskORM:       orm.NewTaskORM(),
+		taskResultORM: orm.NewTaskResultORM(),
 	}
 }
 
 // get task by id
 func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
-	task, err := taskService.client.Task.FindUnique(db.Task.ID.Equals(id)).Exec(ctx)
+	taskORM := orm.NewTaskORM()
+	task, err := taskORM.GetById(ctx, id)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting string to int64")
 		return nil, err
@@ -67,12 +70,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 
 	taskTypes := convertStringToTaskType(types)
 
-	tasks, err := taskService.client.Task.FindMany(
-		db.Task.Type.In(taskTypes),
-	).OrderBy(sortQuery).
-		Skip(offset).
-		Take(limit).
-		Exec(ctx)
+	tasks, err := taskService.taskORM.GetByPage(ctx, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, err
@@ -190,26 +188,8 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 	return taskIds, nil
 }
 
-func (t *TaskService) GetDojoWorkerById(ctx context.Context, id string) (*db.DojoWorkerModel, error) {
-	// print the dojo worker id
-	fmt.Println("Dojo Worker ID: ", id)
-	worker, err := t.client.DojoWorker.FindUnique(
-		db.DojoWorker.ID.Equals(id),
-	).Exec(ctx)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("DojoWorker with ID %s not found", id)
-		}
-		return nil, err
-	}
-
-	return worker, nil
-}
-
 func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel, error) {
-	task, err := t.client.Task.FindUnique(
-		db.Task.ID.Equals(id),
-	).Exec(ctx)
+	task, err := t.taskORM.GetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return nil, fmt.Errorf("Task with ID %s not found", id)
@@ -220,7 +200,7 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
-func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, dojoWorkerId string, resultData map[string]interface{}) (*db.TaskModel, error) {
+func (t *TaskService) UpdateTaskResultData(ctx context.Context, task *db.TaskModel, dojoWorkerId string, resultData map[string]interface{}) (*db.TaskModel, error) {
 	// Convert your map to json
 	jsonResultData, err := json.Marshal(resultData)
 	if err != nil {
@@ -228,10 +208,16 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, d
 		return nil, err
 	}
 
+	_, err = ValidateResultData(jsonResultData, task)
+	if err != nil {
+		log.Error().Err(err).Msg("Error validating result data")
+		return nil, err
+	}
+
 	newTaskResultData := db.InnerTaskResult{
 		Status:     db.TaskResultStatusCompleted,
 		ResultData: jsonResultData,
-		TaskID:     taskId,
+		TaskID:     task.ID,
 		WorkerID:   dojoWorkerId,
 	}
 
@@ -243,6 +229,79 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, d
 	}
 
 	return createdTaskResult.Task(), nil
+}
+
+func ValidateResultData(jsonData []byte, task *db.TaskModel) (ResultData, error) {
+	var resultData ResultData
+	err := json.Unmarshal(jsonData, &resultData)
+	if err != nil {
+		return nil, err
+	}
+
+	var taskData TaskData
+	err = json.Unmarshal(task.TaskData, &taskData)
+	if err != nil {
+		log.Error().Err(err).Msg("Error unmarshaling task data")
+		return nil, err
+	}
+
+	for _, item := range resultData {
+		itemType := CriteriaType(item.Type)
+		if !IsValidCriteriaType(itemType) {
+			log.Error().Msgf("Invalid criteria type: %v", item.Type)
+			continue
+		}
+		switch itemType {
+		case CriteriaTypeScore:
+			score, _ := item.Value.(ScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+				minScore, maxScore := criteria.Min, criteria.Max
+				if float64(score) < minScore || float64(score) > maxScore {
+					return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
+				}
+
+			}
+
+		case CriteriaTypeRanking:
+			ranking, _ := item.Value.(RankingValue)
+			if len(ranking) == 0 {
+				return nil, fmt.Errorf("ranking criteria provided but no rankings found")
+			}
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+
+				if len(ranking) != len(criteria.Options) {
+					return nil, fmt.Errorf("number of rankings provided does not match number of options")
+				}
+			}
+		case CriteriaTypeMultiSelect:
+			multiSelect, _ := item.Value.(MultiSelectValue)
+			if len(multiSelect) == 0 {
+				return nil, fmt.Errorf("multi-select criteria provided but no selections found")
+			}
+
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+
+				if len(multiSelect) > len(criteria.Options) {
+					return nil, fmt.Errorf("number of selections provided exceeds number of options")
+				}
+			}
+
+		default:
+			return nil, fmt.Errorf("unknown result data type: %s", item.Type)
+		}
+	}
+
+	log.Info().Str("resultData", fmt.Sprintf("%v", resultData)).Msgf("Result data validated successfully")
+	return resultData, nil
 }
 
 // Validates a single task, reads the `type` field to determine different flows.

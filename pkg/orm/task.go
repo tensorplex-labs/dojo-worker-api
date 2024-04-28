@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+
 	"dojo-api/db"
 )
 
@@ -32,4 +33,21 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 		),
 	).Exec(ctx)
 	return createdTask, err
+}
+
+func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	task, err := o.dbClient.Task.FindUnique(
+		db.Task.ID.Equals(taskId),
+	).Exec(ctx)
+	return task, err
+}
+
+func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+	tasks, err := o.dbClient.Task.FindMany(
+		db.Task.Type.In(taskTypes),
+	).OrderBy(sortQuery).
+		Skip(offset).
+		Take(limit).
+		Exec(ctx)
+	return tasks, err
 }
