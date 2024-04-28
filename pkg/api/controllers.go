@@ -1,11 +1,13 @@
 package api
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
+
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
-	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -53,7 +55,7 @@ func CreateTaskController(c *gin.Context) {
 		return
 	}
 
-	var requestBody task.TaskRequest
+	var requestBody task.CreateTaskRequest
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Error().Err(err).Msg("Invalid request body")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
@@ -71,34 +73,21 @@ func CreateTaskController(c *gin.Context) {
 
 	taskService := task.NewTaskService()
 	taskIds, err := taskService.CreateTasks(requestBody, minerUserId.(string))
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
 	}
 
-	c.JSON(200, defaultSuccessResponse(taskIds))
+	c.JSON(http.StatusOK, defaultSuccessResponse(taskIds))
 }
 
-//{
-//  "taskId": "Unique Task ID",
-//  "dojoWorkerId": "Unique Dojo Worker ID", //no need will get from jwt
-//  "resultData": {},
-//}
-
-type WorkerTask struct {
-	TaskId       string                 `json:"taskId"`
-	DojoWorkerId string                 `json:"dojoWorkerId"`
-	ResultData   map[string]interface{} `json:"resultData"`
-}
-
-// PUT/api/v1/tasks/{task-id}
-func SubmitWorkerTaskController(c *gin.Context) {
-	var requestBody WorkerTask
-
-	// Get the task id from the path
-	c.Bind(&requestBody)
+func SubmitTaskResultController(c *gin.Context) {
+	var requestBody task.SubmitTaskResultRequest
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
 
 	// Validate the request body for required fields [taskId, dojoWorkerId, resultData]
 	// TODO: Implement validation for the request body
@@ -107,51 +96,49 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	dojoWorkerId := requestBody.DojoWorkerId
 	taskId := c.Param("task-id")
 
-	log.Info().Msg(fmt.Sprintf("Dojo Worker ID: %v", dojoWorkerId))
-	log.Info().Msg(fmt.Sprintf("Task ID: %v", taskId))
+	log.Info().Msgf("Dojo Worker ID: %v", dojoWorkerId)
+	log.Info().Msgf("Task ID: %v", taskId)
 
-	task_service := task.NewTaskService()
+	taskService := task.NewTaskService()
 	// Get a context.Context object from the gin context
 	ctx := c.Request.Context()
 
 	// Get corresponding task and dojoworker data
-	worker, err := task_service.GetDojoWorkerById(ctx, dojoWorkerId)
+	worker, err := taskService.GetDojoWorkerById(ctx, dojoWorkerId)
 	if err != nil {
-		log.Error().Msg(fmt.Sprintf("Error getting DojoWorker: %v", err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, db.ErrNotFound) {
+			log.Error().Err(err).Msg("Error getting DojoWorker")
+			c.JSON(http.StatusNotFound, defaultErrorResponse(err.Error()))
+			return
+		}
+
+		log.Error().Err(err).Msg("Error getting DojoWorker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
 	}
 	// print the worker data
-	log.Info().Msg(fmt.Sprintf("Dojo Worker by id Data pulled: %v", worker))
+	log.Info().Msgf("Dojo Worker by id Data pulled: %v", worker)
 
-	task, err := task_service.GetTaskById(ctx, taskId)
+	task, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
-		log.Error().Msg(fmt.Sprintf("Error getting Task: %v", err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Error().Err(err).Msg("Error getting Task")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
 	}
 	// print the task data
-	log.Info().Msg(fmt.Sprintf("Task Data by id pulled: %v", task))
+	log.Info().Msgf("Task Data by id pulled: %v", task)
 
 	// Update the task with the result data
-	numResults, err := task_service.UpdateTaskResultData(ctx, taskId, dojoWorkerId, requestBody.ResultData)
+	updatedTask, err := taskService.UpdateTaskResultData(ctx, taskId, dojoWorkerId, requestBody.ResultData)
 	if err != nil {
-		log.Error().Msg(fmt.Sprintf("Error updating task: %v", err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Error().Err(err).Msg("Error updating task")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
 	}
 
-	// Response payload example
-	//{
-	//"success": "true",
-	//"body": {
-	//	"numResults": 3
-	//},
-	//"error": null
-	//}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "body": gin.H{"numResults": numResults}, "error": nil})
-
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"numResults": updatedTask.NumResults,
+	}))
 }
 
 func MinerController(c *gin.Context) {

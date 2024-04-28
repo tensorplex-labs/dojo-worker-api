@@ -2,15 +2,15 @@ package task
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"dojo-api/utils"
-	"math"
-	"time"
-
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -73,7 +73,6 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, err
@@ -139,7 +138,7 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 }
 
 // create task
-func (s *TaskService) CreateTasks(request TaskRequest, minerUserId string) ([]string, error) {
+func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]string, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var taskIds []string
@@ -191,30 +190,14 @@ func (s *TaskService) CreateTasks(request TaskRequest, minerUserId string) ([]st
 	return taskIds, nil
 }
 
-func insertTaskResultData(newTaskResult TaskResult, client *db.PrismaClient, ctx context.Context) (string, error) {
-	taskResult, err := client.TaskResult.CreateOne(
-		db.TaskResult.Status.Set("COMPLETED"),
-		db.TaskResult.ResultData.Set(newTaskResult.ResultData),
-		db.TaskResult.Task.Link(
-			db.Task.ID.Equals(newTaskResult.TaskID),
-		),
-		db.TaskResult.DojoWorker.Link(
-			db.DojoWorker.ID.Equals(newTaskResult.DojoWorkerID),
-		),
-	).Exec(ctx)
-
-	return taskResult.ID, err
-}
-
 func (t *TaskService) GetDojoWorkerById(ctx context.Context, id string) (*db.DojoWorkerModel, error) {
 	// print the dojo worker id
 	fmt.Println("Dojo Worker ID: ", id)
 	worker, err := t.client.DojoWorker.FindUnique(
 		db.DojoWorker.ID.Equals(id),
 	).Exec(ctx)
-
 	if err != nil {
-		if err == db.ErrNotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			return nil, fmt.Errorf("DojoWorker with ID %s not found", id)
 		}
 		return nil, err
@@ -227,9 +210,8 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	task, err := t.client.Task.FindUnique(
 		db.Task.ID.Equals(id),
 	).Exec(ctx)
-
 	if err != nil {
-		if err == db.ErrNotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			return nil, fmt.Errorf("Task with ID %s not found", id)
 		}
 		return nil, err
@@ -238,37 +220,29 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
-func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, dojoWorkerId string, resultData map[string]interface{}) (int, error) {
-
+func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, dojoWorkerId string, resultData map[string]interface{}) (*db.TaskModel, error) {
 	// Convert your map to json
 	jsonResultData, err := json.Marshal(resultData)
 	if err != nil {
-		return 0, err
+		log.Error().Err(err).Msg("Error marshaling result data")
+		return nil, err
 	}
 
-	newTaskResultData := TaskResult{
-		Status:       "COMPLETED", // Check with evan if it's completed
-		ResultData:   jsonResultData,
-		TaskID:       taskId,
-		DojoWorkerID: dojoWorkerId,
+	newTaskResultData := db.InnerTaskResult{
+		Status:     db.TaskResultStatusCompleted,
+		ResultData: jsonResultData,
+		TaskID:     taskId,
+		WorkerID:   dojoWorkerId,
 	}
 
 	// Insert the task result data
-	_, err = insertTaskResultData(newTaskResultData, t.client, ctx)
+	taskResultORM := orm.NewTaskResultORM()
+	createdTaskResult, err := taskResultORM.CreateTaskResult(ctx, &newTaskResultData)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	// Increment numResults
-	updatedTask, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskId)).Update(
-		db.Task.NumResults.Increment(1),
-	).Exec(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	// If no errors occurred, return the updated numResults and nil
-	return updatedTask.NumResults, nil
+	return createdTaskResult.Task(), nil
 }
 
 func ValidateTaskData(taskData TaskData) error {
@@ -332,11 +306,12 @@ func ValidateTaskData(taskData TaskData) error {
 			return errors.New("unsupported criteria")
 		}
 
-		if criteria.Type == CriteriaTypeMultiSelect || criteria.Type == CriteriaTypeRanking {
+		switch criteria.Type {
+		case CriteriaTypeMultiSelect, CriteriaTypeRanking:
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-		} else if criteria.Type == CriteriaTypeScore {
+		case CriteriaTypeScore:
 			if criteria.Min == 0 && criteria.Max == 0 {
 				return errors.New("min or max is required for numeric criteria")
 			}
@@ -350,7 +325,7 @@ func ValidateTaskData(taskData TaskData) error {
 	return nil
 }
 
-func ValidateTaskRequest(request TaskRequest) error {
+func ValidateTaskRequest(request CreateTaskRequest) error {
 	if request.Title == "" {
 		return errors.New("title is required")
 	}

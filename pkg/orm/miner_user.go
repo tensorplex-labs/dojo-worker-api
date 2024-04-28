@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"dojo-api/db"
+	"errors"
 
 	"github.com/rs/zerolog/log"
 )
@@ -22,7 +23,7 @@ func (m *MinerUserORM) GetByApiKey(apiKey string) (*db.MinerUserModel, error) {
 		db.MinerUser.APIKey.Equals(apiKey),
 	).Exec(ctx)
 	if err != nil {
-		if err == db.ErrNotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			log.Error().Err(err).Str("apiKey", apiKey).Msgf("Miner user not found with API key")
 			return nil, err
 		}

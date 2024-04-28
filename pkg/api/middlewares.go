@@ -1,16 +1,16 @@
 package api
 
 import (
-	"net/http"
-
 	"context"
-	"dojo-api/db"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"dojo-api/db"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -23,7 +23,6 @@ import (
 // AuthMiddleware checks if the request is authenticated
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		jwtSecret := os.Getenv("JWT_SECRET")
 		token := c.GetHeader("Authorization")
 		if token == "" {
@@ -253,7 +252,6 @@ func verifyApiKey(apiKey string) string {
 	apiKeyModel, err := client.MinerUser.FindFirst(
 		db.MinerUser.APIKey.Equals(apiKey),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Msgf("Error finding API key: %v", err)
 		return ""

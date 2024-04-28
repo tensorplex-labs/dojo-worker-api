@@ -5,7 +5,6 @@ import (
 )
 
 func LoginRoutes(router *gin.Engine) {
-
 	apiV1 := router.Group("/api/v1")
 	{
 		worker := apiV1.Group("/worker")
@@ -15,7 +14,7 @@ func LoginRoutes(router *gin.Engine) {
 			worker.POST("/partner", AuthMiddleware(), WorkerPartnerController)
 		}
 		apiV1.POST("/tasks/", UserAuthMiddleware(), CreateTaskController)
-		apiV1.PUT("/tasks/:task-id", SubmitWorkerTaskController)
+		apiV1.PUT("/tasks/:task-id", SubmitTaskResultController)
 
 		miner := apiV1.Group("/miner")
 		{

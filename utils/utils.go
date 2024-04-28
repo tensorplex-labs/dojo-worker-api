@@ -64,7 +64,6 @@ func IpDecimalToDotted(decimalIP interface{}) string {
 	b1 := (ipInt >> 8) & 0xff
 	b2 := (ipInt >> 16) & 0xff
 	b3 := (ipInt >> 24) & 0xff
-
 	return fmt.Sprintf("%d.%d.%d.%d", b3, b2, b1, b0)
 }
 

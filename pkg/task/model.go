@@ -1,8 +1,9 @@
 package task
 
 import (
-	"dojo-api/db"
 	"time"
+
+	"dojo-api/db"
 )
 
 // TaskResponse reflects the task structure used in API responses
@@ -37,13 +38,18 @@ type TaskPagination struct {
 	Pagination Pagination     `json:"pagination"`
 }
 
-type TaskRequest struct {
+type CreateTaskRequest struct {
 	Title        string      `json:"title"`
 	Body         string      `json:"body"`
 	ExpireAt     interface{} `json:"expireAt"`
 	TaskData     []TaskData  `json:"taskData"`
 	MaxResults   int         `json:"maxResults"`
 	TotalRewards float64     `json:"totalRewards"`
+}
+type SubmitTaskResultRequest struct {
+	TaskId       string                 `json:"taskId"`
+	DojoWorkerId string                 `json:"dojoWorkerId"`
+	ResultData   map[string]interface{} `json:"resultData"`
 }
 
 type TaskData struct {
@@ -86,18 +92,3 @@ const (
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
 )
-
-type TaskResult struct {
-	ID             string    `json:"id"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	Status         string    `json:"status"`
-	ResultData     []byte    `json:"resultData"`
-	TaskID         string    `json:"taskId"`
-	DojoWorkerID   string    `json:"dojoWorkerId"`
-	StakeAmount    *float64  `json:"stakeAmount"`
-	PotentialYield *float64  `json:"potentialYield"`
-	PotentialLoss  *float64  `json:"potentialLoss"`
-	FinalisedYield *float64  `json:"finalisedYield"`
-	FinalisedLoss  *float64  `json:"finalisedLoss"`
-}
