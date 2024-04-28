@@ -8,7 +8,7 @@ generator db {
 }
 
 model ExternalUser {
-    id          String   @id @default(cuid())
+    id          String   @id @default(uuid())
     created_at  DateTime @default(now())
     updated_at  DateTime @updatedAt
     name        String
@@ -39,7 +39,7 @@ enum TaskType {
 }
 
 model MinerUser {
-    id                String          @id @default(cuid())
+    id                String          @id @default(uuid())
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
     coldkey           String
@@ -57,7 +57,7 @@ model MinerUser {
 }
 
 model Task {
-    id            String       @id @default(cuid())
+    id            String       @id @default(uuid())
     created_at    DateTime     @default(now())
     updated_at    DateTime     @updatedAt
     expire_at     DateTime
@@ -76,7 +76,7 @@ model Task {
 }
 
 model TaskResult {
-    id               String           @id @default(cuid())
+    id               String           @id @default(uuid())
     created_at       DateTime         @default(now())
     updated_at       DateTime         @updatedAt
     status           TaskResultStatus
@@ -93,7 +93,7 @@ model TaskResult {
 }
 
 model DojoWorker {
-    id                   String          @id @default(cuid())
+    id                   String          @id @default(uuid())
     created_at           DateTime        @default(now())
     updated_at           DateTime        @updatedAt
     wallet_address       String
@@ -106,7 +106,7 @@ model DojoWorker {
 }
 
 model WorkerPartner {
-    id                  String     @id @default(cuid())
+    id                  String     @id @default(uuid())
     created_at          DateTime   @default(now())
     updated_at          DateTime   @updatedAt
     MinerUser           MinerUser  @relation(fields: [miner_id], references: [id])
