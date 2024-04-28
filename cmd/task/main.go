@@ -1,13 +1,14 @@
 package main
 
 import (
-	"dojo-api/pkg/task"
-	"dojo-api/utils"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+
+	"dojo-api/pkg/task"
+	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -39,8 +40,7 @@ func main() {
 
 	router.GET("/api/v1/tasks/:task-id", func(c *gin.Context) {
 		taskID := c.Param("task-id")
-		task, err := taskService.GetTaskById(c.Request.Context(), taskID)
-
+		task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
 		if err != nil {
 			utils.ErrorHandler(c, http.StatusInternalServerError, "Internal server error")
 			return
@@ -60,7 +60,6 @@ func main() {
 	})
 
 	router.GET("/api/v1/tasks", func(c *gin.Context) {
-
 		// Get the task query parameter as a single string
 		taskParam := c.Query("task")
 		// Split the string into a slice of strings
