@@ -16,7 +16,7 @@ func LoginRoutes(router *gin.Engine) {
 
 		tasks := apiV1.Group("/tasks")
 		{
-			tasks.POST("/create-task", MinerLoginMiddleware(), CreateTaskController)
+			tasks.POST("/create-task", MinerAuthMiddleware(), CreateTaskController)
 			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
 			tasks.GET("/:task-id", GetTaskByIdController)
 			tasks.GET("/", GetTasksByPageController)
