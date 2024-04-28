@@ -12,6 +12,6 @@ func main() {
 	fmt.Println("Hello, World!")
 	authClient := auth.NewAuthService()
 	fmt.Println(authClient)
-	service := orm.NewMinerUserService()
-	service.CreateUser("coldkey123", "hotkey123", "apiKey123", time.Now().Add(24*time.Hour), true)
+	minerUserORM := orm.NewMinerUserORM()
+	minerUserORM.CreateUser("coldkey123", "hotkey123", "apiKey123", time.Now().Add(24*time.Hour), true)
 }

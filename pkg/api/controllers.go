@@ -263,8 +263,8 @@ func MinerLoginController(c *gin.Context) {
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
 
-	minerUserService := orm.NewMinerUserService()
-	_, err := minerUserService.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	minerUserORM := orm.NewMinerUserORM()
+	_, err := minerUserORM.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
@@ -281,7 +281,7 @@ func MinerLoginController(c *gin.Context) {
 func MinerController(c *gin.Context) {
 	apiKey := c.Request.Header.Get("X-API-KEY")
 
-	minerUserORM := orm.NewMinerUserService()
+	minerUserORM := orm.NewMinerUserORM()
 	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
 	if minerUser == nil {
 		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))

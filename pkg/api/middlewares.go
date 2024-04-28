@@ -178,8 +178,8 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 		var expiry time.Time
 		if found {
 			verified = true
-			minerUserService := orm.NewMinerUserService()
-			minerUser, err := minerUserService.GetUserByAPIKey(hotkey)
+			minerUserORM := orm.NewMinerUserORM()
+			minerUser, err := minerUserORM.GetUserByAPIKey(hotkey)
 			if err != nil || minerUser == nil || minerUser.APIKeyExpireAt.Before(time.Now()) {
 				apiKey, expiry, err = generateRandomApiKey()
 				if err != nil {
@@ -299,8 +299,8 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		networkUserService := orm.NewMinerUserService()
-		user, err := networkUserService.GetUserByAPIKey(apiKey)
+		minerUserORM := orm.NewMinerUserORM()
+		user, err := minerUserORM.GetUserByAPIKey(apiKey)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to retrieve user by API key")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to retrieve user by API key"))

@@ -12,7 +12,7 @@ type MinerUserORM struct {
 	dbClient *db.PrismaClient
 }
 
-func NewMinerUserService() *MinerUserORM {
+func NewMinerUserORM() *MinerUserORM {
 	client := NewPrismaClient()
 	return &MinerUserORM{
 		dbClient: client,
