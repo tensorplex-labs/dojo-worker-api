@@ -245,6 +245,7 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, d
 	return createdTaskResult.Task(), nil
 }
 
+// Validates a single task, reads the `type` field to determine different flows.
 func ValidateTaskData(taskData TaskData) error {
 	if taskData.Task == "" {
 		return errors.New("task is required")
@@ -307,9 +308,18 @@ func ValidateTaskData(taskData TaskData) error {
 		}
 
 		switch criteria.Type {
-		case CriteriaTypeMultiSelect, CriteriaTypeRanking:
+		case CriteriaTypeMultiSelect:
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
+			}
+		case CriteriaTypeRanking:
+			if len(criteria.Options) == 0 {
+				return errors.New("options is required for multiple choice criteria")
+			}
+			if task != TaskTypeDialogue {
+				if len(criteria.Options) != len(taskData.Responses) {
+					return fmt.Errorf("number of options for criteria: %v should match number of responses: %v", CriteriaTypeRanking, len(taskData.Responses))
+				}
 			}
 		case CriteriaTypeScore:
 			if criteria.Min == 0 && criteria.Max == 0 {
