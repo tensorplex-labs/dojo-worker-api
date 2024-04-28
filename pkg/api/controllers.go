@@ -93,22 +93,25 @@ func SubmitTaskResultController(c *gin.Context) {
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", userInfo)).Msg("Failed to assert type for userInfo")
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
 	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
 	if err != nil {
+		log.Error().Err(err).Str("walletAddress", userInfo.Subject).Msg("Failed to get worker by wallet address")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
 
 	var requestBody task.SubmitTaskResultRequest
 	if err := c.BindJSON(&requestBody); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	// Validate the request body for required fields [taskId, dojoWorkerId, resultData]
+	// Validate the request body for required fields [resultData]
 	taskId := c.Param("task-id")
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
@@ -120,7 +123,7 @@ func SubmitTaskResultController(c *gin.Context) {
 			c.Abort()
 			return
 		}
-		log.Error().Err(err).Msg("Error getting Task")
+		log.Error().Err(err).Str("taskId", taskId).Msg("Error getting Task")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
@@ -128,9 +131,9 @@ func SubmitTaskResultController(c *gin.Context) {
 	log.Info().Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Dojo Worker and Task ID pulled")
 
 	// Update the task with the result data
-	updatedTask, err := taskService.UpdateTaskResultData(ctx, task, worker.ID, requestBody.ResultData)
+	updatedTask, err := taskService.UpdateTaskResults(ctx, task, worker.ID, requestBody.ResultData)
 	if err != nil {
-		log.Error().Err(err).Msg("Error updating task")
+		log.Error().Err(err).Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Error updating task with result data")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
 	}

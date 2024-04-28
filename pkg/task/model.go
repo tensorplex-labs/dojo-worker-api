@@ -48,10 +48,6 @@ type CreateTaskRequest struct {
 	MaxResults   int         `json:"maxResults"`
 	TotalRewards float64     `json:"totalRewards"`
 }
-type SubmitTaskResultRequest struct {
-	TaskId     string                 `json:"taskId"`
-	ResultData map[string]interface{} `json:"resultData"`
-}
 
 type TaskData struct {
 	Prompt    string          `json:"prompt"`
@@ -94,12 +90,14 @@ const (
 	CriteriaTypeScore       CriteriaType = "score"
 )
 
-type ResultItem struct {
+type Result struct {
 	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
 }
 
-type ResultData []ResultItem
+type SubmitTaskResultRequest struct {
+	ResultData []Result `json:"resultData"`
+}
 
 type (
 	ScoreValue       float64
@@ -107,15 +105,15 @@ type (
 	MultiSelectValue []string
 )
 
-// UnmarshalJSON implements the json.Unmarshaler interface for ResultItem,
+// UnmarshalJSON implements the json.Unmarshaler interface for Result,
 // allowing for custom unmarshalling logic based on the type of value.
-func (r *ResultItem) UnmarshalJSON(data []byte) error {
+func (r *Result) UnmarshalJSON(data []byte) error {
 	// Helper struct to avoid recursion into UnmarshalJSON
-	type tempResultItem struct {
+	type tempResult struct {
 		Type  string          `json:"type"`
 		Value json.RawMessage `json:"value"`
 	}
-	var i tempResultItem
+	var i tempResult
 	if err := json.Unmarshal(data, &i); err != nil {
 		return err
 	}

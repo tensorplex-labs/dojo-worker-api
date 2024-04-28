@@ -28,6 +28,8 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 		db.TaskResult.DojoWorker.Link(
 			db.DojoWorker.ID.Equals(taskResult.WorkerID),
 		),
+	).With(
+		db.TaskResult.Task.Fetch(),
 	).Tx()
 	updateTaskTx := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Update(db.Task.NumResults.Increment(1)).Tx()
 

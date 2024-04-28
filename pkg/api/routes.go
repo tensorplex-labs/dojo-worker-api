@@ -15,7 +15,7 @@ func LoginRoutes(router *gin.Engine) {
 		}
 		apiV1.POST("/tasks/create-task", UserAuthMiddleware(), CreateTaskController)
 		// TODO verify that worker is logged in using WorkerAuthMiddleware
-		apiV1.PUT("/tasks/submit-result/:task-id", SubmitTaskResultController)
+		apiV1.PUT("/tasks/submit-result/:task-id", AuthMiddleware(), SubmitTaskResultController)
 
 		miner := apiV1.Group("/miner")
 		{

@@ -200,23 +200,21 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
-func (t *TaskService) UpdateTaskResultData(ctx context.Context, task *db.TaskModel, dojoWorkerId string, resultData map[string]interface{}) (*db.TaskModel, error) {
-	// Convert your map to json
-	jsonResultData, err := json.Marshal(resultData)
-	if err != nil {
-		log.Error().Err(err).Msg("Error marshaling result data")
-		return nil, err
-	}
-
-	_, err = ValidateResultData(jsonResultData, task)
+func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel, dojoWorkerId string, results []Result) (*db.TaskModel, error) {
+	_, err := ValidateResultData(results, task)
 	if err != nil {
 		log.Error().Err(err).Msg("Error validating result data")
 		return nil, err
 	}
 
+	jsonResults, err := json.Marshal(results)
+	if err != nil {
+		log.Error().Err(err).Msg("Error marshaling result items")
+		return nil, err
+	}
 	newTaskResultData := db.InnerTaskResult{
 		Status:     db.TaskResultStatusCompleted,
-		ResultData: jsonResultData,
+		ResultData: jsonResults,
 		TaskID:     task.ID,
 		WorkerID:   dojoWorkerId,
 	}
@@ -231,21 +229,15 @@ func (t *TaskService) UpdateTaskResultData(ctx context.Context, task *db.TaskMod
 	return createdTaskResult.Task(), nil
 }
 
-func ValidateResultData(jsonData []byte, task *db.TaskModel) (ResultData, error) {
-	var resultData ResultData
-	err := json.Unmarshal(jsonData, &resultData)
-	if err != nil {
-		return nil, err
-	}
-
+func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) {
 	var taskData TaskData
-	err = json.Unmarshal(task.TaskData, &taskData)
+	err := json.Unmarshal(task.TaskData, &taskData)
 	if err != nil {
 		log.Error().Err(err).Msg("Error unmarshaling task data")
 		return nil, err
 	}
 
-	for _, item := range resultData {
+	for _, item := range results {
 		itemType := CriteriaType(item.Type)
 		if !IsValidCriteriaType(itemType) {
 			log.Error().Msgf("Invalid criteria type: %v", item.Type)
@@ -300,8 +292,8 @@ func ValidateResultData(jsonData []byte, task *db.TaskModel) (ResultData, error)
 		}
 	}
 
-	log.Info().Str("resultData", fmt.Sprintf("%v", resultData)).Msgf("Result data validated successfully")
-	return resultData, nil
+	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
+	return results, nil
 }
 
 // Validates a single task, reads the `type` field to determine different flows.
