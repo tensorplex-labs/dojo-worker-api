@@ -9,16 +9,17 @@ func LoginRoutes(router *gin.Engine) {
 	{
 		worker := apiV1.Group("/worker")
 		{
-			worker.POST("/login/auth", LoginMiddleware(), LoginController)
+			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
 			// TODO verify that worker is logged in using WorkerAuthMiddleware
-			worker.POST("/partner", AuthMiddleware(), WorkerPartnerController)
+			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerController)
 		}
-		apiV1.POST("/tasks/create-task", UserAuthMiddleware(), CreateTaskController)
+		apiV1.POST("/tasks/create-task", MinerLoginMiddleware(), CreateTaskController)
 		// TODO verify that worker is logged in using WorkerAuthMiddleware
-		apiV1.PUT("/tasks/submit-result/:task-id", AuthMiddleware(), SubmitTaskResultController)
+		apiV1.PUT("/tasks/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
 
 		miner := apiV1.Group("/miner")
 		{
+			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
 			miner.GET(":hotkey", MinerController)
 		}
 	}

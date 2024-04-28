@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
@@ -14,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func LoginController(c *gin.Context) {
+func WorkerLoginController(c *gin.Context) {
 	walletAddressInterface, _ := c.Get("WalletAddress")
 	chainIdInterface, _ := c.Get("ChainId")
 	token, _ := c.Get("JWTToken")
@@ -143,11 +144,33 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
+func MinerLoginController(c *gin.Context) {
+	verified, _ := c.Get("verified")
+	hotkey, _ := c.Get("hotkey")
+	coldkey, _ := c.Get("coldkey")
+	apiKey, _ := c.Get("apiKey")
+	expiry, _ := c.Get("expiry")
+
+	minerUserORM := orm.NewMinerUserORM()
+	_, err := minerUserORM.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to save network user")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
+		return
+	}
+
+	if verified.(bool) {
+		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
+	} else {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
+	}
+}
+
 func MinerController(c *gin.Context) {
 	apiKey := c.Request.Header.Get("X-API-KEY")
 
 	minerUserORM := orm.NewMinerUserORM()
-	minerUser, _ := minerUserORM.GetByApiKey(apiKey)
+	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
 	if minerUser == nil {
 		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
 		return
