@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"dojo-api/db"
@@ -236,4 +238,50 @@ func GetTaskByIdController(c *gin.Context) {
 
 	// Successful response
 	c.JSON(http.StatusOK, defaultSuccessResponse(task))
+}
+
+func GetTasksByPageController(c *gin.Context) {
+	// Get the task query parameter as a single string
+	taskParam := c.Query("task")
+	// Split the string into a slice of strings
+	taskTypes := strings.Split(taskParam, ",")
+
+	// Parsing "page" and "limit" as integers with default values
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "10")
+	sort := c.DefaultQuery("sort", "createdAt")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting page to integer:")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page parameter"})
+		return
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting page to integer:")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		return
+	}
+
+	// fetching tasks by pagination
+	taskService := task.NewTaskService()
+	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), page, limit, taskTypes, sort)
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting tasks by pagination")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	if taskPagination == nil {
+		log.Error().Err(err).Msg("Error getting tasks by pagination")
+		c.JSON(http.StatusNotFound, defaultErrorResponse("no tasks found"))
+		return
+	}
+
+	// Successful response
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"tasks": taskPagination,
+	}))
 }
