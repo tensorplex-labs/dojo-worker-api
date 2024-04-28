@@ -218,3 +218,22 @@ func WorkerPartnerController(c *gin.Context) {
 
 	c.JSON(http.StatusOK, defaultSuccessResponse("successfully created worker-miner partnership"))
 }
+
+func GetTaskByIdController(c *gin.Context) {
+	taskID := c.Param("task-id")
+	taskService := task.NewTaskService()
+	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))
+		c.Abort()
+		return
+	}
+
+	if task == nil {
+		c.JSON(http.StatusNotFound, defaultErrorResponse("Task not found"))
+		return
+	}
+
+	// Successful response
+	c.JSON(http.StatusOK, defaultSuccessResponse(task))
+}

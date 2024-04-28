@@ -13,9 +13,13 @@ func LoginRoutes(router *gin.Engine) {
 			// TODO verify that worker is logged in using WorkerAuthMiddleware
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerController)
 		}
-		apiV1.POST("/tasks/create-task", MinerLoginMiddleware(), CreateTaskController)
-		// TODO verify that worker is logged in using WorkerAuthMiddleware
-		apiV1.PUT("/tasks/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
+
+		tasks := apiV1.Group("/tasks")
+		{
+			tasks.POST("/create-task", MinerLoginMiddleware(), CreateTaskController)
+			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
+			tasks.GET("/:task-id", GetTaskByIdController)
+		}
 
 		miner := apiV1.Group("/miner")
 		{

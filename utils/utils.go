@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -73,16 +72,6 @@ func LoadDotEnv(varName string) string {
 		log.Fatal().Msgf("Environment variable %s not set", varName)
 	}
 	return envVar
-}
-
-func ErrorHandler(c *gin.Context, statusCode int, message string) {
-	c.JSON(statusCode, gin.H{
-		"success": false,
-		"error": gin.H{
-			"code":    statusCode,
-			"message": message,
-		},
-	})
 }
 
 // Parse ISO8601 date string to time.Time
