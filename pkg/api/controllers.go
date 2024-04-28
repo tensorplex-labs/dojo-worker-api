@@ -277,3 +277,56 @@ func MinerLoginController(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
 	}
 }
+
+func MinerController(c *gin.Context) {
+	apiKey := c.Request.Header.Get("X-API-KEY")
+
+	minerUserORM := orm.NewMinerUserService()
+	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
+	if minerUser == nil {
+		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+		return
+	}
+
+	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
+		"minerId": minerUser.ID,
+	}))
+}
+
+func WorkerPartnerController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	worker, err := orm.NewDojoWorkerService().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	var requestBody struct {
+		MinerId string `json:"minerId"`
+	}
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, requestBody.MinerId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse("successfully created worker-miner partnership"))
+}
