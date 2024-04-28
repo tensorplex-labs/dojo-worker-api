@@ -1,15 +1,16 @@
 package api
 
 import (
+	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
-	"dojo-api/utils"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,19 +34,23 @@ func WorkerLoginController(c *gin.Context) {
 
 	workerService := orm.NewDojoWorkerService()
 	_, err := workerService.CreateDojoWorker(walletAddress, chainId)
+	_, alreadyExists := db.IsErrUniqueConstraint(err)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
-		return
+		if !alreadyExists {
+			log.Error().Err(err).Msg("Failed to create worker")
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker"))
+			return
+		} else {
+			log.Warn().Err(err).Msg("Worker already exists")
+		}
 	}
-	log.Info().Str("walletAddress", walletAddress).Msg("Worker created successfully")
+	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 	c.JSON(http.StatusOK, defaultSuccessResponse(token))
 }
 
 // POST /api/v1/tasks
 func CreateTaskController(c *gin.Context) {
-	var requestBody utils.TaskRequest
-	var logger = utils.GetLogger()
+	var requestBody task.TaskRequest
 	response := make(map[string]interface{})
 	response["success"] = false
 	response["body"] = nil
@@ -58,7 +63,7 @@ func CreateTaskController(c *gin.Context) {
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		// DO SOMETHING WITH THE ERROR
-		logger.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error binding request body: %v", err))
 		response["error"] = fmt.Sprintf("Error binding request body: %v", err)
 		c.JSON(400, response)
 	}
@@ -85,7 +90,7 @@ func CreateTaskController(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-func validateTaskRequest(taskData utils.TaskRequest) error {
+func validateTaskRequest(taskData task.TaskRequest) error {
 	if taskData.Title == "" {
 		return errors.New("title is required")
 	}
@@ -116,7 +121,7 @@ func validateTaskRequest(taskData utils.TaskRequest) error {
 	return nil
 }
 
-func validateTaskData(taskData utils.TaskData) error {
+func validateTaskData(taskData task.TaskData) error {
 	if taskData.Prompt == "" && len(taskData.Dialogue) == 0 {
 		return errors.New("prompt is required")
 	}
@@ -193,7 +198,6 @@ type WorkerTask struct {
 // PUT/api/v1/tasks/{task-id}
 func SubmitWorkerTaskController(c *gin.Context) {
 	var requestBody WorkerTask
-	var logger = utils.GetLogger()
 
 	// Get the task id from the path
 	c.Bind(&requestBody)
@@ -205,8 +209,8 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	dojoWorkerId := requestBody.DojoWorkerId
 	taskId := c.Param("task-id")
 
-	logger.Info().Msg(fmt.Sprintf("Dojo Worker ID: %v", dojoWorkerId))
-	logger.Info().Msg(fmt.Sprintf("Task ID: %v", taskId))
+	log.Info().Msg(fmt.Sprintf("Dojo Worker ID: %v", dojoWorkerId))
+	log.Info().Msg(fmt.Sprintf("Task ID: %v", taskId))
 
 	task_service := task.NewTaskService()
 	// Get a context.Context object from the gin context
@@ -215,26 +219,26 @@ func SubmitWorkerTaskController(c *gin.Context) {
 	// Get corresponding task and dojoworker data
 	worker, err := task_service.GetDojoWorkerById(ctx, dojoWorkerId)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error getting DojoWorker: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error getting DojoWorker: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	// print the worker data
-	logger.Info().Msg(fmt.Sprintf("Dojo Worker by id Data pulled: %v", worker))
+	log.Info().Msg(fmt.Sprintf("Dojo Worker by id Data pulled: %v", worker))
 
 	task, err := task_service.GetTaskById(ctx, taskId)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error getting Task: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error getting Task: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	// print the task data
-	logger.Info().Msg(fmt.Sprintf("Task Data by id pulled: %v", task))
+	log.Info().Msg(fmt.Sprintf("Task Data by id pulled: %v", task))
 
 	// Update the task with the result data
 	numResults, err := task_service.UpdateTaskResultData(ctx, taskId, dojoWorkerId, requestBody.ResultData)
 	if err != nil {
-		logger.Error().Msg(fmt.Sprintf("Error updating task: %v", err))
+		log.Error().Msg(fmt.Sprintf("Error updating task: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
