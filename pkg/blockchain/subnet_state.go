@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"dojo-api/utils"
+
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ValidatorMinStake = GetValidatorMinStake()
-)
+var ValidatorMinStake = GetValidatorMinStake()
 
 func GetValidatorMinStake() int {
 	err := godotenv.Load()
@@ -50,14 +50,30 @@ type SubnetStateSubscriber struct {
 	substrateService *SubstrateService
 	SubnetState      *SubnetState // meant for only tracking our subnet state
 	GlobalState      *GlobalState
+	initialised      bool
 }
 
-func NewSubnetStateSubscriber() *SubnetStateSubscriber {
-	return &SubnetStateSubscriber{
-		substrateService: NewSubstrateService(),
-		SubnetState:      &SubnetState{},
-		GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
-	}
+var (
+	instance *SubnetStateSubscriber
+	once     sync.Once
+)
+
+func GetSubnetStateSubscriberInstance() *SubnetStateSubscriber {
+	once.Do(func() {
+		instance = &SubnetStateSubscriber{
+			substrateService: NewSubstrateService(),
+			SubnetState:      &SubnetState{},
+			GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
+			initialised:      false,
+		}
+		subnetUidStr := utils.LoadDotEnv("SUBNET_UID")
+		subnetUid, err := strconv.Atoi(subnetUidStr)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error parsing SUBNET_UID, failed to start subscriber")
+		}
+		instance.SubscribeSubnetState(subnetUid)
+	})
+	return instance
 }
 
 func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
@@ -162,6 +178,7 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
 	s.SubnetState = s.GetSubnetState(subnetId)
+	s.initialised = true
 
 	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
 	if err != nil {
