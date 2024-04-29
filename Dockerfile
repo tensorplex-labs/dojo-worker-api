@@ -22,9 +22,6 @@ WORKDIR /root/
 
 COPY --from=builder /app/service .
 
-#TODO: Remove this once we have a way to pass env vars to the container either through secrets manager when we deploy to EKS
-COPY .env .
-
 EXPOSE 8080
 
 CMD ["./service"]
