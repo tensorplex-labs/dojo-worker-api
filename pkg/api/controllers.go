@@ -285,3 +285,22 @@ func GetTasksByPageController(c *gin.Context) {
 		"tasks": taskPagination,
 	}))
 }
+
+func GetTaskResultsController(c *gin.Context) {
+	taskId := c.Param("task-id")
+	if taskId == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
+		c.Abort()
+		return
+	}
+
+	taskResultORM := orm.NewTaskResultORM()
+	taskResults, err := taskResultORM.GetTaskResultsByTaskId(c.Request.Context(), taskId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to fetch task results"))
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": taskResults}))
+}

@@ -38,3 +38,7 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 	}
 	return createResultTx.Result(), nil
 }
+
+func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId String) ([]db.TaskResultModel, error) {
+	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
+}
