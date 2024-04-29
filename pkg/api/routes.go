@@ -25,7 +25,7 @@ func LoginRoutes(router *gin.Engine) {
 		miner := apiV1.Group("/miner")
 		{
 			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
-			miner.GET(":hotkey", MinerController)
+			miner.GET("/info/:hotkey", MinerController)
 		}
 	}
 }

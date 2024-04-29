@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"crypto/rand"
+	"encoding/base64"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -324,4 +326,19 @@ func generateRandomApiKey() (string, time.Time, error) {
 	}
 	expiry := time.Now().Add(24 * time.Hour)
 	return apiKey.String(), expiry, nil
+}
+
+// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
+func generateRandomMinerSubscriptionKey(length int) (string, error) {
+    // Generate a slice of random bytes.
+    b := make([]byte, length)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", err
+    }
+
+    // Encode the random bytes to a URL-safe base64 string.
+    apiKey := base64.URLEncoding.EncodeToString(b)
+
+    return apiKey, nil
 }

@@ -177,10 +177,17 @@ func MinerController(c *gin.Context) {
 		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
 		return
 	}
+	// generate subscription key
+	subscriptionKey ,err := generateRandomMinerSubscriptionKey(12)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
+		return
+	}
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
 		"minerId": minerUser.ID,
+		"subscriptionKey":subscriptionKey,
 	}))
 }
 
