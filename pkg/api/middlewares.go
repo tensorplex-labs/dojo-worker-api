@@ -2,17 +2,14 @@ package api
 
 import (
 	"net/http"
-
 	"context"
 	"dojo-api/db"
-	"dojo-api/utils"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -245,10 +242,9 @@ func verifyApiKey(apiKey string) string {
 	// Check if the API key is valid
 	client := db.NewClient()
 	ctx := context.Background()
-	logger := utils.GetLogger()
 	defer func() {
 		if err := client.Prisma.Disconnect(); err != nil {
-			logger.Error().Msgf("Error disconnecting: %v", err)
+			log.Error().Msgf("Error disconnecting: %v", err)
 		}
 	}()
 	client.Prisma.Connect()

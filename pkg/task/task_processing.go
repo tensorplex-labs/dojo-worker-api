@@ -1,8 +1,10 @@
-package api
+package task
+
 import (
 	"dojo-api/utils"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
 )
 
 
@@ -111,41 +113,27 @@ func validateTaskData(taskData utils.TaskData) error {
 
 func ProcessCodeCompletion(taskData *utils.TaskData) error{
 	responses := taskData.Responses
-	logger := utils.GetLogger()
 	for i, response := range responses {
-		completion := response.Completion
-		completionMap, ok := completion.(map[string]interface{})
+		completionMap, ok := response.Completion.(map[string]interface{})
 		if !ok {
-			logger.Error().Msg("You sure this is code generation?")
+			log.Error().Msg("You sure this is code generation?")
 			return errors.New("invalid completion format")
 		}
-		if completionMap["language"] == "python" {
-			pythonResponse, err := utils.GetPythonUrl(completionMap["code"].(string))
+		if _, ok := completionMap["files"]; ok{
+			sandboxResponse, err := utils.GetCodesandbox(completionMap)
 			if err != nil {
-				logger.Error().Msg(fmt.Sprintf("Error getting python response: %v", err))
+				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
 				return err
 			}
-			if pythonResponse.Success {
-				completionMap["sandbox_url"] = pythonResponse.Body.Fileurl
+			if sandboxResponse.Url != "" {
+				completionMap["sandbox_url"] = sandboxResponse.Url
 			}else {
-				logger.Error().Msg(fmt.Sprintf("Error getting python response: %v", pythonResponse.Error))
-				return errors.New("error getting python response")
-			}	
-		}else if _, ok := completionMap["files"]; ok{
-			javascriptResponse, err := utils.GetCodesandbox(completionMap)
-			if err != nil {
-				logger.Error().Msg(fmt.Sprintf("Error getting javascript response: %v", err))
-				return err
-			}
-			if javascriptResponse.Sandbox_id != "" {
-				completionMap["sandbox_url"] = "https://" + javascriptResponse.Sandbox_id + ".csb.app/"
-			}else {
-				fmt.Println(javascriptResponse)
-				logger.Error().Msg("Error getting javascript response")
-				return errors.New("error getting javascript response")
+				fmt.Println(sandboxResponse)
+				log.Error().Msg("Error getting sandbox response")
+				return errors.New("error getting sandbox response")
 			}
 		}else {
-			logger.Error().Msg("Invalid completion format")
+			log.Error().Msg("Invalid completion format")
 			return errors.New("invalid completion format")
 		}
 		taskData.Responses[i].Completion = completionMap
