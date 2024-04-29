@@ -18,12 +18,9 @@ FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /root/
+WORKDIR /dojo-api
 
 COPY --from=builder /app/service .
-
-#TODO: Remove this once we have a way to pass env vars to the container either through secrets manager when we deploy to EKS
-COPY .env .
 
 EXPOSE 8080
 
