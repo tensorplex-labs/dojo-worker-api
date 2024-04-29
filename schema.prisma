@@ -42,7 +42,7 @@ model MinerUser {
     id                String          @id @default(uuid())
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
-    coldkey           String
+    coldkey           String?
     hotkey            String
     api_key           String
     api_key_expire_at DateTime
@@ -52,9 +52,21 @@ model MinerUser {
     is_verified       Boolean         @default(false)
     tasks             Task[]
     worker_partners   WorkerPartner[]
+    Identity          Identity        @relation(fields: [identity_id], references: [id])
+    identity_id       String
     subscription_key  String          @unique @default(uuid())
 
     @@unique([hotkey, api_key])
+}
+
+model Identity {
+    id         String      @id @default(uuid())
+    created_at DateTime    @default(now())
+    updated_at DateTime    @updatedAt
+    email      String
+    name       String?
+    entityName String?
+    MinerUser  MinerUser[]
 }
 
 model Task {
