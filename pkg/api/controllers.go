@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -300,5 +301,29 @@ func GetTaskResultsController(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": taskResults}))
+	// embed TaskResultModel to reuse its fields
+	// override ResultData, also will shadow the original "result_data" JSON field
+	type taskResultResponse struct {
+		db.TaskResultModel
+		ResultData []task.Result `json:"result_data"`
+	}
+	var formattedTaskResults []taskResultResponse
+
+	for _, taskResult := range taskResults {
+		var resultDataItem []task.Result
+		err = json.Unmarshal([]byte(string(taskResult.ResultData)), &resultDataItem)
+		if err != nil {
+			log.Error().Err(err).Str("taskResult.ResultData", string(taskResult.ResultData)).Msg("failed to convert task results")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("failed to convert result data to tempResult"))
+			return
+		}
+
+		tempResult := taskResultResponse{
+			ResultData:      resultDataItem,
+			TaskResultModel: taskResult,
+		}
+		formattedTaskResults = append(formattedTaskResults, tempResult)
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": formattedTaskResults}))
 }
