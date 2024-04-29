@@ -1,4 +1,4 @@
-package utils
+package sandbox
 
 import (
 	"bytes"
@@ -7,9 +7,6 @@ import (
 	"errors"
 	"github.com/rs/zerolog/log"
 	"fmt"
-	"reflect"
-	// "os"
-	"github.com/joho/godotenv"
 )
 
 type Response struct {
@@ -18,20 +15,21 @@ type Response struct {
 	Url string `json:"-"`
 }
 
-func getRequest(body map[string]interface{}, response *Response) error {
+func defaultErrorResponse(errorMsg string) Response {
+    return Response{Sandbox_id: "", Error: errorMsg, Url: ""}
+}
+
+func getRequest(body map[string]interface{}) (Response, error) {
+	var response Response
 	url := "https://codesandbox.io/api/v1/sandboxes/define?json=1"
 	body["environment"] = "server"
 	jsonBody, err := json.Marshal(body); if err != nil {
-		return err
+		return defaultErrorResponse(err.Error()), err
 	}
-
-	err = godotenv.Load(); if err != nil {
-        log.Error().Msg("Error loading .env file")
-    }
 
 	req,err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
-		return err
+		return defaultErrorResponse(err.Error()), err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// req.Header.Set("_cfuvid", os.Getenv("CODESANDBOX_ID"))
@@ -40,12 +38,15 @@ func getRequest(body map[string]interface{}, response *Response) error {
 	client := &http.Client{}
     resp, err := client.Do(req)
     if err != nil {
-		return err
+		return defaultErrorResponse(err.Error()), err
     }
     defer resp.Body.Close()
 
-	json.NewDecoder(resp.Body).Decode(response)
-	return nil
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Error().Msgf("Failed to decode JSON response: %v", err)
+		return defaultErrorResponse("Failed to decode JSON response"), fmt.Errorf("failed to decode JSON response: %w", err)
+	}	
+	return response, nil
 }
 
 func reformatFiles(files []interface{}, python bool) map[string]interface{} {
@@ -65,26 +66,20 @@ func reformatFiles(files []interface{}, python bool) map[string]interface{} {
 }
 
 func GetCodesandbox(body map[string]interface{}) (Response, error) {
-	var r = reflect.TypeOf(body["files"])
-	fmt.Printf("Other:%v\n", r) 
-	var response Response
 	files, ok := body["files"].([]interface{}); if !ok {
-		response.Error = "Error getting files"
 		log.Error().Msg("Error getting files")
-		return response, errors.New("object has no files key")
+		return defaultErrorResponse("Error getting files"), errors.New("object has no files key")
 	}
 	javascript := false
 	python := false
 	for _, file := range files {
 		file, ok := file.(map[string]interface{}); if !ok {
-			response.Error = "Error getting file"
 			log.Error().Msg("Error getting file")
-			return response, errors.New("file object is not a map")
+			return defaultErrorResponse("Error getting file"), errors.New("file object is not a map")
 		}
 		language, ok := file["language"]; if !ok {
-			response.Error = "Error getting language"
 			log.Error().Msg("Error getting language")
-			return response, errors.New("files object has no language key")
+			return defaultErrorResponse("Error getting language"), errors.New("files object has no language key")
 		}
 
 		if language == "javascript" {
@@ -95,7 +90,8 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 	}
 	body["files"] = reformatFiles(body["files"].([]interface{}), python)
 
-	err := getRequest(body, &response); if err != nil {
+	response, err := getRequest(body); 
+	if err != nil {
 		response.Error = "Error getting request"
 		log.Error().Msg("Error getting request")
 		return response, err
@@ -106,9 +102,8 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 	}else if python {
 		response.Url = "https://" + response.Sandbox_id + "-8050.csb.app/"
 	}else {
-		response.Error = "Invalid language"
 		log.Error().Msg("Invalid language")
-		return response, errors.New("invalid language")
+		return defaultErrorResponse("Invalid language"), errors.New("invalid language")
 	}
 	return response, nil
 }

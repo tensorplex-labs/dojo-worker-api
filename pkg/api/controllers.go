@@ -66,15 +66,15 @@ func CreateTaskController(c *gin.Context) {
 		return
 	}
 
-	err := task.ValidateTaskRequest(requestBody)
-	if err != nil {
+	if err := task.ValidateTaskRequest(requestBody); err != nil {
 		log.Error().Err(err).Msg("Failed to validate task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
 	}
 
-	if err := task.ProcessTaskRequest(&requestBody); err != nil{
+	requestBody, err := task.ProcessTaskRequest(requestBody); 
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
 		c.Abort()
@@ -97,7 +97,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		c.JSON(http.StatusUnauthorized, ("Unauthorized"))
 		return
 	}
 

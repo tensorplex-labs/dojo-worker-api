@@ -11,6 +11,7 @@ import (
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
+	"dojo-api/pkg/sandbox"
 
 	"github.com/rs/zerolog/log"
 )
@@ -417,41 +418,48 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 	return nil
 }
 
-func ProcessTaskRequest(taskData *CreateTaskRequest) error {
-	for i, taskInterface := range taskData.TaskData {
-		if taskInterface.Task == "CODE_GENERATION" {
-			ProcessCodeCompletion(&taskData.TaskData[i])
+func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
+	processedTaskData :=  make([]TaskData, 0)
+	for _, taskInterface := range taskData.TaskData {
+		if taskInterface.Task == TaskTypeCodeGen{
+			orocessedTaskEntry, err := ProcessCodeCompletion(taskInterface)
+			if err != nil {
+				log.Error().Msg("Error processing code completion")
+				return taskData, err
+			}
+			processedTaskData = append(processedTaskData, orocessedTaskEntry)
 		}
 	}
-	return nil
+	taskData.TaskData = processedTaskData
+	return taskData, nil
 }
 
-func ProcessCodeCompletion(taskData *TaskData) error{
+func ProcessCodeCompletion(taskData TaskData) (TaskData, error){
 	responses := taskData.Responses
 	for i, response := range responses {
 		completionMap, ok := response.Completion.(map[string]interface{})
 		if !ok {
 			log.Error().Msg("You sure this is code generation?")
-			return errors.New("invalid completion format")
+			return taskData, errors.New("invalid completion format")
 		}
 		if _, ok := completionMap["files"]; ok{
-			sandboxResponse, err := utils.GetCodesandbox(completionMap)
+			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
 			if err != nil {
 				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
-				return err
+				return taskData, err
 			}
 			if sandboxResponse.Url != "" {
 				completionMap["sandbox_url"] = sandboxResponse.Url
 			}else {
 				fmt.Println(sandboxResponse)
 				log.Error().Msg("Error getting sandbox response")
-				return errors.New("error getting sandbox response")
+				return taskData, errors.New("error getting sandbox response")
 			}
 		}else {
 			log.Error().Msg("Invalid completion format")
-			return errors.New("invalid completion format")
+			return taskData, errors.New("invalid completion format")
 		}
 		taskData.Responses[i].Completion = completionMap
 	}
-	return nil
+	return taskData, nil
 }
