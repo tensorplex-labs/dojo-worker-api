@@ -9,7 +9,6 @@ RUN go mod download
 COPY . .
 
 RUN go run github.com/steebchen/prisma-client-go generate
-RUN go run github.com/steebchen/prisma-client-go db push
 
 ARG PLATFORM=linux
 ARG ARCH=amd64
