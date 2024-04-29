@@ -289,16 +289,14 @@ func GetTasksByPageController(c *gin.Context) {
 func GetTaskResultsController(c *gin.Context) {
 	taskId := c.Param("task-id")
 	if taskId == "" {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
-		c.Abort()
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
 		return
 	}
 
 	taskResultORM := orm.NewTaskResultORM()
 	taskResults, err := taskResultORM.GetTaskResultsByTaskId(c.Request.Context(), taskId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to fetch task results"))
-		c.Abort()
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("failed to fetch task results"))
 		return
 	}
 
