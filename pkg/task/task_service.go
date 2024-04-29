@@ -2,58 +2,35 @@ package task
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"math"
-
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 
 	"github.com/rs/zerolog/log"
 )
 
 type TaskService struct {
-	client *db.PrismaClient
+	taskORM       *orm.TaskORM
+	taskResultORM *orm.TaskResultORM
 }
 
 func NewTaskService() *TaskService {
 	return &TaskService{
-		client: orm.NewPrismaClient(),
+		taskORM:       orm.NewTaskORM(),
+		taskResultORM: orm.NewTaskResultORM(),
 	}
-}
-
-type Task struct {
-	Title        string      `json:"title"`
-	Body         string      `json:"body"`
-	Modality     db.TaskType `json:"modality"`
-	ExpireAt     time.Time   `json:"expireAt"`
-	Criteria     []byte      `json:"criteria"`
-	TaskData     []byte      `json:"taskData"`
-	MaxResults   int         `json:"maxResults"`
-	TotalRewards float64     `json:"totalRewards"`
-}
-
-type TaskResult struct {
-	ID             string    `json:"id"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	Status         string    `json:"status"`
-	ResultData     []byte    `json:"resultData"`
-	TaskID         string    `json:"taskId"`
-	DojoWorkerID   string    `json:"dojoWorkerId"`
-	StakeAmount    *float64  `json:"stakeAmount"`
-	PotentialYield *float64  `json:"potentialYield"`
-	PotentialLoss  *float64  `json:"potentialLoss"`
-	FinalisedYield *float64  `json:"finalisedYield"`
-	FinalisedLoss  *float64  `json:"finalisedLoss"`
 }
 
 // get task by id
 func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
-	task, err := taskService.client.Task.FindUnique(db.Task.ID.Equals(id)).Exec(ctx)
+	taskORM := orm.NewTaskORM()
+	task, err := taskORM.GetById(ctx, id)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting string to int64")
 		return nil, err
@@ -93,13 +70,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 
 	taskTypes := convertStringToTaskType(types)
 
-	tasks, err := taskService.client.Task.FindMany(
-		db.Task.Type.In(taskTypes),
-	).OrderBy(sortQuery).
-		Skip(offset).
-		Take(limit).
-		Exec(ctx)
-
+	tasks, err := taskService.taskORM.GetByPage(ctx, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, err
@@ -150,130 +121,77 @@ func convertStringToTaskType(taskTypes []string) []db.TaskType {
 	return convertedTypes
 }
 
-// create task
-func (t *TaskService) CreateTask(taskData utils.TaskRequest, userid string) ([]string, error) {
-	var logger = utils.GetLogger()
-	client := db.NewClient()
-	ctx := context.Background()
-	defer func() {
-		if err := client.Prisma.Disconnect(); err != nil {
-			logger.Error().Msgf("Error disconnecting: %v", err)
-		}
-	}()
-	client.Prisma.Connect()
-	var createdIds []string
-	for _, taskInterface := range taskData.TaskData {
-		modality := db.TaskType(taskInterface.Task)
+func IsValidTaskType(taskType TaskType) bool {
+	if taskType == TaskTypeCodeGen || taskType == TaskTypeTextToImage || taskType == TaskTypeDialogue {
+		return true
+	}
+	return false
+}
 
-		criteriaJSON, err := json.Marshal(taskInterface.Criteria)
+func IsValidCriteriaType(criteriaType CriteriaType) bool {
+	if criteriaType == CriteriaTypeMultiSelect || criteriaType == CriteriaTypeRanking || criteriaType == CriteriaTypeScore {
+		return true
+	}
+	return false
+}
+
+// create task
+func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]string, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var taskIds []string
+	taskORM := orm.NewTaskORM()
+	for _, currTask := range request.TaskData {
+		taskType := TaskType(currTask.Task)
+
+		_, err := json.Marshal(currTask.Criteria)
 		if err != nil {
-			logger.Error().Msgf("Error marshaling criteria: %v", err)
+			log.Error().Err(err).Msgf("Error marshaling criteria")
 			return nil, errors.New("invalid criteria format")
 		}
 
-		taskInfoJSON, err := json.Marshal(taskInterface)
+		taskData, err := json.Marshal(currTask)
 		if err != nil {
-			logger.Error().Msgf("Error marshaling task data: %v", err)
+			log.Error().Err(err).Msgf("Error marshaling task data")
 			return nil, errors.New("invalid task data format")
 		}
 
-		parsedExpireAt, err := time.Parse(time.DateTime, taskData.ExpireAt.(string))
-		if err != nil {
-			logger.Error().Msgf("Error parsing expireAt: %v", err)
+		expireAt := utils.ParseDate(request.ExpireAt.(string))
+		if expireAt == nil {
+			log.Error().Msg("Error parsing expireAt")
 			return nil, errors.New("invalid expireAt format")
 		}
 
-		newTask := Task{
-			Title:        taskData.Title,
-			Body:         taskData.Body,
-			Modality:     modality,
-			ExpireAt:     parsedExpireAt,
-			Criteria:     criteriaJSON,
-			TaskData:     taskInfoJSON,
-			MaxResults:   taskData.MaxResults,
-			TotalRewards: taskData.TotalRewards,
+		taskToCreate := db.InnerTask{
+			ExpireAt:   *expireAt,
+			Title:      request.Title,
+			Body:       request.Body,
+			Type:       db.TaskType(taskType),
+			TaskData:   taskData,
+			MaxResults: request.MaxResults,
+			NumResults: 0,
+			Status:     db.TaskStatusInProgress,
 		}
 
-		id, err := insertTaskData(newTask, userid, client, ctx)
+		if request.TotalRewards > 0 {
+			taskToCreate.TotalReward = &request.TotalRewards
+		}
 
+		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
-			logger.Error().Msgf("Error creating task: %v", err)
+			log.Error().Msgf("Error creating task: %v", err)
 			return nil, err
 		}
 
-		createdIds = append(createdIds, fmt.Sprintf("Task created with ID: %s", id))
+		taskIds = append(taskIds, task.ID)
 	}
-
-	return createdIds, nil
-}
-
-func insertTaskData(newTask Task, userid string, client *db.PrismaClient, ctx context.Context) (string, error) {
-	task, err := client.Task.CreateOne(
-		db.Task.ExpireAt.Set(newTask.ExpireAt),
-		db.Task.Title.Set(newTask.Title),
-		db.Task.Body.Set(newTask.Body),
-		db.Task.Type.Set(newTask.Modality),
-		// db.Task.Criteria.Set(newTask.Criteria),
-		db.Task.TaskData.Set(newTask.TaskData),
-		db.Task.Status.Set("PENDING"),
-		db.Task.MaxResults.Set(newTask.MaxResults),
-		db.Task.NumResults.Set(0),
-		db.Task.TotalReward.Set(newTask.TotalRewards),
-		db.Task.MinerUser.Link(
-			db.MinerUser.ID.Equals(userid),
-		),
-	).Exec(ctx)
-
-	if err != nil {
-		return "", err
-	}
-
-	if task == nil {
-		return "", errors.New("failed to create task")
-	}
-
-	return task.ID, err
-}
-
-func insertTaskResultData(newTaskResult TaskResult, client *db.PrismaClient, ctx context.Context) (string, error) {
-	taskResult, err := client.TaskResult.CreateOne(
-		db.TaskResult.Status.Set("COMPLETED"),
-		db.TaskResult.ResultData.Set(newTaskResult.ResultData),
-		db.TaskResult.Task.Link(
-			db.Task.ID.Equals(newTaskResult.TaskID),
-		),
-		db.TaskResult.DojoWorker.Link(
-			db.DojoWorker.ID.Equals(newTaskResult.DojoWorkerID),
-		),
-	).Exec(ctx)
-
-	return taskResult.ID, err
-}
-
-func (t *TaskService) GetDojoWorkerById(ctx context.Context, id string) (*db.DojoWorkerModel, error) {
-	// print the dojo worker id
-	fmt.Println("Dojo Worker ID: ", id)
-	worker, err := t.client.DojoWorker.FindUnique(
-		db.DojoWorker.ID.Equals(id),
-	).Exec(ctx)
-
-	if err != nil {
-		if err == db.ErrNotFound {
-			return nil, fmt.Errorf("DojoWorker with ID %s not found", id)
-		}
-		return nil, err
-	}
-
-	return worker, nil
+	return taskIds, nil
 }
 
 func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel, error) {
-	task, err := t.client.Task.FindUnique(
-		db.Task.ID.Equals(id),
-	).Exec(ctx)
-
+	task, err := t.taskORM.GetById(ctx, id)
 	if err != nil {
-		if err == db.ErrNotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			return nil, fmt.Errorf("Task with ID %s not found", id)
 		}
 		return nil, err
@@ -282,35 +200,258 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
-func (t *TaskService) UpdateTaskResultData(ctx context.Context, taskId string, dojoWorkerId string, resultData map[string]interface{}) (int, error) {
-
-	// Convert your map to json
-	jsonResultData, err := json.Marshal(resultData)
+func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel, dojoWorkerId string, results []Result) (*db.TaskModel, error) {
+	_, err := ValidateResultData(results, task)
 	if err != nil {
-		return 0, err
+		log.Error().Err(err).Msg("Error validating result data")
+		return nil, err
 	}
 
-	newTaskResultData := TaskResult{
-		Status:       "COMPLETED", // Check with evan if it's completed
-		ResultData:   jsonResultData,
-		TaskID:       taskId,
-		DojoWorkerID: dojoWorkerId,
+	jsonResults, err := json.Marshal(results)
+	if err != nil {
+		log.Error().Err(err).Msg("Error marshaling result items")
+		return nil, err
+	}
+	newTaskResultData := db.InnerTaskResult{
+		Status:     db.TaskResultStatusCompleted,
+		ResultData: jsonResults,
+		TaskID:     task.ID,
+		WorkerID:   dojoWorkerId,
 	}
 
 	// Insert the task result data
-	_, err = insertTaskResultData(newTaskResultData, t.client, ctx)
+	taskResultORM := orm.NewTaskResultORM()
+	createdTaskResult, err := taskResultORM.CreateTaskResult(ctx, &newTaskResultData)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	// Increment numResults
-	updatedTask, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskId)).Update(
-		db.Task.NumResults.Increment(1),
-	).Exec(ctx)
+	return createdTaskResult.Task(), nil
+}
+
+func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) {
+	var taskData TaskData
+	err := json.Unmarshal(task.TaskData, &taskData)
 	if err != nil {
-		return 0, err
+		log.Error().Err(err).Msg("Error unmarshaling task data")
+		return nil, err
 	}
 
-	// If no errors occurred, return the updated numResults and nil
-	return updatedTask.NumResults, nil
+	for _, item := range results {
+		itemType := CriteriaType(item.Type)
+		if !IsValidCriteriaType(itemType) {
+			log.Error().Msgf("Invalid criteria type: %v", item.Type)
+			continue
+		}
+		switch itemType {
+		case CriteriaTypeScore:
+			score, _ := item.Value.(ScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+				minScore, maxScore := criteria.Min, criteria.Max
+				if float64(score) < minScore || float64(score) > maxScore {
+					return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
+				}
+
+			}
+
+		case CriteriaTypeRanking:
+			ranking, _ := item.Value.(RankingValue)
+			if len(ranking) == 0 {
+				return nil, fmt.Errorf("ranking criteria provided but no rankings found")
+			}
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+
+				if len(ranking) != len(criteria.Options) {
+					return nil, fmt.Errorf("number of rankings provided does not match number of options")
+				}
+			}
+		case CriteriaTypeMultiSelect:
+			multiSelect, _ := item.Value.(MultiSelectValue)
+			if len(multiSelect) == 0 {
+				return nil, fmt.Errorf("multi-select criteria provided but no selections found")
+			}
+
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
+
+				if len(multiSelect) > len(criteria.Options) {
+					return nil, fmt.Errorf("number of selections provided exceeds number of options")
+				}
+			}
+
+		default:
+			return nil, fmt.Errorf("unknown result data type: %s", item.Type)
+		}
+	}
+
+	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
+	return results, nil
+}
+
+// Validates a single task, reads the `type` field to determine different flows.
+func ValidateTaskData(taskData TaskData) error {
+	if taskData.Task == "" {
+		return errors.New("task is required")
+	}
+
+	if !IsValidTaskType(taskData.Task) {
+		return fmt.Errorf("unsupported task: %v", taskData.Task)
+	}
+
+	if taskData.Task == TaskTypeDialogue {
+		if len(taskData.Dialogue) == 0 {
+			return errors.New("dialogue cannot be empty")
+		}
+	} else {
+		if taskData.Prompt == "" {
+			return errors.New("prompt is required")
+		}
+	}
+
+	task := taskData.Task
+	if task == TaskTypeCodeGen || task == TaskTypeTextToImage {
+		for _, taskresponse := range taskData.Responses {
+			var ok bool
+			if task == TaskTypeCodeGen {
+				fmt.Println(taskresponse.Completion)
+				_, ok = taskresponse.Completion.(map[string]interface{})
+			} else if task == TaskTypeTextToImage {
+				_, ok = taskresponse.Completion.(string)
+			}
+
+			if !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
+		}
+
+		if len(taskData.Dialogue) != 0 {
+			return errors.New("dialogue should be empty for code generation and text to image tasks")
+		}
+	} else if task == TaskTypeDialogue {
+		if len(taskData.Responses) != 0 {
+			return errors.New("responses should be empty for dialogue task")
+		}
+
+		if len(taskData.Dialogue) == 0 {
+			return errors.New("dialogue is required for dialogue task")
+		}
+	}
+
+	if len(taskData.Criteria) == 0 {
+		return errors.New("criteria is required")
+	}
+
+	for _, criteria := range taskData.Criteria {
+		if criteria.Type == "" {
+			return errors.New("type is required for criteria")
+		}
+
+		if !IsValidCriteriaType(criteria.Type) {
+			return errors.New("unsupported criteria")
+		}
+
+		switch criteria.Type {
+		case CriteriaTypeMultiSelect:
+			if len(criteria.Options) == 0 {
+				return errors.New("options is required for multiple choice criteria")
+			}
+		case CriteriaTypeRanking:
+			if len(criteria.Options) == 0 {
+				return errors.New("options is required for multiple choice criteria")
+			}
+			if task != TaskTypeDialogue {
+				if len(criteria.Options) != len(taskData.Responses) {
+					return fmt.Errorf("number of options for criteria: %v should match number of responses: %v", CriteriaTypeRanking, len(taskData.Responses))
+				}
+			}
+		case CriteriaTypeScore:
+			if criteria.Min == 0 && criteria.Max == 0 {
+				return errors.New("min or max is required for numeric criteria")
+			}
+
+			if criteria.Min >= criteria.Max {
+				return errors.New("min must be less than max")
+			}
+		}
+	}
+
+	return nil
+}
+
+func ValidateTaskRequest(request CreateTaskRequest) error {
+	if request.Title == "" {
+		return errors.New("title is required")
+	}
+
+	if request.Body == "" {
+		return errors.New("body is required")
+	}
+
+	if request.ExpireAt == "" {
+		return errors.New("expireAt is required")
+	}
+
+	for _, currTask := range request.TaskData {
+		err := ValidateTaskData(currTask)
+		if err != nil {
+			return err
+		}
+	}
+
+	if request.MaxResults == 0 {
+		return errors.New("maxResults is required")
+	}
+
+	if request.TotalRewards == 0 {
+		return errors.New("totalRewards is required")
+	}
+
+	return nil
+}
+
+func ProcessTaskRequest(taskData *CreateTaskRequest) error {
+	for i, taskInterface := range taskData.TaskData {
+		if taskInterface.Task == "CODE_GENERATION" {
+			ProcessCodeCompletion(&taskData.TaskData[i])
+		}
+	}
+	return nil
+}
+
+func ProcessCodeCompletion(taskData *TaskData) error{
+	responses := taskData.Responses
+	for i, response := range responses {
+		completionMap, ok := response.Completion.(map[string]interface{})
+		if !ok {
+			log.Error().Msg("You sure this is code generation?")
+			return errors.New("invalid completion format")
+		}
+		if _, ok := completionMap["files"]; ok{
+			sandboxResponse, err := utils.GetCodesandbox(completionMap)
+			if err != nil {
+				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
+				return err
+			}
+			if sandboxResponse.Url != "" {
+				completionMap["sandbox_url"] = sandboxResponse.Url
+			}else {
+				fmt.Println(sandboxResponse)
+				log.Error().Msg("Error getting sandbox response")
+				return errors.New("error getting sandbox response")
+			}
+		}else {
+			log.Error().Msg("Invalid completion format")
+			return errors.New("invalid completion format")
+		}
+		taskData.Responses[i].Completion = completionMap
+	}
+	return nil
 }

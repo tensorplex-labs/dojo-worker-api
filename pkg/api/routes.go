@@ -5,12 +5,27 @@ import (
 )
 
 func LoginRoutes(router *gin.Engine) {
-
-	// Grouping routes
-	workerApiGroup := router.Group("/api/v1")
+	apiV1 := router.Group("/api/v1")
 	{
-		workerApiGroup.POST("/login/auth", LoginMiddleware(), LoginController)
-		workerApiGroup.POST("/tasks/", UserAuthMiddleware(), CreateTaskController)
-		workerApiGroup.PUT("/tasks/:task-id", SubmitWorkerTaskController)
+		worker := apiV1.Group("/worker")
+		{
+			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
+			// TODO verify that worker is logged in using WorkerAuthMiddleware
+			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerController)
+		}
+
+		tasks := apiV1.Group("/tasks")
+		{
+			tasks.POST("/create-task", MinerAuthMiddleware(), CreateTaskController)
+			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
+			tasks.GET("/:task-id", GetTaskByIdController)
+			tasks.GET("/", GetTasksByPageController)
+		}
+
+		miner := apiV1.Group("/miner")
+		{
+			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
+			miner.GET(":hotkey", MinerController)
+		}
 	}
 }
