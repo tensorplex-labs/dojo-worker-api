@@ -1,7 +1,14 @@
 package api
 
 import (
+	"context"
+	"encoding/hex"
+	"fmt"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -13,20 +20,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-
-	"context"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // AuthMiddleware checks if the request is authenticated
 func WorkerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		jwtSecret := os.Getenv("JWT_SECRET")
 		token := c.GetHeader("Authorization")
 		if token == "" {

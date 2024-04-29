@@ -14,6 +14,8 @@ require (
 	github.com/steebchen/prisma-client-go v0.36.0
 )
 
+require github.com/pkg/errors v0.9.1 // indirect
+
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
