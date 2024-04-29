@@ -222,6 +222,14 @@ func WorkerPartnerController(c *gin.Context) {
 }
 
 func GetTaskByIdController(c *gin.Context) {
+	_, exists := c.Get("userInfo")
+	if !exists {
+		// If no user info is available, return unauthorized
+		log.Error().Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
 	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
@@ -241,6 +249,14 @@ func GetTaskByIdController(c *gin.Context) {
 }
 
 func GetTasksByPageController(c *gin.Context) {
+	_, exists := c.Get("userInfo")
+	if !exists {
+		// If no user info is available, return unauthorized
+		log.Error().Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
 	// Split the string into a slice of strings
@@ -254,14 +270,14 @@ func GetTasksByPageController(c *gin.Context) {
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid page parameter"))
 		return
 	}
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid limit parameter"))
 		return
 	}
 
