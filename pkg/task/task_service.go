@@ -429,12 +429,12 @@ func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	processedTaskData :=  make([]TaskData, 0)
 	for _, taskInterface := range taskData.TaskData {
 		if taskInterface.Task == TaskTypeCodeGen{
-			orocessedTaskEntry, err := ProcessCodeCompletion(taskInterface)
+			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")
 				return taskData, err
 			}
-			processedTaskData = append(processedTaskData, orocessedTaskEntry)
+			processedTaskData = append(processedTaskData, processedTaskEntry)
 		}else{
 			processedTaskData = append(processedTaskData, taskInterface)
 		}

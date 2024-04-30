@@ -51,7 +51,7 @@ func WorkerLoginController(c *gin.Context) {
 }
 
 func CreateTaskController(c *gin.Context) {
-	minerUserId, exists := c.Get("userId")
+	minerUserId, exists := c.Get("minerUserId")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		c.Abort()
@@ -97,7 +97,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, ("Unauthorized"))
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
 
