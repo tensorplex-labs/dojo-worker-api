@@ -28,12 +28,13 @@ func NewTaskService() *TaskService {
 }
 
 // get task by id
-func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
+func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string, workerId string) (*TaskResponse, error) {
 	taskORM := orm.NewTaskORM()
-	task, err := taskORM.GetById(ctx, id)
+
+	task, err := taskORM.GetTaskByIdWithSub(ctx, id, workerId)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Error converting string to int64")
+		log.Error().Err(err).Msg("Error in getting task by Id")
 		return nil, err
 	}
 	// Ensure task is not nil if Prisma does not handle not found errors automatically
@@ -61,7 +62,7 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 }
 
 // TODO: Implement yieldMin, yieldMax
-func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page int, limit int, types []string, sort string) (*TaskPagination, error) {
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, error) {
 	// Calculate offset based on the page and limit
 	offset := (page - 1) * limit
 
@@ -78,7 +79,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 
 	taskTypes := convertStringToTaskType(types)
 
-	tasks, err := taskService.taskORM.GetByPage(ctx, offset, limit, sortQuery, taskTypes)
+	tasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, err

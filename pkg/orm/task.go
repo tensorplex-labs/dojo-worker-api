@@ -51,3 +51,83 @@ func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db
 		Exec(ctx)
 	return tasks, err
 }
+
+// TODO: Optimization
+func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
+	// Fetch the task along with its associated MinerUser
+	task, err := o.dbClient.Task.FindUnique(
+		db.Task.ID.Equals(taskId),
+	).With(
+		db.Task.MinerUser.Fetch(),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, err
+	}
+
+	// Retrieve the MinerUser from the fetched task
+	minerUser, ok := task.MinerUser()
+	if !ok || minerUser == nil {
+		return nil, err
+	}
+
+	// Check if there's a WorkerPartner link for the given MinerUser and DojoWorker
+	exists, err := o.dbClient.WorkerPartner.FindFirst(
+		db.WorkerPartner.MinerSubscriptionKey.Equals(minerUser.SubscriptionKey),
+		db.WorkerPartner.WorkerID.Equals(workerId),
+		db.WorkerPartner.IsDeleteByMiner.Equals(false),
+		db.WorkerPartner.IsActiveByWorker.Equals(true),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	if exists == nil {
+		return nil, err
+	}
+
+	// If all checks pass, return the task
+	return task, nil
+}
+
+// TODO: Optimization
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
+	partners, err := o.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.WorkerID.Equals(workerId),
+		db.WorkerPartner.IsDeleteByMiner.Equals(false),
+		db.WorkerPartner.IsActiveByWorker.Equals(true),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect Subscription keys from the fetched WorkerPartner records
+	var subscriptionKeys []string
+	for _, partner := range partners {
+		subscriptionKeys = append(subscriptionKeys, partner.MinerSubscriptionKey)
+	}
+
+	if len(subscriptionKeys) == 0 {
+		return nil, err
+	}
+
+	// Fetch tasks associated with these subscription keys
+	tasks, err := o.dbClient.Task.FindMany(
+		db.Task.MinerUser.Where(
+			db.MinerUser.SubscriptionKey.In(subscriptionKeys),
+		), db.Task.Type.In(taskTypes),
+	).OrderBy(sortQuery).
+		Skip(offset).
+		Take(limit).
+		Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}

@@ -223,9 +223,28 @@ func WorkerPartnerController(c *gin.Context) {
 
 func GetTaskByIdController(c *gin.Context) {
 
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
-	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
+	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID, worker.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))
 		c.Abort()
@@ -242,6 +261,24 @@ func GetTaskByIdController(c *gin.Context) {
 }
 
 func GetTasksByPageController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
 
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
@@ -269,7 +306,7 @@ func GetTasksByPageController(c *gin.Context) {
 
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), page, limit, taskTypes, sort)
+	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
