@@ -194,7 +194,7 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
 		var verified bool
 		var apiKey string

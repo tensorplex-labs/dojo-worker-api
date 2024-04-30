@@ -206,10 +206,18 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 }
 
 func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
-	s.mutex.RLock()
-	defer s.mutex.RLock()
 	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
+	// TODO fix why validator hotkey changes so quickly, should be a bug
+	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+		if hotkey == vhotkey {
 			return i, true
 		}
 	}
