@@ -53,6 +53,8 @@ model MinerUser {
     tasks             Task[]
     worker_partners   WorkerPartner[]
     subscription_key  String          @unique @default(uuid())
+    email             String
+    organizationName  String?
 
     @@unique([hotkey, api_key])
 }
@@ -116,6 +118,7 @@ model WorkerPartner {
     worker_id              String
     is_delete_by_miner     Boolean    @default(false)
     is_active_by_worker    Boolean    @default(true)
+    name                   String?
 
     @@unique([miner_subscription_key, worker_id])
 }
