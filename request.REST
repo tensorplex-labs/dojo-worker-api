@@ -20,3 +20,62 @@ Content-Type: application/json
    "hotkey" : "12356",
    "coldkey" : "78907"
 }
+
+POST {{url}}/api/v1/tasks
+Content-Type: application/json
+
+{
+  "title": "Task Title",
+  "body": "Detailed task description",
+  "expireAt": "2024-12-03 15:04:05",
+  "taskData": [
+    {
+        "prompt": "Write me a program that visualized our solar system, you may use python, javascript or pure HTML.",
+        "responses": [
+            {
+                "model": "openai/gpt-4-turbo", 
+                "completion": {
+                        "code": "print('\''Hello World'\'')",
+                        "language": "python",
+                        "installation_commands": "null",
+                        "additional_notes": "The code uses built-in libraries so no additional commands are required."
+                    }
+            },
+            {
+                "model": "phind/phind-codellama-34b",
+                "completion": {
+                    "code": "import matplotlib.pyplot as plt\r\n\r\n# Define the distances from the Sun for each planet in millions of km\r\ndistance_from_sun = [57.9, 108.2, 149.6, 227.9, 778.6, 1433.5]\r\n\r\n# Define the planet names\r\nplanet_names = ['\''Mercury'\'', '\''Venus'\'', '\''Earth'\'', '\''Mars'\'', '\''Jupiter'\'', '\''Saturn'\'']\r\n\r\n# Plot the orbits\r\nfig, ax = plt.subplots()\r\nfor i in range(len(planet_names)):\r\n    ax.plot(0, 0, '\''o'\'', label=planet_names[i])\r\n    ax.plot([0, distance_from_sun[i]], [0, 0], '\''--'\'')\r\n\r\nax.legend()\r\nplt.show()\r\n",
+                    "language": "python",
+                    "installation_commands": "pip install matplotlib",
+                    "additional_notes": "The code uses the matplotlib library to create the visualization of the solar system. You can install it using the command '\''pip install matplotlib'\''."
+                    }
+            }
+        ],
+        "task": "CODE_GENERATION",
+        "criteria": [
+            {
+                "type": "ranking",
+                "options": [
+                "Code 1",
+                "Code 2"
+                ]
+            },
+            {
+                "type": "multi-select",
+                "options": [
+                   "The code is well-written and clear.",
+                   "The code does not have any malicious intent.",
+                   "The code correctly accepts user input."
+               ]
+           },
+           {
+                "type": "score",
+                "min": 1.0,
+                "max": 10.0
+           }
+        ]
+    },
+  ],
+  "maxResults": 10,
+  "totalRewards": 100.3,
+}
