@@ -31,6 +31,7 @@ func NewTaskService() *TaskService {
 func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
 	taskORM := orm.NewTaskORM()
 	task, err := taskORM.GetById(ctx, id)
+
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting string to int64")
 		return nil, err
@@ -40,13 +41,20 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 		return nil, fmt.Errorf("no task found with ID %s", id)
 	}
 
+	var rawJSON json.RawMessage
+	err = json.Unmarshal([]byte(task.TaskData), &rawJSON)
+	if err != nil {
+		log.Error().Err(err).Msg("Error parsing task data")
+		return nil, err
+	}
+
 	return &TaskResponse{
 		ID:         task.ID,
 		Title:      task.Title,
 		Body:       task.Body,
 		ExpireAt:   task.ExpireAt,
 		Type:       task.Type,
-		TaskData:   task.TaskData,
+		TaskData:   rawJSON,
 		Status:     task.Status,
 		MaxResults: task.MaxResults,
 	}, nil
@@ -83,13 +91,19 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, page i
 	// Convert tasks to TaskResponse model
 	var taskResponses []TaskResponse
 	for _, task := range tasks {
+		var rawJSON json.RawMessage
+		err = json.Unmarshal([]byte(task.TaskData), &rawJSON)
+		if err != nil {
+			log.Error().Err(err).Msg("Error parsing task data")
+			return nil, err
+		}
 		taskResponse := TaskResponse{
 			ID:         task.ID,
 			Title:      task.Title,
 			Body:       task.Body,
 			Type:       task.Type,
 			ExpireAt:   task.ExpireAt,
-			TaskData:   task.TaskData,
+			TaskData:   rawJSON,
 			Status:     task.Status,
 			MaxResults: task.MaxResults,
 		}

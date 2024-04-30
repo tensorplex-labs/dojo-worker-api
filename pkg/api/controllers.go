@@ -222,13 +222,6 @@ func WorkerPartnerController(c *gin.Context) {
 }
 
 func GetTaskByIdController(c *gin.Context) {
-	_, exists := c.Get("userInfo")
-	if !exists {
-		// If no user info is available, return unauthorized
-		log.Error().Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
 
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
@@ -249,13 +242,6 @@ func GetTaskByIdController(c *gin.Context) {
 }
 
 func GetTasksByPageController(c *gin.Context) {
-	_, exists := c.Get("userInfo")
-	if !exists {
-		// If no user info is available, return unauthorized
-		log.Error().Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
 
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
