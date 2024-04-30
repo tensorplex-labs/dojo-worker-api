@@ -186,7 +186,7 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
 		var verified bool
 		var apiKey string
@@ -237,7 +237,7 @@ func MinerVerificationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
 		if !found {
 			log.Error().Msg("Hotkey is not registered")
@@ -374,7 +374,11 @@ func generateRandomApiKey() (string, time.Time, error) {
 	return apiKey.String(), expiry, nil
 }
 
-
+func isTimestampValid(requestTimestamp int64) bool {
+    const tolerance = 15 * 60 // 15 minutes in seconds
+    currentTime := time.Now().Unix()
+    return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
+}
 // GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
 func generateRandomMinerSubscriptionKey(length int) (string, error) {
     // Generate a slice of random bytes.
@@ -388,10 +392,4 @@ func generateRandomMinerSubscriptionKey(length int) (string, error) {
     apiKey := base64.URLEncoding.EncodeToString(b)
 
     return apiKey, nil
-}
-
-func isTimestampValid(requestTimestamp int64) bool {
-    const tolerance = 15 * 60 // 15 minutes in seconds
-    currentTime := time.Now().Unix()
-    return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
 }
