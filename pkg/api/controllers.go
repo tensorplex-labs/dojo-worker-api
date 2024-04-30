@@ -162,10 +162,16 @@ func MinerLoginController(c *gin.Context) {
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
 	email, _ := c.Get("email")
-	organisation, _ := c.Get("organisationName")
+	organisation, organisationExists := c.Get("organisationName")
 
 	minerUserORM := orm.NewMinerUserORM()
-	_, err := minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
+	var err error
+	if organisationExists {
+		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
+	}else{
+		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
@@ -203,9 +209,17 @@ func MinerApplicationController(c *gin.Context) {
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], requestMap["organisationName"]); err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
-		return
+	organisation, organisationExists := requestMap["organisationName"]
+	if organisationExists {
+		if _, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+			return
+		}
+	}else{
+		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+			return
+		}
 	}
 
 	subscriptionKey, err := generateRandomMinerSubscriptionKey()
@@ -214,7 +228,8 @@ func MinerApplicationController(c *gin.Context) {
 		return
 	}
 
-	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", requestMap["organisationName"], apiKey, subscriptionKey)
+	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
+	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
 	err = email.SendEmail(requestMap["email"], body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))

@@ -239,13 +239,6 @@ func MinerVerificationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if _, ok := requestMap["organisationName"]; !ok {
-			log.Error().Msg("organisationName is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("organisationName is required"))
-			c.Abort()
-			return
-		}
-
 		if _, ok := requestMap["email"]; !ok {
 			log.Error().Msg("email is required")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("email is required"))
