@@ -43,7 +43,7 @@ model MinerUser {
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
     hotkey            String          @unique
-    api_key           String
+    api_key           String          @unique
     api_key_expire_at DateTime
     // not necessary anymore since GET APIs must be public
     // ip_address        String?
@@ -115,6 +115,7 @@ model WorkerPartner {
     worker_id              String
     is_delete_by_miner     Boolean    @default(false)
     is_active_by_worker    Boolean    @default(true)
+    name                   String?
 
     @@unique([miner_subscription_key, worker_id])
 }
