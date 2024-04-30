@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"dojo-api/db"
+
+	"github.com/rs/zerolog/log"
 )
 
 type TaskORM struct {
@@ -62,15 +64,19 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 	).Exec(ctx)
 
 	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching task by taskId")
 		return nil, err
 	}
+
 	if task == nil {
+		log.Error().Err(err).Msg("No Task found with the given taskId")
 		return nil, err
 	}
 
 	// Retrieve the MinerUser from the fetched task
 	minerUser, ok := task.MinerUser()
 	if !ok || minerUser == nil {
+		log.Error().Err(err).Msg("Error in fetching MinerUser by MinerSubscriptionKey")
 		return nil, err
 	}
 
@@ -83,9 +89,11 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 	).Exec(ctx)
 
 	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching WorkerPartner by MinerSubscriptionKey and WorkerID")
 		return nil, err
 	}
 	if exists == nil {
+		log.Error().Err(err).Msg("No WorkerPartner found with the given MinerSubscriptionKey and WorkerID")
 		return nil, err
 	}
 
@@ -102,6 +110,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		db.WorkerPartner.IsActiveByWorker.Equals(true),
 	).Exec(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
 		return nil, err
 	}
 
@@ -112,6 +121,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	}
 
 	if len(subscriptionKeys) == 0 {
+		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
 		return nil, err
 	}
 
@@ -126,6 +136,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		Exec(ctx)
 
 	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
 		return nil, err
 	}
 

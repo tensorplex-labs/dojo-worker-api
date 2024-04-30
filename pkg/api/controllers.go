@@ -187,11 +187,11 @@ func MinerInfoController(c *gin.Context) {
 		return
 	}
 
-    // Check if API key is expired (didn't get to test)
-    if minerUser.APIKeyExpireAt.Before(time.Now()) {
-        c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
-        return
-    }
+	// Check if API key is expired (didn't get to test)
+	if minerUser.APIKeyExpireAt.Before(time.Now()) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
+		return
+	}
 
 	// generate subscription key
 	subscriptionKey, err := generateRandomMinerSubscriptionKey(32)
@@ -202,8 +202,8 @@ func MinerInfoController(c *gin.Context) {
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
-		"minerId": minerUser.ID,
-		"subscriptionKey":subscriptionKey,
+		"minerId":         minerUser.ID,
+		"subscriptionKey": subscriptionKey,
 	}))
 }
 
@@ -343,9 +343,7 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	// Successful response
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"tasks": taskPagination,
-	}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(taskPagination))
 }
 
 func GetTaskResultsController(c *gin.Context) {
