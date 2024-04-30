@@ -178,14 +178,6 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		coldkey, coldkeyExists := requestMap["coldkey"]
-		if !coldkeyExists {
-			log.Error().Msg("coldkey is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("coldkey is required"))
-			c.Abort()
-			return
-		}
-
 		hotkey, hotkeyExists := requestMap["hotkey"]
 		if !hotkeyExists {
 			log.Error().Msg("hotkey is required")
@@ -221,7 +213,6 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 
 		c.Set("verified", verified)
 		c.Set("hotkey", hotkey)
-		c.Set("coldkey", coldkey)
 		c.Set("apiKey", apiKey)
 		c.Set("expiry", expiry)
 		c.Next()

@@ -149,12 +149,11 @@ func SubmitTaskResultController(c *gin.Context) {
 func MinerLoginController(c *gin.Context) {
 	verified, _ := c.Get("verified")
 	hotkey, _ := c.Get("hotkey")
-	coldkey, _ := c.Get("coldkey")
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
 
 	minerUserORM := orm.NewMinerUserORM()
-	_, err := minerUserORM.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	_, err := minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
@@ -174,7 +173,6 @@ func MinerVerifyController(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
-	coldkey := "test-coldkey"
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
@@ -182,7 +180,7 @@ func MinerVerifyController(c *gin.Context) {
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	if _, err := minerUserORM.CreateUser(coldkey, hotkey.(string), apiKey, expiry, true); err != nil {
+	if _, err := minerUserORM.CreateUser(hotkey.(string), apiKey, expiry, true); err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
 		return
 	}
