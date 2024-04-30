@@ -168,6 +168,28 @@ func MinerLoginController(c *gin.Context) {
 	}
 }
 
+func MinerVerifyController(c *gin.Context) {
+	hotkey, exists := c.Get("hotkey")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	coldkey := "test-coldkey"
+	apiKey, expiry, err := generateRandomApiKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
+		return
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	if _, err := minerUserORM.CreateUser(coldkey, hotkey.(string), apiKey, expiry, true); err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse("User verified"))
+}
+
 func MinerController(c *gin.Context) {
 	apiKey := c.Request.Header.Get("X-API-KEY")
 

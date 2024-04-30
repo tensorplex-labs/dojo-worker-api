@@ -14,7 +14,11 @@ require (
 	github.com/steebchen/prisma-client-go v0.36.0
 )
 
-require github.com/pkg/errors v0.9.1 // indirect
+require (
+	github.com/pkg/errors v0.9.1 // indirect
+	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
+	gopkg.in/mail.v2 v2.3.1 // indirect
+)
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect

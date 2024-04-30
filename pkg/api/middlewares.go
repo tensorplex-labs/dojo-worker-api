@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"crypto/rand"
+	"encoding/base64"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -226,6 +228,38 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 	}
 }
 
+func MinerVerificationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var requestMap map[string]string
+		if err := c.BindJSON(&requestMap); err != nil {
+			log.Error().Err(err).Msg("Invalid request body")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
+			c.Abort()
+			return
+		}
+
+		hotkey, ok := requestMap["hotkey"]
+		if !ok {
+			log.Error().Msg("hotkey is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
+			c.Abort()
+			return
+		}
+
+		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
+		if !found {
+			log.Error().Msg("Hotkey is not registered")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
+			c.Abort()
+			return
+		}
+
+		c.Set("hotkey", hotkey)
+		c.Next()
+	}
+}
+
 func generateJWT(walletAddress string) (string, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	tokenExpiry, _ := strconv.Atoi(os.Getenv("TOKEN_EXPIRY"))
@@ -347,6 +381,22 @@ func generateRandomApiKey() (string, time.Time, error) {
 	}
 	expiry := time.Now().Add(24 * time.Hour)
 	return apiKey.String(), expiry, nil
+}
+
+
+// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
+func generateRandomMinerSubscriptionKey(length int) (string, error) {
+    // Generate a slice of random bytes.
+    b := make([]byte, length)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", err
+    }
+
+    // Encode the random bytes to a URL-safe base64 string.
+    apiKey := base64.URLEncoding.EncodeToString(b)
+
+    return apiKey, nil
 }
 
 func isTimestampValid(requestTimestamp int64) bool {
