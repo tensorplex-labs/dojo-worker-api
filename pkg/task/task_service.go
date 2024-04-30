@@ -193,7 +193,7 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	task, err := t.taskORM.GetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("Task with ID %s not found", id)
+			return nil, fmt.Errorf("task with ID %s not found", id)
 		}
 		return nil, err
 	}
@@ -318,18 +318,25 @@ func ValidateTaskData(taskData TaskData) error {
 	}
 
 	task := taskData.Task
-	if task == TaskTypeCodeGen || task == TaskTypeTextToImage {
+	if task == TaskTypeTextToImage || task == TaskTypeCodeGen{
 		for _, taskresponse := range taskData.Responses {
-			var ok bool
-			if task == TaskTypeCodeGen {
-				fmt.Println(taskresponse.Completion)
-				_, ok = taskresponse.Completion.(map[string]interface{})
-			} else if task == TaskTypeTextToImage {
-				_, ok = taskresponse.Completion.(string)
-			}
+			if task == TaskTypeTextToImage {
+				if _, ok := taskresponse.Completion.(string); !ok {
+					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				}
+			} else if task == TaskTypeCodeGen {
+				if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				}
 
-			if !ok {
-				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				files, ok := taskresponse.Completion.(map[string]interface{})["files"]
+				if !ok {
+					return errors.New("files is required for code generation task")
+				}
+
+				if _, ok = files.([]interface{}); !ok{
+					return errors.New("files must be an array")
+				}
 			}
 		}
 

@@ -51,7 +51,7 @@ func WorkerLoginController(c *gin.Context) {
 }
 
 func CreateTaskController(c *gin.Context) {
-	minerUserId, exists := c.Get("minerUserID")
+	minerUserId, exists := c.Get("userId")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		c.Abort()
