@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"dojo-api/utils"
+
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ValidatorMinStake = GetValidatorMinStake()
-)
+var ValidatorMinStake = GetValidatorMinStake()
 
 func GetValidatorMinStake() int {
 	err := godotenv.Load()
@@ -37,8 +37,8 @@ func GetValidatorMinStake() int {
 // TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
 	SubnetId               int
-	ActiveValidatorHotkeys []string
-	ActiveMinerHotkeys     []string
+	ActiveValidatorHotkeys map[int]string
+	ActiveMinerHotkeys     map[int]string
 	ActiveAxonInfos        []AxonInfo
 }
 
@@ -50,14 +50,31 @@ type SubnetStateSubscriber struct {
 	substrateService *SubstrateService
 	SubnetState      *SubnetState // meant for only tracking our subnet state
 	GlobalState      *GlobalState
+	initialised      bool
+	mutex            sync.RWMutex
 }
 
-func NewSubnetStateSubscriber() *SubnetStateSubscriber {
-	return &SubnetStateSubscriber{
-		substrateService: NewSubstrateService(),
-		SubnetState:      &SubnetState{},
-		GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
-	}
+var (
+	instance *SubnetStateSubscriber
+	once     sync.Once
+)
+
+func GetSubnetStateSubscriberInstance() *SubnetStateSubscriber {
+	once.Do(func() {
+		instance = &SubnetStateSubscriber{
+			substrateService: NewSubstrateService(),
+			SubnetState:      &SubnetState{},
+			GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
+			initialised:      false,
+		}
+		subnetUidStr := utils.LoadDotEnv("SUBNET_UID")
+		subnetUid, err := strconv.Atoi(subnetUidStr)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error parsing SUBNET_UID, failed to start subscriber")
+		}
+		instance.SubscribeSubnetState(subnetUid)
+	})
+	return instance
 }
 
 func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
@@ -67,21 +84,20 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 	}
 
 	// clear from active validators if found
-	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+	for key, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
-			s.SubnetState.ActiveValidatorHotkeys = append(s.SubnetState.ActiveValidatorHotkeys[:i], s.SubnetState.ActiveValidatorHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveValidatorHotkeys, key)
 			break
 		}
 	}
 
 	// clear from active miners if found
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for key, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			s.SubnetState.ActiveMinerHotkeys = append(s.SubnetState.ActiveMinerHotkeys[:i], s.SubnetState.ActiveMinerHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveMinerHotkeys, key)
 			break
 		}
 	}
-
 	// clear from axon infos
 	for i, axonInfo := range s.SubnetState.ActiveAxonInfos {
 		if hotkey == axonInfo.Hotkey {
@@ -99,8 +115,8 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	}
 
 	subnetState := SubnetState{SubnetId: subnetId, ActiveAxonInfos: axonInfos}
-	minerHotkeys := make([]string, 0)
-	validatorHotkeys := make([]string, 0)
+	minerHotkeys := make(map[int]string)
+	validatorHotkeys := make(map[int]string)
 
 	hotkeyToStake := make(map[string]float64)
 	hotkeyToIsRegistered := make(map[string]bool)
@@ -148,20 +164,28 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 
 		stake := hotkeyToStake[axonInfo.Hotkey]
 		if stake > float64(ValidatorMinStake) {
-			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
+			validatorHotkeys[axonInfo.Uid] = axonInfo.Hotkey
 		} else {
-			minerHotkeys = append(minerHotkeys, axonInfo.Hotkey)
+			minerHotkeys[axonInfo.Uid] = axonInfo.Hotkey
 		}
 	}
 
 	subnetState.ActiveValidatorHotkeys = validatorHotkeys
 	subnetState.ActiveMinerHotkeys = minerHotkeys
+
 	return &subnetState
+}
+
+func (s *SubnetStateSubscriber) IsInitialised() bool {
+	return s.initialised
 }
 
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
+	s.mutex.Lock()
 	s.SubnetState = s.GetSubnetState(subnetId)
+	s.initialised = true
+	s.mutex.Unlock()
 
 	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
 	if err != nil {
@@ -173,16 +197,28 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 
 	go func() {
 		for range ticker.C {
+			s.mutex.Lock()
 			s.SubnetState = s.GetSubnetState(subnetId)
+			s.mutex.Unlock()
 		}
 	}()
 	return nil
 }
 
 func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for uid, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			return i, true
+			return uid, true
+		}
+	}
+	return -1, false
+}
+
+func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
+	// TODO fix why validator hotkey changes so quickly, should be a bug
+	for uid, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+		if hotkey == vhotkey {
+			return uid, true
 		}
 	}
 	return -1, false

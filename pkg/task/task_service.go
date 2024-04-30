@@ -11,6 +11,7 @@ import (
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
+	"dojo-api/pkg/sandbox"
 
 	"github.com/rs/zerolog/log"
 )
@@ -191,7 +192,6 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		if request.TotalRewards > 0 {
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
-
 		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
@@ -207,7 +207,7 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	task, err := t.taskORM.GetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("Task with ID %s not found", id)
+			return nil, fmt.Errorf("task with ID %s not found", id)
 		}
 		return nil, err
 	}
@@ -332,18 +332,25 @@ func ValidateTaskData(taskData TaskData) error {
 	}
 
 	task := taskData.Task
-	if task == TaskTypeCodeGen || task == TaskTypeTextToImage {
+	if task == TaskTypeTextToImage || task == TaskTypeCodeGen{
 		for _, taskresponse := range taskData.Responses {
-			var ok bool
-			if task == TaskTypeCodeGen {
-				fmt.Println(taskresponse.Completion)
-				_, ok = taskresponse.Completion.(map[string]interface{})
-			} else if task == TaskTypeTextToImage {
-				_, ok = taskresponse.Completion.(string)
-			}
+			if task == TaskTypeTextToImage {
+				if _, ok := taskresponse.Completion.(string); !ok {
+					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				}
+			} else if task == TaskTypeCodeGen {
+				if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				}
 
-			if !ok {
-				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+				files, ok := taskresponse.Completion.(map[string]interface{})["files"]
+				if !ok {
+					return errors.New("files is required for code generation task")
+				}
+
+				if _, ok = files.([]interface{}); !ok{
+					return errors.New("files must be an array")
+				}
 			}
 		}
 
@@ -430,4 +437,52 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 	}
 
 	return nil
+}
+
+func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
+	processedTaskData :=  make([]TaskData, 0)
+	for _, taskInterface := range taskData.TaskData {
+		if taskInterface.Task == TaskTypeCodeGen{
+			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
+			if err != nil {
+				log.Error().Msg("Error processing code completion")
+				return taskData, err
+			}
+			processedTaskData = append(processedTaskData, processedTaskEntry)
+		}else{
+			processedTaskData = append(processedTaskData, taskInterface)
+		}
+	}
+	taskData.TaskData = processedTaskData
+	return taskData, nil
+}
+
+func ProcessCodeCompletion(taskData TaskData) (TaskData, error){
+	responses := taskData.Responses
+	for i, response := range responses {
+		completionMap, ok := response.Completion.(map[string]interface{})
+		if !ok {
+			log.Error().Msg("You sure this is code generation?")
+			return taskData, errors.New("invalid completion format")
+		}
+		if _, ok := completionMap["files"]; ok{
+			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
+			if err != nil {
+				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
+				return taskData, err
+			}
+			if sandboxResponse.Url != "" {
+				completionMap["sandbox_url"] = sandboxResponse.Url
+			}else {
+				fmt.Println(sandboxResponse)
+				log.Error().Msg("Error getting sandbox response")
+				return taskData, errors.New("error getting sandbox response")
+			}
+		}else {
+			log.Error().Msg("Invalid completion format")
+			return taskData, errors.New("invalid completion format")
+		}
+		taskData.Responses[i].Completion = completionMap
+	}
+	return taskData, nil
 }
