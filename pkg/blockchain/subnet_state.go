@@ -3,6 +3,7 @@ package blockchain
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -37,8 +38,8 @@ func GetValidatorMinStake() int {
 // TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
 	SubnetId               int
-	ActiveValidatorHotkeys []string
-	ActiveMinerHotkeys     []string
+	ActiveValidatorHotkeys map[int]string
+	ActiveMinerHotkeys     map[int]string
 	ActiveAxonInfos        []AxonInfo
 }
 
@@ -84,21 +85,20 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 	}
 
 	// clear from active validators if found
-	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+	for key, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
-			s.SubnetState.ActiveValidatorHotkeys = append(s.SubnetState.ActiveValidatorHotkeys[:i], s.SubnetState.ActiveValidatorHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveValidatorHotkeys, key)
 			break
 		}
 	}
 
 	// clear from active miners if found
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for key, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			s.SubnetState.ActiveMinerHotkeys = append(s.SubnetState.ActiveMinerHotkeys[:i], s.SubnetState.ActiveMinerHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveMinerHotkeys, key)
 			break
 		}
 	}
-
 	// clear from axon infos
 	for i, axonInfo := range s.SubnetState.ActiveAxonInfos {
 		if hotkey == axonInfo.Hotkey {
@@ -116,8 +116,8 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	}
 
 	subnetState := SubnetState{SubnetId: subnetId, ActiveAxonInfos: axonInfos}
-	minerHotkeys := make([]string, 0)
-	validatorHotkeys := make([]string, 0)
+	minerHotkeys := make(map[int]string)
+	validatorHotkeys := make(map[int]string)
 
 	hotkeyToStake := make(map[string]float64)
 	hotkeyToIsRegistered := make(map[string]bool)
@@ -165,14 +165,16 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 
 		stake := hotkeyToStake[axonInfo.Hotkey]
 		if stake > float64(ValidatorMinStake) {
-			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
+			validatorHotkeys[axonInfo.Uid] = axonInfo.Hotkey
 		} else {
-			minerHotkeys = append(minerHotkeys, axonInfo.Hotkey)
+			minerHotkeys[axonInfo.Uid] = axonInfo.Hotkey
 		}
 	}
 
 	subnetState.ActiveValidatorHotkeys = validatorHotkeys
 	subnetState.ActiveMinerHotkeys = minerHotkeys
+	subnetState.SortActiveKeys()
+
 	return &subnetState
 }
 
@@ -206,9 +208,9 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 }
 
 func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for uid, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			return i, true
+			return uid, true
 		}
 	}
 	return -1, false
@@ -216,10 +218,34 @@ func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) 
 
 func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
 	// TODO fix why validator hotkey changes so quickly, should be a bug
-	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+	for uid, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
-			return i, true
+			return uid, true
 		}
 	}
 	return -1, false
+}
+
+func (s *SubnetState) SortActiveKeys() {
+	validatorKeys := make([]int, 0, len(s.ActiveValidatorHotkeys))
+	for k := range s.ActiveValidatorHotkeys {
+		validatorKeys = append(validatorKeys, k)
+	}
+	sort.Ints(validatorKeys)
+	sortedValidatorHotkeys := make(map[int]string)
+	for _, k := range validatorKeys {
+		sortedValidatorHotkeys[k] = s.ActiveValidatorHotkeys[k]
+	}
+	s.ActiveValidatorHotkeys = sortedValidatorHotkeys
+
+	minerKeys := make([]int, 0, len(s.ActiveMinerHotkeys))
+	for k := range s.ActiveMinerHotkeys {
+		minerKeys = append(minerKeys, k)
+	}
+	sort.Ints(minerKeys)
+	sortedMinerHotkeys := make(map[int]string)
+	for _, k := range minerKeys {
+		sortedMinerHotkeys[k] = s.ActiveMinerHotkeys[k]
+	}
+	s.ActiveMinerHotkeys = sortedMinerHotkeys
 }
