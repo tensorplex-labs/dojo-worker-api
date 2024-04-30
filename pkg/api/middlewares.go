@@ -312,7 +312,7 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		c.Set("minerUserId", user.ID)
+		c.Set("minerUser", user)
 		c.Next()
 	}
 }

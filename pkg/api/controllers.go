@@ -51,7 +51,8 @@ func WorkerLoginController(c *gin.Context) {
 }
 
 func CreateTaskController(c *gin.Context) {
-	minerUserId, exists := c.Get("minerUserId")
+	minerUserInterface, exists := c.Get("minerUser")
+	minerUser, _ := minerUserInterface.(*db.MinerUserModel)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		c.Abort()
@@ -73,7 +74,7 @@ func CreateTaskController(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := task.ProcessTaskRequest(requestBody); 
+	requestBody, err := task.ProcessTaskRequest(requestBody)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
@@ -82,7 +83,7 @@ func CreateTaskController(c *gin.Context) {
 	}
 
 	taskService := task.NewTaskService()
-	taskIds, err := taskService.CreateTasks(requestBody, minerUserId.(string))
+	taskIds, err := taskService.CreateTasks(requestBody, minerUser.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
