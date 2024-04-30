@@ -22,12 +22,17 @@ func main() {
 	// service.SubscribeAxonInfos(21)
 	// fmt.Println(service.TotalHotkeyStake("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
 	subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+
 	fmt.Println(subnetSubscriber.FindValidatorHotkeyIndex("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("5DkqojGdL8wwCDgUZPoVEVbV9ndoRPwWpFhnpXUdmxZk5KWp"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+
+	// Deleting
+	subnetSubscriber.OnNonRegisteredFound("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3")
+	fmt.Println(subnetSubscriber.FindValidatorHotkeyIndex("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
 
 	// wait for interrupt signal to gracefully shutdown the program
 	quit := make(chan os.Signal, 1)
