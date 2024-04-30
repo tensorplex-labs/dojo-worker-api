@@ -2,7 +2,6 @@ package email
 
 import (
 	"crypto/tls"
-	"fmt"
 
 	"dojo-api/utils"
 
@@ -11,31 +10,31 @@ import (
 	gomail "gopkg.in/mail.v2"
 )
 
-func SendEmail(from string, to string, apikey string, subscriptionKey string) error {
+func SendEmail(to string, body string) error {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal().Msg("Error loading .env file")
 	}
 
 	password := utils.LoadDotEnv("EMAIL_PASSWORD")
+	email_address := utils.LoadDotEnv("EMAIL_ADDRESS")
 
 	m := gomail.NewMessage()
 
 	// Set E-Mail sender
-	m.SetHeader("From", from)
+	m.SetHeader("From", email_address)
 
 	// Set E-Mail receivers
 	m.SetHeader("To", to)
 
 	// Set E-Mail subject
-	m.SetHeader("Subject", "Gomail test subject")
+	m.SetHeader("Subject", "API and Subscription key for Tensorplex Dojo subnet")
 
 	// Set E-Mail body. You can set plain text or html with text/html
-	body := fmt.Sprintf("Your API key is %s and subscription key is %s", apikey, subscriptionKey)
 	m.SetBody("text/plain", body)
 
 	// Settings for SMTP server
-	d := gomail.NewDialer("smtp.gmail.com", 587, from, password)
+	d := gomail.NewDialer("smtp.gmail.com", 587, email_address, password)
 
 	// This is only needed when SSL/TLS certificate is not valid on server.
 	// In production this should be set to false.

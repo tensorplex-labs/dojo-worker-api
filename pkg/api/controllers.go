@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/email"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 
@@ -152,9 +153,11 @@ func MinerLoginController(c *gin.Context) {
 	hotkey, _ := c.Get("hotkey")
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
+	email, _ := c.Get("email")
+	organisation, _ := c.Get("organisationName")
 
 	minerUserORM := orm.NewMinerUserORM()
-	_, err := minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	_, err := minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save network user")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
@@ -168,12 +171,23 @@ func MinerLoginController(c *gin.Context) {
 	}
 }
 
-func MinerVerifyController(c *gin.Context) {
-	hotkey, exists := c.Get("hotkey")
+func MinerApplicationController(c *gin.Context) {
+	requestInterface, exists := c.Get("requestMap")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		log.Error().Msg("Request map not found in context")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Request map not found in context"))
+		c.Abort()
 		return
 	}
+
+	requestMap, ok := requestInterface.(map[string]string)
+	if !ok {
+		log.Error().Msg("Invalid request body")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		c.Abort()
+		return
+	}
+	
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
@@ -181,12 +195,24 @@ func MinerVerifyController(c *gin.Context) {
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	if _, err := minerUserORM.CreateUser(hotkey.(string), apiKey, expiry, true); err != nil {
+	if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], requestMap["organisationName"]); err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
 		return
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse("User verified"))
+	subscriptionKey, err := generateRandomMinerSubscriptionKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
+		return
+	}
+
+	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", requestMap["organisationName"], apiKey, subscriptionKey)
+	err = email.SendEmail(requestMap["email"], body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
+		return
+	}
+	
 }
 
 func MinerInfoController(c *gin.Context) {
@@ -206,7 +232,7 @@ func MinerInfoController(c *gin.Context) {
     }
 
 	// generate subscription key
-	subscriptionKey, err := generateRandomMinerSubscriptionKey(32)
+	subscriptionKey, err := generateRandomMinerSubscriptionKey()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
 		return

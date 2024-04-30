@@ -42,8 +42,7 @@ model MinerUser {
     id                String          @id @default(uuid())
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
-    coldkey           String
-    hotkey            String
+    hotkey            String          @unique
     api_key           String
     api_key_expire_at DateTime
     // not necessary anymore since GET APIs must be public
@@ -53,8 +52,8 @@ model MinerUser {
     tasks             Task[]
     worker_partners   WorkerPartner[]
     subscription_key  String          @unique @default(uuid())
-
-    @@unique([hotkey, api_key])
+    email             String
+    organizationName  String?
 }
 
 model Task {

@@ -215,6 +215,8 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 		c.Set("hotkey", hotkey)
 		c.Set("apiKey", apiKey)
 		c.Set("expiry", expiry)
+		c.Set("email", requestMap["email"])
+		c.Set("organisationName", requestMap["organisationName"])
 		c.Next()
 	}
 }
@@ -237,6 +239,20 @@ func MinerVerificationMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		if _, ok := requestMap["organisationName"]; !ok {
+			log.Error().Msg("organisationName is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("organisationName is required"))
+			c.Abort()
+			return
+		}
+
+		if _, ok := requestMap["email"]; !ok {
+			log.Error().Msg("email is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("email is required"))
+			c.Abort()
+			return
+		}
+
 		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
 		if !found {
@@ -246,7 +262,7 @@ func MinerVerificationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("hotkey", hotkey)
+		c.Set("requestMap", requestMap)
 		c.Next()
 	}
 }
@@ -380,9 +396,9 @@ func isTimestampValid(requestTimestamp int64) bool {
     return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
 }
 // GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
-func generateRandomMinerSubscriptionKey(length int) (string, error) {
+func generateRandomMinerSubscriptionKey() (string, error) {
     // Generate a slice of random bytes.
-    b := make([]byte, length)
+    b := make([]byte, 32)
     _, err := rand.Read(b)
     if err != nil {
         return "", err

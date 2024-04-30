@@ -27,7 +27,7 @@ func main() {
 	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
 	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
 	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
-	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("5DkqojGdL8wwCDgUZPoVEVbV9ndoRPwWpFhnpXUdmxZk5KWp"))
 
 	// wait for interrupt signal to gracefully shutdown the program
 	quit := make(chan os.Signal, 1)
