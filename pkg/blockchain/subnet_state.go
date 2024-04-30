@@ -3,7 +3,6 @@ package blockchain
 import (
 	"encoding/json"
 	"os"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -173,7 +172,6 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 
 	subnetState.ActiveValidatorHotkeys = validatorHotkeys
 	subnetState.ActiveMinerHotkeys = minerHotkeys
-	subnetState.SortActiveKeys()
 
 	return &subnetState
 }
@@ -224,28 +222,4 @@ func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bo
 		}
 	}
 	return -1, false
-}
-
-func (s *SubnetState) SortActiveKeys() {
-	validatorKeys := make([]int, 0, len(s.ActiveValidatorHotkeys))
-	for k := range s.ActiveValidatorHotkeys {
-		validatorKeys = append(validatorKeys, k)
-	}
-	sort.Ints(validatorKeys)
-	sortedValidatorHotkeys := make(map[int]string)
-	for _, k := range validatorKeys {
-		sortedValidatorHotkeys[k] = s.ActiveValidatorHotkeys[k]
-	}
-	s.ActiveValidatorHotkeys = sortedValidatorHotkeys
-
-	minerKeys := make([]int, 0, len(s.ActiveMinerHotkeys))
-	for k := range s.ActiveMinerHotkeys {
-		minerKeys = append(minerKeys, k)
-	}
-	sort.Ints(minerKeys)
-	sortedMinerHotkeys := make(map[int]string)
-	for _, k := range minerKeys {
-		sortedMinerHotkeys[k] = s.ActiveMinerHotkeys[k]
-	}
-	s.ActiveMinerHotkeys = sortedMinerHotkeys
 }
