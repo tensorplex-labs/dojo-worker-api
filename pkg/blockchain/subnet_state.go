@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"dojo-api/utils"
+
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ValidatorMinStake = GetValidatorMinStake()
-)
+var ValidatorMinStake = GetValidatorMinStake()
 
 func GetValidatorMinStake() int {
 	err := godotenv.Load()
@@ -50,14 +50,31 @@ type SubnetStateSubscriber struct {
 	substrateService *SubstrateService
 	SubnetState      *SubnetState // meant for only tracking our subnet state
 	GlobalState      *GlobalState
+	initialised      bool
+	mutex            sync.RWMutex
 }
 
-func NewSubnetStateSubscriber() *SubnetStateSubscriber {
-	return &SubnetStateSubscriber{
-		substrateService: NewSubstrateService(),
-		SubnetState:      &SubnetState{},
-		GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
-	}
+var (
+	instance *SubnetStateSubscriber
+	once     sync.Once
+)
+
+func GetSubnetStateSubscriberInstance() *SubnetStateSubscriber {
+	once.Do(func() {
+		instance = &SubnetStateSubscriber{
+			substrateService: NewSubstrateService(),
+			SubnetState:      &SubnetState{},
+			GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
+			initialised:      false,
+		}
+		subnetUidStr := utils.LoadDotEnv("SUBNET_UID")
+		subnetUid, err := strconv.Atoi(subnetUidStr)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error parsing SUBNET_UID, failed to start subscriber")
+		}
+		instance.SubscribeSubnetState(subnetUid)
+	})
+	return instance
 }
 
 func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
@@ -159,9 +176,16 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	return &subnetState
 }
 
+func (s *SubnetStateSubscriber) IsInitialised() bool {
+	return s.initialised
+}
+
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
+	s.mutex.Lock()
 	s.SubnetState = s.GetSubnetState(subnetId)
+	s.initialised = true
+	s.mutex.Unlock()
 
 	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
 	if err != nil {
@@ -173,13 +197,17 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 
 	go func() {
 		for range ticker.C {
+			s.mutex.Lock()
 			s.SubnetState = s.GetSubnetState(subnetId)
+			s.mutex.Unlock()
 		}
 	}()
 	return nil
 }
 
 func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
+	s.mutex.RLock()
+	defer s.mutex.RLock()
 	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
 			return i, true
