@@ -75,6 +75,29 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 		chainId, chainIdExists := requestMap["chainId"]
 		signature, signatureExists := requestMap["signature"]
 		message, messageExists := requestMap["message"]
+		timestamp, timestampExists := requestMap["timestamp"]
+
+		if !timestampExists {
+			log.Error().Msg("Timestamp is missing")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("timestamp is missing"))
+			c.Abort()
+			return
+		}
+
+		timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			log.Error().Err(err).Msg("Invalid timestamp format")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid timestamp format"))
+			c.Abort()
+			return
+		}
+
+		if !isTimestampValid(timestampInt) {
+			log.Error().Msg("Timestamp is invalid or expired")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("Bad request"))
+			c.Abort()
+			return
+		}
 
 		if !walletExists {
 			log.Error().Msg("walletAddress is required")
@@ -328,6 +351,11 @@ func generateRandomApiKey() (string, time.Time, error) {
 	return apiKey.String(), expiry, nil
 }
 
+func isTimestampValid(requestTimestamp int64) bool {
+    const tolerance = 15 * 60 // 15 minutes in seconds
+    currentTime := time.Now().Unix()
+    return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
+}
 // GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
 func generateRandomMinerSubscriptionKey(length int) (string, error) {
     // Generate a slice of random bytes.
