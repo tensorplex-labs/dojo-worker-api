@@ -185,7 +185,7 @@ func MinerInfoController(c *gin.Context) {
     }
 
 	// generate subscription key
-	subscriptionKey ,err := generateRandomMinerSubscriptionKey(12)
+	subscriptionKey, err := generateRandomMinerSubscriptionKey(32)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
 		return
