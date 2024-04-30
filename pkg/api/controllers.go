@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -168,19 +169,33 @@ func MinerLoginController(c *gin.Context) {
 	}
 }
 
-func MinerController(c *gin.Context) {
+func MinerInfoController(c *gin.Context) {
 	apiKey := c.Request.Header.Get("X-API-KEY")
 
 	minerUserORM := orm.NewMinerUserORM()
 	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
 	if minerUser == nil {
-		c.JSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+		return
+	}
+
+    // Check if API key is expired (didn't get to test)
+    if minerUser.APIKeyExpireAt.Before(time.Now()) {
+        c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
+        return
+    }
+
+	// generate subscription key
+	subscriptionKey, err := generateRandomMinerSubscriptionKey(32)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
 		return
 	}
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
 		"minerId": minerUser.ID,
+		"subscriptionKey":subscriptionKey,
 	}))
 }
 
@@ -284,4 +299,45 @@ func GetTasksByPageController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
 		"tasks": taskPagination,
 	}))
+}
+
+func GetTaskResultsController(c *gin.Context) {
+	taskId := c.Param("task-id")
+	if taskId == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
+		return
+	}
+
+	taskResultORM := orm.NewTaskResultORM()
+	taskResults, err := taskResultORM.GetTaskResultsByTaskId(c.Request.Context(), taskId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("failed to fetch task results"))
+		return
+	}
+
+	// embed TaskResultModel to reuse its fields
+	// override ResultData, also will shadow the original "result_data" JSON field
+	type taskResultResponse struct {
+		db.TaskResultModel
+		ResultData []task.Result `json:"result_data"`
+	}
+	var formattedTaskResults []taskResultResponse
+
+	for _, taskResult := range taskResults {
+		var resultDataItem []task.Result
+		err = json.Unmarshal([]byte(string(taskResult.ResultData)), &resultDataItem)
+		if err != nil {
+			log.Error().Err(err).Str("taskResult.ResultData", string(taskResult.ResultData)).Msg("failed to convert task results")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("failed to convert result data to tempResult"))
+			return
+		}
+
+		tempResult := taskResultResponse{
+			ResultData:      resultDataItem,
+			TaskResultModel: taskResult,
+		}
+		formattedTaskResults = append(formattedTaskResults, tempResult)
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": formattedTaskResults}))
 }

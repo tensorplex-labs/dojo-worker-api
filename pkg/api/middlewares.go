@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"crypto/rand"
+	"encoding/base64"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -353,4 +355,18 @@ func isTimestampValid(requestTimestamp int64) bool {
     const tolerance = 15 * 60 // 15 minutes in seconds
     currentTime := time.Now().Unix()
     return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
+}
+// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
+func generateRandomMinerSubscriptionKey(length int) (string, error) {
+    // Generate a slice of random bytes.
+    b := make([]byte, length)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", err
+    }
+
+    // Encode the random bytes to a URL-safe base64 string.
+    apiKey := base64.URLEncoding.EncodeToString(b)
+
+    return apiKey, nil
 }
