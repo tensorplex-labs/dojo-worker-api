@@ -138,7 +138,7 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 
 // create task
 func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]string, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 200*time.Second)
 	defer cancel()
 	var taskIds []string
 	taskORM := orm.NewTaskORM()
@@ -177,7 +177,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		if request.TotalRewards > 0 {
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
-
+		println("Creating task", taskToCreate.Type)
 		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
@@ -435,6 +435,8 @@ func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 				return taskData, err
 			}
 			processedTaskData = append(processedTaskData, orocessedTaskEntry)
+		}else{
+			processedTaskData = append(processedTaskData, taskInterface)
 		}
 	}
 	taskData.TaskData = processedTaskData
