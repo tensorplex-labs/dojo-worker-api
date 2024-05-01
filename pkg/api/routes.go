@@ -26,6 +26,7 @@ func LoginRoutes(router *gin.Engine) {
 		{
 			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
 			miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
+			miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
 		}
 	}
 }

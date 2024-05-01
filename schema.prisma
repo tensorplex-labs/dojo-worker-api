@@ -42,9 +42,8 @@ model MinerUser {
     id                String          @id @default(uuid())
     created_at        DateTime        @default(now())
     updated_at        DateTime        @updatedAt
-    coldkey           String
-    hotkey            String
-    api_key           String
+    hotkey            String          @unique
+    api_key           String          @unique
     api_key_expire_at DateTime
     // not necessary anymore since GET APIs must be public
     // ip_address        String?
@@ -55,8 +54,6 @@ model MinerUser {
     subscription_key  String          @unique @default(uuid())
     email             String
     organizationName  String?
-
-    @@unique([hotkey, api_key])
 }
 
 model Task {
