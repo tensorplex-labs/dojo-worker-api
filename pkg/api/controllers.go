@@ -248,11 +248,11 @@ func MinerInfoController(c *gin.Context) {
 		return
 	}
 
-    // Check if API key is expired (didn't get to test)
-    if minerUser.APIKeyExpireAt.Before(time.Now()) {
-        c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
-        return
-    }
+	// Check if API key is expired (didn't get to test)
+	if minerUser.APIKeyExpireAt.Before(time.Now()) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
+		return
+	}
 
 	// generate subscription key
 	subscriptionKey, err := generateRandomMinerSubscriptionKey()
@@ -263,8 +263,8 @@ func MinerInfoController(c *gin.Context) {
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
-		"minerId": minerUser.ID,
-		"subscriptionKey":subscriptionKey,
+		"minerId":         minerUser.ID,
+		"subscriptionKey": subscriptionKey,
 	}))
 }
 
@@ -306,9 +306,29 @@ func WorkerPartnerController(c *gin.Context) {
 }
 
 func GetTaskByIdController(c *gin.Context) {
+
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
-	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
+	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID, worker.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))
 		c.Abort()
@@ -325,6 +345,25 @@ func GetTaskByIdController(c *gin.Context) {
 }
 
 func GetTasksByPageController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
 	// Split the string into a slice of strings
@@ -338,20 +377,20 @@ func GetTasksByPageController(c *gin.Context) {
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid page parameter"))
 		return
 	}
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid limit parameter"))
 		return
 	}
 
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), page, limit, taskTypes, sort)
+	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -365,9 +404,7 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	// Successful response
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"tasks": taskPagination,
-	}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(taskPagination))
 }
 
 func GetTaskResultsController(c *gin.Context) {

@@ -46,3 +46,15 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string) (*db.WorkerPa
 	}
 	return workerPartner, nil
 }
+
+func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerId(workerId string) ([]db.WorkerPartnerModel, error) {
+	ctx := context.Background()
+
+	workerPartners, err := m.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.WorkerID.Equals(workerId),
+	).Exec(ctx)
+	if err != nil && errors.Is(err, db.ErrNotFound) {
+		return nil, fmt.Errorf("worker partners with worker ID %s not found", workerId)
+	}
+	return workerPartners, nil
+}
