@@ -13,7 +13,7 @@ type TaskORM struct {
 }
 
 func NewTaskORM() *TaskORM {
-	client := NewPrismaClient()
+	client := GetPrismaClient()
 	return &TaskORM{dbClient: client}
 }
 
@@ -85,7 +85,7 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 		db.WorkerPartner.MinerSubscriptionKey.Equals(minerUser.SubscriptionKey),
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
-		db.WorkerPartner.IsActiveByWorker.Equals(true),
+		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
 
 	if err != nil {
@@ -107,7 +107,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
-		db.WorkerPartner.IsActiveByWorker.Equals(true),
+		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")

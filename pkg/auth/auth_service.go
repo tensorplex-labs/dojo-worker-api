@@ -11,6 +11,6 @@ type AuthService struct {
 
 func NewAuthService() *AuthService {
 	return &AuthService{
-		client: orm.NewPrismaClient(),
+		client: orm.GetPrismaClient(),
 	}
 }
