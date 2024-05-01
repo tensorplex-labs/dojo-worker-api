@@ -173,8 +173,8 @@ func MinerLoginController(c *gin.Context) {
 	}
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to save network user")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
+		log.Error().Err(err).Msg("Failed to save miner user")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
 		return
 	}
 
@@ -212,12 +212,12 @@ func MinerApplicationController(c *gin.Context) {
 	organisation, organisationExists := requestMap["organisationName"]
 	if organisationExists {
 		if _, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	}else{
 		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user"))
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	}

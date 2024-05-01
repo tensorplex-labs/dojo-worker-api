@@ -167,7 +167,7 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 	}
 }
 
-// login middleware for network user
+// login middleware for miner user
 func MinerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var requestMap map[string]string

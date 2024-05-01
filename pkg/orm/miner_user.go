@@ -85,20 +85,3 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 	}
 	return user, nil
 }
-
-func (s *MinerUserORM) SetVerified(id string) error {
-	if id == "" {
-		return fmt.Errorf("id cannot be an empty string")
-	}
-	ctx := context.Background()
-	_, err := s.dbClient.MinerUser.FindUnique(
-		db.MinerUser.ID.Equals(id),
-	).Update(
-		db.MinerUser.IsVerified.Set(true),
-	).Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Error setting user as verified")
-		return err
-	}
-	return nil
-}
