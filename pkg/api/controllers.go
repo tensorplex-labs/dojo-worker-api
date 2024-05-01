@@ -479,17 +479,7 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 	var updatedWorkerPartner interface{}
 	if minerSubscriptionKey != "" || newMinerSubscriptionKey != "" || name != "" {
 
-		payload := make(map[string]interface{})
-		if minerSubscriptionKey != "" {
-			payload["miner_subscription_key"] = minerSubscriptionKey
-		}
-		if newMinerSubscriptionKey != "" {
-			payload["new_miner_subscription_key"] = newMinerSubscriptionKey
-		}
-		if name != "" {
-			payload["name"] = name
-		}
-		updatedWorkerPartner, err = workerPartnerORM.Update(worker.ID, payload)
+		updatedWorkerPartner, err = workerPartnerORM.Update(worker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
 	} else {
 
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing required param for update"))

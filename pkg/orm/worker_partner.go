@@ -48,18 +48,12 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string, name string) 
 	return workerPartner, nil
 }
 
-func (m *WorkerPartnerORM) Update(workerId string, payload map[string]interface{}) (*db.WorkerPartnerModel, error) {
+func (m *WorkerPartnerORM) Update(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) (*db.WorkerPartnerModel, error) {
 	ctx := context.Background()
 
-	// Prepare update parameters
 	var updateParams []db.WorkerPartnerSetParam
 
-	if name, ok := payload["name"].(string); ok && name != "" {
-		updateParams = append(updateParams, db.WorkerPartner.Name.Set(name))
-	}
-
-	if minerSubscriptionKey, ok := payload["miner_subscription_key"].(string); ok && minerSubscriptionKey != "" {
-		// Check if the miner subscription key exists in the WorkerPartner table
+	if minerSubscriptionKey != "" {
 		existingWorkerPartner, err := m.dbClient.WorkerPartner.FindFirst(
 			db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
 			db.WorkerPartner.WorkerID.Equals(workerId),
@@ -68,22 +62,28 @@ func (m *WorkerPartnerORM) Update(workerId string, payload map[string]interface{
 			return nil, fmt.Errorf("no existing miner key: %s with this worker", minerSubscriptionKey)
 		}
 
-		if newMinerSubscriptionKey, ok := payload["new_miner_subscription_key"].(string); ok && newMinerSubscriptionKey != "" {
+		if name != "" {
+			updateParams = append(updateParams, db.WorkerPartner.Name.Set(name))
+		}
+
+		if newMinerSubscriptionKey != "" {
 			updateParams = append(updateParams, db.WorkerPartner.MinerSubscriptionKey.Set(newMinerSubscriptionKey))
 		}
 	}
 
-	// Execute update
-	updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindUnique(
-		db.WorkerPartner.ID.Equals(workerId),
-	).Update(
-		updateParams...,
-	).Exec(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update worker partner: %w", err)
+	if len(updateParams) > 0 {
+		updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindUnique(
+			db.WorkerPartner.ID.Equals(workerId),
+		).Update(
+			updateParams...,
+		).Exec(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update worker partner: %w", err)
+		}
+		return updatedWorkerPartner, nil
+	} else {
+		return nil, fmt.Errorf("no update parameters provided")
 	}
-
-	return updatedWorkerPartner, nil
 }
 
 func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
