@@ -12,7 +12,7 @@ type TaskResultORM struct {
 
 func NewTaskResultORM() *TaskResultORM {
 	return &TaskResultORM{
-		client: NewPrismaClient(),
+		client: GetPrismaClient(),
 	}
 }
 

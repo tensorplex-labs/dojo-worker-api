@@ -25,7 +25,7 @@ func GetConnHandler() *SimpleConnHandler {
 	return connHandler
 }
 
-func NewPrismaClient() *db.PrismaClient {
+func GetPrismaClient() *db.PrismaClient {
 	handler := GetConnHandler()
 	if !handler.isConnected {
 		if err := handler.client.Prisma.Connect(); err != nil {

@@ -12,7 +12,7 @@ type WorkerPartnerORM struct {
 }
 
 func NewWorkerPartnerORM() *WorkerPartnerORM {
-	client := NewPrismaClient()
+	client := GetPrismaClient()
 	return &WorkerPartnerORM{dbClient: client}
 }
 
