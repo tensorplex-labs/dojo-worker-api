@@ -13,21 +13,20 @@ func LoginRoutes(router *gin.Engine) {
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.POST("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 		}
-        apiV1.PUT("/partner/edit", WorkerAuthMiddleware(), UpdateWorkerPartnerController)
+		apiV1.PUT("/partner/edit", WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
 			tasks.POST("/create-task", MinerAuthMiddleware(), CreateTaskController)
 			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
-			tasks.GET("/:task-id", GetTaskByIdController)
-			tasks.GET("/", GetTasksByPageController)
-			tasks.GET("/get-results/:task-id", GetTaskResultsController)
+			tasks.GET("/:task-id", WorkerAuthMiddleware(), GetTaskByIdController)
+			tasks.GET("/", WorkerAuthMiddleware(), GetTasksByPageController)
 		}
 
 		miner := apiV1.Group("/miner")
 		{
 			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
-			miner.GET("/info/:hotkey",MinerAuthMiddleware(), MinerInfoController)
-			worker.POST("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
+			miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
+			miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
 		}
 	}
 }

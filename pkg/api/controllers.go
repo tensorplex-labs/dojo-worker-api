@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/email"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 
@@ -158,15 +159,22 @@ func SubmitTaskResultController(c *gin.Context) {
 func MinerLoginController(c *gin.Context) {
 	verified, _ := c.Get("verified")
 	hotkey, _ := c.Get("hotkey")
-	coldkey, _ := c.Get("coldkey")
 	apiKey, _ := c.Get("apiKey")
 	expiry, _ := c.Get("expiry")
+	email, _ := c.Get("email")
+	organisation, organisationExists := c.Get("organisationName")
 
 	minerUserORM := orm.NewMinerUserORM()
-	_, err := minerUserORM.CreateUser(coldkey.(string), hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool))
+	var err error
+	if organisationExists {
+		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
+	}else{
+		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
+	}
+
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to save network user")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save network user because miner's hot key may already exists"))
+		log.Error().Err(err).Msg("Failed to save miner user")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
 		return
 	}
 
@@ -175,6 +183,59 @@ func MinerLoginController(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
 	}
+}
+
+func MinerApplicationController(c *gin.Context) {
+	requestInterface, exists := c.Get("requestMap")
+	if !exists {
+		log.Error().Msg("Request map not found in context")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Request map not found in context"))
+		c.Abort()
+		return
+	}
+
+	requestMap, ok := requestInterface.(map[string]string)
+	if !ok {
+		log.Error().Msg("Invalid request body")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		c.Abort()
+		return
+	}
+	
+	apiKey, expiry, err := generateRandomApiKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
+		return
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	organisation, organisationExists := requestMap["organisationName"]
+	if organisationExists {
+		if _, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
+			return
+		}
+	}else{
+		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
+			return
+		}
+	}
+
+	subscriptionKey, err := generateRandomMinerSubscriptionKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
+		return
+	}
+
+	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
+	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
+	err = email.SendEmail(requestMap["email"], body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
+		return
+	}
+	
 }
 
 func MinerInfoController(c *gin.Context) {
@@ -187,12 +248,14 @@ func MinerInfoController(c *gin.Context) {
 		return
 	}
 
+	// Check if API key is expired (didn't get to test)
 	if minerUser.APIKeyExpireAt.Before(time.Now()) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
 		return
 	}
 
-	subscriptionKey, err := generateRandomMinerSubscriptionKey(32)
+	// generate subscription key
+	subscriptionKey, err := generateRandomMinerSubscriptionKey()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
 		return
@@ -253,9 +316,29 @@ func WorkerPartnerCreateController(c *gin.Context) {
 }
 
 func GetTaskByIdController(c *gin.Context) {
+
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
-	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
+	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID, worker.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))
 		c.Abort()
@@ -272,6 +355,25 @@ func GetTaskByIdController(c *gin.Context) {
 }
 
 func GetTasksByPageController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
 	// Split the string into a slice of strings
@@ -285,20 +387,20 @@ func GetTasksByPageController(c *gin.Context) {
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid page parameter"))
 		return
 	}
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid limit parameter"))
 		return
 	}
 
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), page, limit, taskTypes, sort)
+	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -312,9 +414,7 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	// Successful response
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"tasks": taskPagination,
-	}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(taskPagination))
 }
 
 func GetTaskResultsController(c *gin.Context) {

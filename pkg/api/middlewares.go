@@ -173,21 +173,13 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 	}
 }
 
-// login middleware for network user
+// login middleware for miner user
 func MinerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var requestMap map[string]string
 		if err := c.BindJSON(&requestMap); err != nil {
 			log.Error().Err(err).Msg("Invalid request body")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
-			c.Abort()
-			return
-		}
-
-		coldkey, coldkeyExists := requestMap["coldkey"]
-		if !coldkeyExists {
-			log.Error().Msg("coldkey is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("coldkey is required"))
 			c.Abort()
 			return
 		}
@@ -227,9 +219,49 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 
 		c.Set("verified", verified)
 		c.Set("hotkey", hotkey)
-		c.Set("coldkey", coldkey)
 		c.Set("apiKey", apiKey)
 		c.Set("expiry", expiry)
+		c.Set("email", requestMap["email"])
+		c.Set("organisationName", requestMap["organisationName"])
+		c.Next()
+	}
+}
+
+func MinerVerificationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var requestMap map[string]string
+		if err := c.BindJSON(&requestMap); err != nil {
+			log.Error().Err(err).Msg("Invalid request body")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
+			c.Abort()
+			return
+		}
+
+		hotkey, ok := requestMap["hotkey"]
+		if !ok {
+			log.Error().Msg("hotkey is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
+			c.Abort()
+			return
+		}
+
+		if _, ok := requestMap["email"]; !ok {
+			log.Error().Msg("email is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("email is required"))
+			c.Abort()
+			return
+		}
+
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
+		if !found {
+			log.Error().Msg("Hotkey is not registered")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
+			c.Abort()
+			return
+		}
+
+		c.Set("requestMap", requestMap)
 		c.Next()
 	}
 }
@@ -371,9 +403,9 @@ func isTimestampValid(requestTimestamp int64) bool {
     return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
 }
 // GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
-func generateRandomMinerSubscriptionKey(length int) (string, error) {
+func generateRandomMinerSubscriptionKey() (string, error) {
     // Generate a slice of random bytes.
-    b := make([]byte, length)
+    b := make([]byte, 32)
     _, err := rand.Read(b)
     if err != nil {
         return "", err

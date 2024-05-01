@@ -21,13 +21,31 @@ func NewMinerUserORM() *MinerUserORM {
 	}
 }
 
-func (s *MinerUserORM) CreateUser(coldkey string, hotkey string, apiKey string, expiry time.Time, isVerified bool) (*db.MinerUserModel, error) {
+func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, organisation string) (*db.MinerUserModel, error) {
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
-		db.MinerUser.Coldkey.Set(coldkey),
 		db.MinerUser.Hotkey.Set(hotkey),
 		db.MinerUser.APIKey.Set(apiKey),
 		db.MinerUser.APIKeyExpireAt.Set(expiry),
+		db.MinerUser.Email.Set(email),
+		db.MinerUser.OrganizationName.Set(organisation),
+		db.MinerUser.IsVerified.Set(isVerified),
+	).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msgf("Error creating user")
+		return nil, err
+	}
+	log.Info().Msg("User created successfully")
+	return createdUser, nil
+}
+
+func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string) (*db.MinerUserModel, error) {
+	ctx := context.Background()
+	createdUser, err := s.dbClient.MinerUser.CreateOne(
+		db.MinerUser.Hotkey.Set(hotkey),
+		db.MinerUser.APIKey.Set(apiKey),
+		db.MinerUser.APIKeyExpireAt.Set(expiry),
+		db.MinerUser.Email.Set(email),
 		db.MinerUser.IsVerified.Set(isVerified),
 	).Exec(ctx)
 	if err != nil {

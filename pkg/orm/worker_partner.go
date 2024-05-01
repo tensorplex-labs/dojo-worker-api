@@ -88,7 +88,6 @@ func (m *WorkerPartnerORM) Update(workerId string, payload map[string]interface{
 	return updatedWorkerPartner, nil
 }
 
-
 func (m *WorkerPartnerORM) WorkerParnterDisableUpdate(payload map[string]interface{}) (int, error) {
 	ctx := context.Background()
 
