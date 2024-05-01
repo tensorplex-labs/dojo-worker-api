@@ -14,7 +14,7 @@ type DojoWorkerORM struct {
 }
 
 func NewDojoWorkerORM() *DojoWorkerORM {
-	client := NewPrismaClient()
+	client := GetPrismaClient()
 	return &DojoWorkerORM{dbClient: client}
 }
 

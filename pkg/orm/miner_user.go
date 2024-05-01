@@ -15,7 +15,7 @@ type MinerUserORM struct {
 }
 
 func NewMinerUserORM() *MinerUserORM {
-	client := NewPrismaClient()
+	client := GetPrismaClient()
 	return &MinerUserORM{
 		dbClient: client,
 	}

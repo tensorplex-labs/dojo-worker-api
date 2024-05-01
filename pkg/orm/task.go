@@ -13,7 +13,7 @@ type TaskORM struct {
 }
 
 func NewTaskORM() *TaskORM {
-	client := NewPrismaClient()
+	client := GetPrismaClient()
 	return &TaskORM{dbClient: client}
 }
 
