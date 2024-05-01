@@ -278,11 +278,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 
 	nameInterface, ok := c.Get("name")
 	var name string
-    if !ok {
-		log.Error().Msg("Missing name")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("name is required"))
-		return
-	} else {
+	if ok {
 		name = nameInterface.(string)
 	}
 
@@ -538,11 +534,7 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	}
 
 	if toDisable {
-		count, err := orm.NewWorkerPartnerORM().WorkerParnterDisableUpdate(map[string]interface{}{
-            "workerId": worker.ID,
-            "minerSubscriptionKey": minerSubscriptionKey, 
-            "toDisable": toDisable,
-        })
+		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(worker.ID, minerSubscriptionKey, toDisable)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
@@ -581,15 +573,8 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
 	if toDisable {
-		payload := map[string]interface{}{
-			"workerId": workerId,
-			"toDisable": toDisable,
-		}
-		if minerUser != nil {
-			payload["minerSubscriptionKey"] = minerUser.APIKey
-		}
 
-		count, err := orm.NewWorkerPartnerORM().WorkerParnterDisableUpdate(payload)
+		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(workerId, minerUser.APIKey, toDisable)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
 			return

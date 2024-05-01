@@ -115,7 +115,7 @@ model WorkerPartner {
     worker_id              String
     is_delete_by_miner     Boolean    @default(false)
     is_delete_by_worker    Boolean    @default(false)
-    name                   String     
+    name                   String?     
 
     @@unique([miner_subscription_key, worker_id])
 }

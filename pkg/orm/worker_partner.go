@@ -67,9 +67,7 @@ func (m *WorkerPartnerORM) Update(workerId string, payload map[string]interface{
 		if err != nil || existingWorkerPartner == nil {
 			return nil, fmt.Errorf("no existing miner key: %s with this worker", minerSubscriptionKey)
 		}
-		// if existingWorkerPartner == nil {
-		// 	return nil, fmt.Errorf("miner subscription key %s does not exist", minerSubscriptionKey)
-		// }
+
 		if newMinerSubscriptionKey, ok := payload["new_miner_subscription_key"].(string); ok && newMinerSubscriptionKey != "" {
 			updateParams = append(updateParams, db.WorkerPartner.MinerSubscriptionKey.Set(newMinerSubscriptionKey))
 		}
@@ -88,26 +86,11 @@ func (m *WorkerPartnerORM) Update(workerId string, payload map[string]interface{
 	return updatedWorkerPartner, nil
 }
 
-func (m *WorkerPartnerORM) WorkerParnterDisableUpdate(payload map[string]interface{}) (int, error) {
+func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
 	ctx := context.Background()
 
-	workerId, ok := payload["workerId"].(string)
-	if !ok {
-		return 0, fmt.Errorf("workerId is required and must be a string")
-	}
-
-	minerSubscriptionKey, ok := payload["minerSubscriptionKey"].(string)
-	if !ok {
-		return 0, fmt.Errorf("minerSubscriptionKey is required and must be a string")
-	}
-
-	toDisable, ok := payload["toDisable"].(bool)
-	if !ok || !toDisable {
-		return 0, fmt.Errorf("toDisable is required and must be true")
-	}
-
 	updateParams := []db.WorkerPartnerSetParam{
-		db.WorkerPartner.IsDeleteByWorker.Set(true),
+		db.WorkerPartner.IsDeleteByWorker.Set(toDisable),
 	}
 
 	result, err := m.dbClient.WorkerPartner.FindMany(
