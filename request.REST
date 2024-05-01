@@ -9,7 +9,7 @@ Content-Type: application/json
     "chainId": "2",
     "message": "Some random message",
     "signature": "0xc1d45d5813feec1d6d9ec004dce1b100d59bd49bf8520d897beacb40600194cb242d710297e6407ae72228219d2e6b6dfa390ff979695f287b4a5c6186d2dcf900",
-    "timestamp": "1714385500"
+    "timestamp": "1714542782"
 }
 
 ###
@@ -78,4 +78,35 @@ Content-Type: application/json
   ],
   "maxResults": 10,
   "totalRewards": 100.3,
+}
+
+###
+PUT {{url}}/api/v1/partner/edit
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkb2pvLWFwaSIsInN1YiI6IjB4MDVhYTFhYWI1ZEQ4ZTFERjMwM0NBMUM5Y2I2RTNGNWQ3NDViODM4OSIsImV4cCI6MTcxNDYyOTE5Nn0.UOOs9T-Xcglyi4urXxITMhw69ScPOPcHfzxQZlXXGy0
+
+{
+   "miner_subscription_key" : "12356",
+   "name" : "some_guy",
+   "new_miner_subscription_key": "7890"
+}
+
+
+PUT {{url}}/api/v1/worker/partner/disable
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkb2pvLWFwaSIsInN1YiI6IjB4MDVhYTFhYWI1ZEQ4ZTFERjMwM0NBMUM5Y2I2RTNGNWQ3NDViODM4OSIsImV4cCI6MTcxNDYyOTE5Nn0.UOOs9T-Xcglyi4urXxITMhw69ScPOPcHfzxQZlXXGy0
+
+{
+    "miner_subscription_key" : "",
+    "to_disable": true
+}
+
+
+PUT {{url}}/api/v1/miner/partner/disable
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkb2pvLWFwaSIsInN1YiI6IjB4MDVhYTFhYWI1ZEQ4ZTFERjMwM0NBMUM5Y2I2RTNGNWQ3NDViODM4OSIsImV4cCI6MTcxNDYyOTE5Nn0.UOOs9T-Xcglyi4urXxITMhw69ScPOPcHfzxQZlXXGy0
+
+{
+    "worker_id" : "",
+    "to_disable": true
 }

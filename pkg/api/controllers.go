@@ -268,12 +268,18 @@ func MinerInfoController(c *gin.Context) {
 	}))
 }
 
-func WorkerPartnerController(c *gin.Context) {
+func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
+	}
+
+	nameInterface, ok := c.Get("name")
+	var name string
+	if ok {
+		name = nameInterface.(string)
 	}
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
@@ -287,16 +293,16 @@ func WorkerPartnerController(c *gin.Context) {
 		return
 	}
 
-	var requestBody struct {
-		MinerId string `json:"minerId"`
-	}
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+	minerIdInterface, ok := c.Get("minerId")
+	var minerId string
+	if !ok {
+		log.Error().Msg("Missing minerId")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing minerId"))
 		return
 	}
+	minerId = minerIdInterface.(string)
 
-	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, requestBody.MinerId)
+	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, minerId, name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
@@ -446,4 +452,129 @@ func GetTaskResultsController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": formattedTaskResults}))
+}
+
+func UpdateWorkerPartnerController(c *gin.Context) {
+	jwtClaims, _ := c.Get("userInfo")
+
+	minerSubscriptionKeyValue, _ := c.Get("miner_subscription_key")
+	minerSubscriptionKey, _ := minerSubscriptionKeyValue.(string)
+	newMinerSubscriptionKeyValue, _ := c.Get("new_miner_subscription_key")
+	newMinerSubscriptionKey, _ := newMinerSubscriptionKeyValue.(string)
+	nameValue, _ := c.Get("name")
+	name, _ := nameValue.(string)
+	
+    userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	workerPartnerORM := orm.NewWorkerPartnerORM()
+	var updatedWorkerPartner interface{}
+	if minerSubscriptionKey != "" || newMinerSubscriptionKey != "" || name != "" {
+
+		updatedWorkerPartner, err = workerPartnerORM.Update(worker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
+	} else {
+
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing required param for update"))
+		return
+	}
+
+	if err != nil {
+		log.Error().Err(err).Msg("Miner key does not exist with this worker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Miner key does not exist with this worker"))
+		return
+	}
+
+	log.Info().Msg("Worker partner updated successfully")
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"workerPartner": updatedWorkerPartner}))
+}
+
+func DisableMinerByWorkerController(c *gin.Context) {
+	minerSubscriptionKeyValue, minerSubscriptionKeyExists := c.Get("miner_subscription_key")
+	minerSubscriptionKey, okMinerSubscriptionKey := minerSubscriptionKeyValue.(string)
+	if !minerSubscriptionKeyExists || !okMinerSubscriptionKey || minerSubscriptionKey == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("miner_subscription_key is required, must be a string, and cannot be empty"))
+		return
+	}
+
+	toDisableValue, toDisableExists := c.Get("to_disable")
+	toDisable, okToDisable := toDisableValue.(bool)
+	if !toDisableExists || !okToDisable {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable is required and must be a boolean"))
+		return
+	}
+	jwtClaims, _ := c.Get("userInfo")
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	if toDisable {
+		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(worker.ID, minerSubscriptionKey, toDisable)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"message": "Miner disabled successfully"}))
+		} else {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner, no records updated"))
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
+	}
+}
+
+
+func DisableWorkerByMinerController(c *gin.Context) {
+	workerIdValue, workerIdExists := c.Get("worker_id")
+	workerId, okWorkerId := workerIdValue.(string)
+	if !workerIdExists || !okWorkerId || workerId == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("workerId is required and must be a string"))
+		return
+	}
+
+	toDisableValue, toDisableExists := c.Get("toDisable")
+	toDisable, okToDisable := toDisableValue.(bool)
+	if !toDisableExists || !okToDisable {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable is required and must be a boolean"))
+		return
+	}
+
+	minerUserValue, exists := c.Get("minerUser")
+	if !exists {
+		return 
+	}
+	minerUser, _ := minerUserValue.(*db.MinerUserModel)
+
+	if toDisable {
+
+		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(workerId, minerUser.APIKey, toDisable)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"message": "Worker disabled successfully"}))
+		} else {
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner, no records updated"))
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
+	}
 }
