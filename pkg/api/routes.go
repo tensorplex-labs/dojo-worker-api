@@ -10,10 +10,10 @@ func LoginRoutes(router *gin.Engine) {
 		worker := apiV1.Group("/worker")
 		{
 			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
-			// TODO verify that worker is logged in using WorkerAuthMiddleware
-			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerController)
+			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
+			worker.POST("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 		}
-
+        apiV1.PUT("/partner/edit", WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
 			tasks.POST("/create-task", MinerAuthMiddleware(), CreateTaskController)
@@ -27,6 +27,7 @@ func LoginRoutes(router *gin.Engine) {
 		{
 			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
 			miner.GET("/info/:hotkey",MinerAuthMiddleware(), MinerInfoController)
+			worker.POST("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
 		}
 	}
 }

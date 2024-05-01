@@ -115,7 +115,8 @@ model WorkerPartner {
     DojoWorker             DojoWorker @relation(fields: [worker_id], references: [id])
     worker_id              String
     is_delete_by_miner     Boolean    @default(false)
-    is_active_by_worker    Boolean    @default(true)
+    is_delete_by_worker    Boolean    @default(false)
+    name                   String     
 
     @@unique([miner_subscription_key, worker_id])
 }
