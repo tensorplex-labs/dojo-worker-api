@@ -14,6 +14,8 @@ import (
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 
+	"github.com/spruceid/siwe-go"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
@@ -49,7 +51,9 @@ func WorkerLoginController(c *gin.Context) {
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
-	c.JSON(http.StatusOK, defaultSuccessResponse(token))
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"token": token,
+	}))
 }
 
 func CreateTasksController(c *gin.Context) {
@@ -599,4 +603,21 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
 	}
+}
+
+func GenerateNonceController(c *gin.Context) {
+	address := c.Param("address")
+	if address == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "address parameter is required"})
+		return
+	}
+	cache := GetCacheInstance()
+	nonce := siwe.GenerateNonce()
+	err := cache.SetWithExpire(address, nonce, time.Minute*2)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
 }
