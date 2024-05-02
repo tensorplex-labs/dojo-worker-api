@@ -266,6 +266,13 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
+	var requestBody map[string]string
+	if err := c.BindJSON(&requestBody); err == nil {
+		for key, value := range requestBody {
+			c.Set(key, value)
+		}
+	}
+
 	nameInterface, ok := c.Get("name")
 	var name string
 	if ok {
@@ -284,6 +291,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	minerIdInterface, ok := c.Get("minerId")
+	log.Info().Str("minerId", fmt.Sprintf("%+v", minerIdInterface)).Msg("Miner ID")
 	var minerId string
 	if !ok {
 		log.Error().Msg("Missing minerId")

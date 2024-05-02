@@ -59,13 +59,6 @@ func WorkerAuthMiddleware() gin.HandlerFunc {
 
 		log.Info().Msg("Token authenticated successfully")
 
-		// var requestBody map[string]string
-		// if err := c.BindJSON(&requestBody); err == nil {
-		// 	for key, value := range requestBody {
-		// 		c.Set(key, value)
-		// 	}
-		// }
-
 		c.Set("userInfo", claims)
 		c.Next()
 	}
