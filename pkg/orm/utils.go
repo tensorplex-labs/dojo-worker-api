@@ -38,6 +38,11 @@ func GetPrismaClient() *db.PrismaClient {
 }
 
 func (h *SimpleConnHandler) OnShutdown() error {
+	if h.client == nil {
+		log.Warn().Msg("Prisma client not initialised")
+		return nil
+	}
+
 	if err := h.client.Prisma.Disconnect(); err != nil {
 		log.Error().Err(err).Msg("Failed to disconnect from Prisma client")
 		return err

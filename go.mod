@@ -11,12 +11,15 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.32.0
 	github.com/shopspring/decimal v1.3.1
+	github.com/spruceid/siwe-go v0.2.1
 	github.com/steebchen/prisma-client-go v0.36.0
 	gopkg.in/mail.v2 v2.3.1
 )
 
 require (
+	github.com/dchest/uniuri v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/relvacode/iso8601 v1.1.1-0.20210511065120-b30b151cc433 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 )
 

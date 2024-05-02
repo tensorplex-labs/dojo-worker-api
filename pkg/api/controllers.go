@@ -245,32 +245,16 @@ func MinerApplicationController(c *gin.Context) {
 }
 
 func MinerInfoController(c *gin.Context) {
-	apiKey := c.Request.Header.Get("X-API-KEY")
-
-	minerUserORM := orm.NewMinerUserORM()
-	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
-	if minerUser == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+	minerUserInterface, ok := c.Get("minerUser")
+	if !ok {
+		log.Error().Msg("Miner user not found in context")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
-
-	// Check if API key is expired (didn't get to test)
-	if minerUser.APIKeyExpireAt.Before(time.Now()) {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
-		return
-	}
-
-	// generate subscription key
-	subscriptionKey, err := generateRandomMinerSubscriptionKey()
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
-	}
-
-	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
+	minerUser := minerUserInterface.(*db.MinerUserModel)
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
 		"minerId":         minerUser.ID,
-		"subscriptionKey": subscriptionKey,
+		"subscriptionKey": minerUser.SubscriptionKey,
 	}))
 }
 
