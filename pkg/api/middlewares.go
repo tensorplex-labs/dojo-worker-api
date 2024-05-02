@@ -375,14 +375,6 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// TODO check all affected endpoints still working
-		// var requestBody map[string]string
-		// if err := c.BindJSON(&requestBody); err == nil {
-		// 	for key, value := range requestBody {
-		// 		c.Set(key, value)
-		// 	}
-		// }
-
 		c.Set("minerUser", user)
 
 		log.Info().Msg("Miner user authenticated successfully")
