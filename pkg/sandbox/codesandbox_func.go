@@ -19,12 +19,19 @@ func getRequest(body map[string]interface{}) (Response, error) {
 	var response Response
 	url := "https://codesandbox.io/api/v1/sandboxes/define?json=1"
 	body["environment"] = "server"
-	jsonBody, err := json.Marshal(body); if err != nil {
-		response.Error = "Error marshalling JSON"
+	var buf bytes.Buffer
+    encoder := json.NewEncoder(&buf)
+    encoder.SetEscapeHTML(false)
+    if err := encoder.Encode(body); err != nil {
+		response.Error = "Error encoding JSON"
 		return response, err
 	}
+	// jsonBody, err := json.Marshal(body); if err != nil {
+	// 	response.Error = "Error marshalling JSON"
+	// 	return response, err
+	// }
 
-	req,err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req,err := http.NewRequest("POST", url, &buf)
 	if err != nil {
 		response.Error = "Error creating request"
 		return response, err
