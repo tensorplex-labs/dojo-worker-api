@@ -11,6 +11,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.32.0
 	github.com/shopspring/decimal v1.3.1
+	github.com/spruceid/siwe-go v0.2.1
 	github.com/steebchen/prisma-client-go v0.36.0
 	gopkg.in/mail.v2 v2.3.1
 )

@@ -10,6 +10,7 @@ var (
 	cacheInstance gcache.Cache
 	once          sync.Once
 )
+
 // Define a common response structure
 type ApiResponse struct {
 	Success bool        `json:"success"`
@@ -17,7 +18,7 @@ type ApiResponse struct {
 	Error   interface{} `json:"error"`
 }
 
-func defaultErrorResponse(errorMsg string) ApiResponse {
+func defaultErrorResponse(errorMsg interface{}) ApiResponse {
 	return ApiResponse{Success: false, Body: nil, Error: errorMsg}
 }
 
