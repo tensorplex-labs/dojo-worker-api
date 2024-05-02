@@ -5,11 +5,11 @@ POST {{url}}/api/v1/worker/login/auth
 Content-Type: application/json
 
 {
-    "walletAddress":"0x05aa1aab5dD8e1DF303CA1C9cb6E3F5d745b8389",
-    "chainId": "2",
-    "message": "Some random message",
-    "signature": "0xc1d45d5813feec1d6d9ec004dce1b100d59bd49bf8520d897beacb40600194cb242d710297e6407ae72228219d2e6b6dfa390ff979695f287b4a5c6186d2dcf900",
-    "timestamp": "1714542782"
+    "walletAddress": "0x4a13147277b4e2E7Fe4Eaf41d72Ffcf7EB2F55D9",
+    "chainId": "1",
+    "signature": "0xf6c8d429a1e9aacb4debe62d08b6c1ca4ed8adbd59addbf066e0d77b110d1d8812720e63d24d19d39a731ffad83c2118176029d4e5da33a28d4a3c6ad11117b01c",
+    "message": "localhost:3000 wants you to sign in with your Ethereum account:\n0x4a13147277b4e2E7Fe4Eaf41d72Ffcf7EB2F55D9\n\nSign in with Ethereum to tensorplex\n\nURI: http://localhost:3000\nVersion: 1\nChain ID: 1\nNonce: 2lfsl2N8dLFsAU9Tk\nIssued At: 2024-05-02T05:43:02.368Z",
+    "timestamp": "1714640093"
 }
 
 ###
@@ -17,8 +17,8 @@ POST {{url}}/api/v1/miner/login/auth
 Content-Type: application/json
 
 {
-   "hotkey" : "12356",
-   "coldkey" : "78907"
+   "hotkey" : "1221212356jkhsesdsldjklsd87273208090",
+   "coldkey" : "78980090870392jzdskjdsd7"
 }
 
 POST {{url}}/api/v1/tasks
@@ -110,3 +110,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkb2pvLWFwa
     "worker_id" : "",
     "to_disable": true
 }
+
+
+
+
+###
+GET {{url}}/api/v1/auth/0x4a13147277b4e2E7Fe4Eaf41d72Ffcf7EB2F55D9
