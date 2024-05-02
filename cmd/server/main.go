@@ -52,6 +52,13 @@ func main() {
 		Handler: router,
 	}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Msgf("Recovered from panic: %v", r)
+			}
+			// Ensure onShutdown is called even after a panic
+			onShutdown()
+		}()
 		// service connections
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("listen")
@@ -65,18 +72,16 @@ func main() {
 	sig := <-quit
 	log.Info().Msgf("Received signal: %s. Shutting down...", sig)
 
-	// shutdown tasks
-	onShutdown()
-
 	numSeconds := 2
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(numSeconds)*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Server Shutdown:")
+		// shutdown tasks
+		onShutdown()
 	}
 	// catching ctx.Done(). timeout of 5 seconds.
 	<-ctx.Done()
-	log.Info().Msgf("timeout of %v seconds.", numSeconds)
 	log.Info().Msg("Server exiting")
 }
 
