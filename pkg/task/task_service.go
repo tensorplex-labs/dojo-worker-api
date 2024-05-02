@@ -10,8 +10,8 @@ import (
 
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
-	"dojo-api/utils"
 	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -152,15 +152,18 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 }
 
 // create task
-func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]string, error) {
+func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) (*db.TaskModel, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	var taskIds []string
+
+	var task *db.TaskModel
+	var err error
+
 	taskORM := orm.NewTaskORM()
 	for _, currTask := range request.TaskData {
 		taskType := TaskType(currTask.Task)
 
-		_, err := json.Marshal(currTask.Criteria)
+		_, err = json.Marshal(currTask.Criteria)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error marshaling criteria")
 			return nil, errors.New("invalid criteria format")
@@ -173,6 +176,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		}
 
 		expireAt := utils.ParseDate(request.ExpireAt.(string))
+		log.Info().Msgf("ExpireAt: %v", expireAt)
 		if expireAt == nil {
 			log.Error().Msg("Error parsing expireAt")
 			return nil, errors.New("invalid expireAt format")
@@ -192,15 +196,15 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		if request.TotalRewards > 0 {
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
-		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
+
+		task, err = taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
 			return nil, err
 		}
-
-		taskIds = append(taskIds, task.ID)
+		// taskIds = append(taskIds, task.ID)
 	}
-	return taskIds, nil
+	return task, nil
 }
 
 func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel, error) {
@@ -332,7 +336,7 @@ func ValidateTaskData(taskData TaskData) error {
 	}
 
 	task := taskData.Task
-	if task == TaskTypeTextToImage || task == TaskTypeCodeGen{
+	if task == TaskTypeTextToImage || task == TaskTypeCodeGen {
 		for _, taskresponse := range taskData.Responses {
 			if task == TaskTypeTextToImage {
 				if _, ok := taskresponse.Completion.(string); !ok {
@@ -348,7 +352,7 @@ func ValidateTaskData(taskData TaskData) error {
 					return errors.New("files is required for code generation task")
 				}
 
-				if _, ok = files.([]interface{}); !ok{
+				if _, ok = files.([]interface{}); !ok {
 					return errors.New("files must be an array")
 				}
 			}
@@ -440,16 +444,16 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 }
 
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
-	processedTaskData :=  make([]TaskData, 0)
+	processedTaskData := make([]TaskData, 0)
 	for _, taskInterface := range taskData.TaskData {
-		if taskInterface.Task == TaskTypeCodeGen{
+		if taskInterface.Task == TaskTypeCodeGen {
 			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")
 				return taskData, err
 			}
 			processedTaskData = append(processedTaskData, processedTaskEntry)
-		}else{
+		} else {
 			processedTaskData = append(processedTaskData, taskInterface)
 		}
 	}
@@ -457,7 +461,7 @@ func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	return taskData, nil
 }
 
-func ProcessCodeCompletion(taskData TaskData) (TaskData, error){
+func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 	responses := taskData.Responses
 	for i, response := range responses {
 		completionMap, ok := response.Completion.(map[string]interface{})
@@ -465,7 +469,7 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error){
 			log.Error().Msg("You sure this is code generation?")
 			return taskData, errors.New("invalid completion format")
 		}
-		if _, ok := completionMap["files"]; ok{
+		if _, ok := completionMap["files"]; ok {
 			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
 			if err != nil {
 				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
@@ -473,12 +477,12 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error){
 			}
 			if sandboxResponse.Url != "" {
 				completionMap["sandbox_url"] = sandboxResponse.Url
-			}else {
+			} else {
 				fmt.Println(sandboxResponse)
 				log.Error().Msg("Error getting sandbox response")
 				return taskData, errors.New("error getting sandbox response")
 			}
-		}else {
+		} else {
 			log.Error().Msg("Invalid completion format")
 			return taskData, errors.New("invalid completion format")
 		}

@@ -27,6 +27,8 @@ import (
 // AuthMiddleware checks if the request is authenticated
 func WorkerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Info().Msg("Authenticating token")
+
 		jwtSecret := os.Getenv("JWT_SECRET")
 		token := c.GetHeader("Authorization")
 		if token == "" {
@@ -57,12 +59,13 @@ func WorkerAuthMiddleware() gin.HandlerFunc {
 
 		log.Info().Msg("Token authenticated successfully")
 
-		var requestBody map[string]string
-		if err := c.BindJSON(&requestBody); err == nil {
-			for key, value := range requestBody {
-				c.Set(key, value)
-			}
-		}
+		// var requestBody map[string]string
+		// if err := c.BindJSON(&requestBody); err == nil {
+		// 	for key, value := range requestBody {
+		// 		c.Set(key, value)
+		// 	}
+		// }
+
 		c.Set("userInfo", claims)
 		c.Next()
 	}
@@ -353,6 +356,9 @@ func verifySignature(walletAddress, message, signatureHex string) (bool, error) 
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		log.Info().Msg("Authenticating miner user")
+
 		apiKey := c.GetHeader("X-API-KEY")
 		if apiKey == "" {
 			log.Error().Msg("API key is required")
@@ -385,6 +391,9 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 		// }
 
 		c.Set("minerUser", user)
+
+		log.Info().Msg("Miner user authenticated successfully")
+
 		c.Next()
 	}
 }
