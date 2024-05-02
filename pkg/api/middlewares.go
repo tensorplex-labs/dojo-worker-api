@@ -2,15 +2,16 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"crypto/rand"
-	"encoding/base64"
+
+	"github.com/spruceid/siwe-go"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -27,6 +28,8 @@ import (
 // AuthMiddleware checks if the request is authenticated
 func WorkerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Info().Msg("Authenticating token")
+
 		jwtSecret := os.Getenv("JWT_SECRET")
 		token := c.GetHeader("Authorization")
 		if token == "" {
@@ -57,12 +60,6 @@ func WorkerAuthMiddleware() gin.HandlerFunc {
 
 		log.Info().Msg("Token authenticated successfully")
 
-		var requestBody map[string]string
-		if err := c.BindJSON(&requestBody); err == nil {
-			for key, value := range requestBody {
-				c.Set(key, value)
-			}
-		}
 		c.Set("userInfo", claims)
 		c.Next()
 	}
@@ -312,47 +309,52 @@ func verifyEthereumAddress(address string) (bool, error) {
 	return true, nil
 }
 
-func verifySignature(walletAddress, message, signatureHex string) (bool, error) {
-	// Remove the 0x prefix if present
-	signatureHex = strings.TrimPrefix(signatureHex, "0x")
-
-	// Decode the hex-encoded signature
-	signatureBytes, err := hex.DecodeString(signatureHex)
+func verifySignature(walletAddress string, message string, signatureHex string) (bool, error) {
+	messageDomain, err := siwe.ParseMessage(message)
 	if err != nil {
-		log.Error().Err(err).Str("signatureHex", signatureHex).Msg("Failed to decode signature")
-		return false, fmt.Errorf("failed to decode signature: %v", err)
+		log.Error().Err(err).Msg("Failed to parse SIWE message")
+		return false, fmt.Errorf("failed to parse SIWE message: %v", err)
 	}
 
-	// Adjust the V value in the signature (last byte) to be 0 or 1
-	if signatureBytes[64] >= 27 {
-		signatureBytes[64] -= 27
-	}
-
-	// Hash the message to get the message digest as expected by SigToPub
-	msgHash := crypto.Keccak256Hash([]byte(message))
-
-	// Recover the public key from the signature
-	pubKey, err := crypto.SigToPub(msgHash.Bytes(), signatureBytes)
+	cache := GetCacheInstance()
+	addressNonce, err := cache.Get(walletAddress)
 	if err != nil {
-		log.Error().Err(err).Str("messageHash", msgHash.Hex()).Msg("Failed to recover public key")
-		return false, fmt.Errorf("failed to recover public key: %v", err)
+		log.Error().Err(err).Msg("Failed to retrieve nonce from cache")
+		return false, fmt.Errorf("failed to retrieve nonce from cache: %v", err)
 	}
 
-	// Convert the recovered public key to an Ethereum address
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
+	nonceFromMessage := messageDomain.GetNonce()
+	addressNonceStr, ok := addressNonce.(string)
+	if !ok || nonceFromMessage != addressNonceStr {
+		log.Error().Str("expectedNonce", addressNonceStr).Str("actualNonce", nonceFromMessage).Msg("Nonce mismatch")
+		return false, fmt.Errorf("nonce mismatch: expected %s, got %s", addressNonceStr, nonceFromMessage)
+	}
 
-	// Compare the recovered address with the wallet address
+	verifiedPublicKey, err := messageDomain.Verify(signatureHex, nil, nil, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify signature with SIWE")
+		return false, fmt.Errorf("failed to verify signature with SIWE: %v", err)
+	}
+
+	if verifiedPublicKey == nil {
+		log.Error().Msg("Signature verification failed")
+		return false, fmt.Errorf("signature verification failed")
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*verifiedPublicKey).Hex()
 	if !strings.EqualFold(recoveredAddr, walletAddress) {
 		log.Error().Str("recoveredAddress", recoveredAddr).Str("walletAddress", walletAddress).Msg("Recovered address does not match wallet address")
-		return false, fmt.Errorf("recovered address %s does not match wallet address %s", recoveredAddr, walletAddress)
+		return false, fmt.Errorf("recovered address does not match wallet address")
 	}
-
-	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
+	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully with SIWE")
 	return true, nil
 }
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		log.Info().Msg("Authenticating miner user")
+
 		apiKey := c.GetHeader("X-API-KEY")
 		if apiKey == "" {
 			log.Error().Msg("API key is required")
@@ -376,14 +378,10 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var requestBody map[string]string
-		if err := c.BindJSON(&requestBody); err == nil {
-			for key, value := range requestBody {
-				c.Set(key, value)
-			}
-		}
-		
 		c.Set("minerUser", user)
+
+		log.Info().Msg("Miner user authenticated successfully")
+
 		c.Next()
 	}
 }
@@ -398,21 +396,22 @@ func generateRandomApiKey() (string, time.Time, error) {
 }
 
 func isTimestampValid(requestTimestamp int64) bool {
-    const tolerance = 15 * 60 // 15 minutes in seconds
-    currentTime := time.Now().Unix()
-    return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
+	const tolerance = 15 * 60 // 15 minutes in seconds
+	currentTime := time.Now().Unix()
+	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
 }
-// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
+
+// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length.
 func generateRandomMinerSubscriptionKey() (string, error) {
-    // Generate a slice of random bytes.
-    b := make([]byte, 32)
-    _, err := rand.Read(b)
-    if err != nil {
-        return "", err
-    }
+	// Generate a slice of random bytes.
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
 
-    // Encode the random bytes to a URL-safe base64 string.
-    apiKey := base64.URLEncoding.EncodeToString(b)
+	// Encode the random bytes to a URL-safe base64 string.
+	apiKey := base64.URLEncoding.EncodeToString(b)
 
-    return apiKey, nil
+	return apiKey, nil
 }
