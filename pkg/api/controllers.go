@@ -51,7 +51,9 @@ func WorkerLoginController(c *gin.Context) {
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
-	c.JSON(http.StatusOK, defaultSuccessResponse(token))
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"token": token,
+	}))
 }
 
 func CreateTaskController(c *gin.Context) {
