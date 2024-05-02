@@ -272,57 +272,70 @@ func MinerInfoController(c *gin.Context) {
 
 func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
-	if !ok {
-		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
-
-	var requestBody map[string]string
-	if err := c.BindJSON(&requestBody); err == nil {
-		for key, value := range requestBody {
-			c.Set(key, value)
-		}
-	}
-
-	nameInterface, ok := c.Get("name")
-	var name string
+	var walletAddress string
 	if ok {
-		name = nameInterface.(string)
+		userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+		if !ok {
+			log.Error().Msg("Failed to assert type for userInfo")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+		walletAddress = userInfo.Subject
 	}
 
-	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+	if walletAddress == "" {
+		log.Error().Msg("Missing wallet address, so cannot find worker by wallet address")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Missing wallet address"))
 		return
 	}
-	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
 
-	minerIdInterface, ok := c.Get("minerId")
-	log.Info().Str("minerId", fmt.Sprintf("%+v", minerIdInterface)).Msg("Miner ID")
-	var minerId string
+	var requestMap map[string]string
+	if err := c.BindJSON(&requestMap); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	name, ok := requestMap["name"]
+	minerSubscriptionKey, ok := requestMap["minerSubscriptionKey"]
 	if !ok {
-		log.Error().Msg("Missing minerId")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing minerId"))
+		log.Error().Msg("Missing minerSubscriptionKey")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing minerSubscriptionKey"))
 		return
 	}
-	minerId = minerIdInterface.(string)
 
-	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, minerId, name)
+	existingPartnership, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
+	if existingPartnership != nil {
+		c.AbortWithStatusJSON(http.StatusOK, &ApiResponse{
+			Success: true,
+			Body:    "Worker-miner partnership already exists",
+			Error:   nil,
+		})
+		return
+	}
+
+	foundMinerUser, _ := orm.NewMinerUserORM().GetUserBySubscriptionKey(minerSubscriptionKey)
+	if foundMinerUser == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Miner subscription key is invalid"))
+		return
+	}
+
+	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, foundMinerUser.ID, name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker-miner partnership"))
 		return
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse("successfully created worker-miner partnership"))
+	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
 }
 
 func GetTaskByIdController(c *gin.Context) {
-
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")

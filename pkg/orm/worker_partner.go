@@ -16,7 +16,7 @@ func NewWorkerPartnerORM() *WorkerPartnerORM {
 	return &WorkerPartnerORM{dbClient: client}
 }
 
-func (m *WorkerPartnerORM) Create(workerId string, minerId string, name string) (*db.WorkerPartnerModel, error) {
+func (m *WorkerPartnerORM) Create(workerId string, minerId string, optionalName string) (*db.WorkerPartnerModel, error) {
 	ctx := context.Background()
 
 	dojoWorker, err := m.dbClient.DojoWorker.FindUnique(
@@ -40,7 +40,7 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string, name string) 
 		db.WorkerPartner.DojoWorker.Link(
 			db.DojoWorker.ID.Equals(dojoWorker.ID),
 		),
-		db.WorkerPartner.Name.Set(name),
+		db.WorkerPartner.Name.Set(optionalName),
 	).Exec(ctx)
 	if err != nil {
 		return nil, err
@@ -116,4 +116,16 @@ func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerId(workerId string) ([]db.Wor
 		return nil, fmt.Errorf("worker partners with worker ID %s not found", workerId)
 	}
 	return workerPartners, nil
+}
+
+func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerIdAndSubscriptionKey(workerId string, minerSubscriptionKey string) (*db.WorkerPartnerModel, error) {
+	ctx := context.Background()
+	workerPartner, err := m.dbClient.WorkerPartner.FindFirst(
+		db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
+		db.WorkerPartner.WorkerID.Equals(workerId),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return workerPartner, nil
 }

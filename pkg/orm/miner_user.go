@@ -85,3 +85,15 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 	}
 	return user, nil
 }
+
+func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.MinerUserModel, error) {
+	ctx := context.Background()
+	user, err := s.dbClient.MinerUser.FindFirst(
+		db.MinerUser.SubscriptionKey.Equals(subscriptionKey),
+	).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error retrieving user by subscription key")
+		return nil, err
+	}
+	return user, nil
+}
