@@ -52,8 +52,8 @@ func WorkerLoginController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(token))
 }
 
-func CreateTaskController(c *gin.Context) {
-	log.Info().Msg("Creating Task")
+func CreateTasksController(c *gin.Context) {
+	log.Info().Msg("Creating Tasks")
 
 	minerUserInterface, exists := c.Get("minerUser")
 	minerUser, _ := minerUserInterface.(*db.MinerUserModel)
@@ -89,16 +89,28 @@ func CreateTaskController(c *gin.Context) {
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 
 	taskService := task.NewTaskService()
-	task, err := taskService.CreateTasks(requestBody, minerUser.ID)
+	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
 	}
 
-	log.Info().Interface("task", task).Msg("Task created successfully")
+	log.Info().Interface("tasks", tasks).Msg("Tasks created successfully")
+	if len(tasks) == 0 {
+		c.JSON(http.StatusOK, defaultErrorResponse(errors))
+	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(task))
+	taskIds := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		taskIds = append(taskIds, task.ID)
+	}
+
+	c.JSON(http.StatusOK, &ApiResponse{
+		Success: true,
+		Body:    taskIds,
+		Error:   errors,
+	})
 }
 
 func SubmitTaskResultController(c *gin.Context) {

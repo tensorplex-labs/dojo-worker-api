@@ -152,34 +152,35 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 }
 
 // create task
-func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) (*db.TaskModel, error) {
+func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
 	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	var task *db.TaskModel
-	var err error
+	tasks := make([]*db.TaskModel, 0)
+	errors := make([]error, 0)
 
 	taskORM := orm.NewTaskORM()
 	for _, currTask := range request.TaskData {
 		taskType := TaskType(currTask.Task)
 
-		_, err = json.Marshal(currTask.Criteria)
+		_, err := json.Marshal(currTask.Criteria)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error marshaling criteria")
-			return nil, errors.New("invalid criteria format")
+			errors = append(errors, err)
 		}
 
 		taskData, err := json.Marshal(currTask)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error marshaling task data")
-			return nil, errors.New("invalid task data format")
+			errors = append(errors, err)
 		}
 
 		expireAt := utils.ParseDate(request.ExpireAt.(string))
 		log.Info().Msgf("ExpireAt: %v", expireAt)
 		if expireAt == nil {
 			log.Error().Msg("Error parsing expireAt")
-			return nil, errors.New("invalid expireAt format")
+			errors = append(errors, fmt.Errorf("error parsing expireAt"))
+			continue
 		}
 
 		taskToCreate := db.InnerTask{
@@ -197,14 +198,14 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
 
-		task, err = taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
+		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
-			return nil, err
+			errors = append(errors, err)
 		}
-		// taskIds = append(taskIds, task.ID)
+		tasks = append(tasks, task)
 	}
-	return task, nil
+	return tasks, errors
 }
 
 func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel, error) {
