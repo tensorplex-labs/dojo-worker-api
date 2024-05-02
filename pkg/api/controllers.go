@@ -542,7 +542,7 @@ func DisableMinerByWorkerController(c *gin.Context) {
 
 
 func DisableWorkerByMinerController(c *gin.Context) {
-	workerIdValue, workerIdExists := c.Get("worker_id")
+	workerIdValue, workerIdExists := c.Get("workerId")
 	workerId, okWorkerId := workerIdValue.(string)
 	if !workerIdExists || !okWorkerId || workerId == "" {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("workerId is required and must be a string"))
