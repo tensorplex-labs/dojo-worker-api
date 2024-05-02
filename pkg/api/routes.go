@@ -13,6 +13,7 @@ func LoginRoutes(router *gin.Engine) {
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.PUT("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 		}
+		apiV1.GET("/auth/:address", GenerateNonceController)
 		apiV1.PUT("/partner/edit", WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{

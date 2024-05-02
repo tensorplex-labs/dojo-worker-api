@@ -14,6 +14,8 @@ import (
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 
+	"github.com/spruceid/siwe-go"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
@@ -168,7 +170,7 @@ func MinerLoginController(c *gin.Context) {
 	var err error
 	if organisationExists {
 		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
-	}else{
+	} else {
 		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
 	}
 
@@ -201,7 +203,7 @@ func MinerApplicationController(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	
+
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
@@ -215,7 +217,7 @@ func MinerApplicationController(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
-	}else{
+	} else {
 		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
@@ -235,7 +237,7 @@ func MinerApplicationController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
 		return
 	}
-	
+
 }
 
 func MinerInfoController(c *gin.Context) {
@@ -463,8 +465,8 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 	newMinerSubscriptionKey, _ := newMinerSubscriptionKeyValue.(string)
 	nameValue, _ := c.Get("name")
 	name, _ := nameValue.(string)
-	
-    userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
@@ -540,7 +542,6 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	}
 }
 
-
 func DisableWorkerByMinerController(c *gin.Context) {
 	workerIdValue, workerIdExists := c.Get("workerId")
 	workerId, okWorkerId := workerIdValue.(string)
@@ -558,7 +559,7 @@ func DisableWorkerByMinerController(c *gin.Context) {
 
 	minerUserValue, exists := c.Get("minerUser")
 	if !exists {
-		return 
+		return
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
@@ -577,4 +578,21 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
 	}
+}
+
+func GenerateNonceController(c *gin.Context) {
+	address := c.Param("address")
+	if address == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "address parameter is required"})
+		return
+	}
+	cache := GetCacheInstance()
+	nonce := siwe.GenerateNonce()
+	err := cache.SetWithExpire(address, nonce, time.Minute*2)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
 }
