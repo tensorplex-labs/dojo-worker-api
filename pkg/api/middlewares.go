@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -9,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"crypto/rand"
-	"encoding/base64"
 
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/orm"
@@ -376,13 +376,14 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var requestBody map[string]string
-		if err := c.BindJSON(&requestBody); err == nil {
-			for key, value := range requestBody {
-				c.Set(key, value)
-			}
-		}
-		
+		// TODO check all affected endpoints still working
+		// var requestBody map[string]string
+		// if err := c.BindJSON(&requestBody); err == nil {
+		// 	for key, value := range requestBody {
+		// 		c.Set(key, value)
+		// 	}
+		// }
+
 		c.Set("minerUser", user)
 		c.Next()
 	}
@@ -398,21 +399,22 @@ func generateRandomApiKey() (string, time.Time, error) {
 }
 
 func isTimestampValid(requestTimestamp int64) bool {
-    const tolerance = 15 * 60 // 15 minutes in seconds
-    currentTime := time.Now().Unix()
-    return requestTimestamp <= currentTime && currentTime - requestTimestamp <= tolerance
+	const tolerance = 15 * 60 // 15 minutes in seconds
+	currentTime := time.Now().Unix()
+	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
 }
-// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length. 
+
+// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length.
 func generateRandomMinerSubscriptionKey() (string, error) {
-    // Generate a slice of random bytes.
-    b := make([]byte, 32)
-    _, err := rand.Read(b)
-    if err != nil {
-        return "", err
-    }
+	// Generate a slice of random bytes.
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
 
-    // Encode the random bytes to a URL-safe base64 string.
-    apiKey := base64.URLEncoding.EncodeToString(b)
+	// Encode the random bytes to a URL-safe base64 string.
+	apiKey := base64.URLEncoding.EncodeToString(b)
 
-    return apiKey, nil
+	return apiKey, nil
 }
