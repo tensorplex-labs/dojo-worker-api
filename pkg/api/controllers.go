@@ -168,7 +168,7 @@ func MinerLoginController(c *gin.Context) {
 	var err error
 	if organisationExists {
 		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
-	}else{
+	} else {
 		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
 	}
 
@@ -201,7 +201,7 @@ func MinerApplicationController(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	
+
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
@@ -215,7 +215,7 @@ func MinerApplicationController(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
-	}else{
+	} else {
 		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
@@ -235,36 +235,20 @@ func MinerApplicationController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
 		return
 	}
-	
+
 }
 
 func MinerInfoController(c *gin.Context) {
-	apiKey := c.Request.Header.Get("X-API-KEY")
-
-	minerUserORM := orm.NewMinerUserORM()
-	minerUser, _ := minerUserORM.GetUserByAPIKey(apiKey)
-	if minerUser == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("miner not found"))
+	minerUserInterface, ok := c.Get("minerUser")
+	if !ok {
+		log.Error().Msg("Miner user not found in context")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
-
-	// Check if API key is expired (didn't get to test)
-	if minerUser.APIKeyExpireAt.Before(time.Now()) {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("API key expired"))
-		return
-	}
-
-	// generate subscription key
-	subscriptionKey, err := generateRandomMinerSubscriptionKey()
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
-	}
-
-	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
+	minerUser := minerUserInterface.(*db.MinerUserModel)
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
 		"minerId":         minerUser.ID,
-		"subscriptionKey": subscriptionKey,
+		"subscriptionKey": minerUser.SubscriptionKey,
 	}))
 }
 
@@ -463,8 +447,8 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 	newMinerSubscriptionKey, _ := newMinerSubscriptionKeyValue.(string)
 	nameValue, _ := c.Get("name")
 	name, _ := nameValue.(string)
-	
-    userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
@@ -540,7 +524,6 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	}
 }
 
-
 func DisableWorkerByMinerController(c *gin.Context) {
 	workerIdValue, workerIdExists := c.Get("workerId")
 	workerId, okWorkerId := workerIdValue.(string)
@@ -558,7 +541,7 @@ func DisableWorkerByMinerController(c *gin.Context) {
 
 	minerUserValue, exists := c.Get("minerUser")
 	if !exists {
-		return 
+		return
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
