@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,7 +27,19 @@ func main() {
 	port := utils.LoadDotEnv("SERVER_PORT")
 
 	router := gin.Default()
-	router.Use(cors.Default())
+	// read allowedOrigins from environment variable which is a comma separated string
+	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
+	allowedOrigins = append(allowedOrigins, "http://localhost")
+
+	log.Info().Msgf("Allowed origins: %v", allowedOrigins)
+	config := cors.Config{
+		AllowOrigins:     allowedOrigins,
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
+	}
+	router.Use(cors.New(config))
 	api.LoginRoutes(router)
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -55,14 +68,15 @@ func main() {
 	// shutdown tasks
 	onShutdown()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	numSeconds := 2
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(numSeconds)*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Server Shutdown:")
 	}
 	// catching ctx.Done(). timeout of 5 seconds.
 	<-ctx.Done()
-	log.Info().Msg("timeout of 5 seconds.")
+	log.Info().Msgf("timeout of %v seconds.", numSeconds)
 	log.Info().Msg("Server exiting")
 }
 
