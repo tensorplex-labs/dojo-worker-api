@@ -590,16 +590,19 @@ func DisableMinerByWorkerController(c *gin.Context) {
 		return
 	}
 
-	minerSubKeyInterface, minerSubscriptionKeyExists := requestMap["miner_subscription_key"]
+	const SUB_KEY = "minerSubscriptionKey"
+	const DISABLE_KEY = "toDisable"
+
+	minerSubKeyInterface, minerSubscriptionKeyExists := requestMap[SUB_KEY]
 	minerSubscriptionKey, ok := minerSubKeyInterface.(string)
 	if !minerSubscriptionKeyExists || minerSubscriptionKey == "" || !ok {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("miner_subscription_key is required, must be a string, and cannot be empty"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(SUB_KEY+" is required, must be a string, and cannot be empty"))
 		return
 	}
 
-	toDisableInterface, toDisableExists := requestMap["to_disable"]
+	toDisableInterface, toDisableExists := requestMap[DISABLE_KEY]
 	if !toDisableExists {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable is required"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" is required"))
 		return
 	}
 	jwtClaims, _ := c.Get("userInfo")
@@ -618,15 +621,16 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	// check if bool
 	toDisableOptional, parseError := parseBool(toDisableInterface)
 	if parseError != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable must be a boolean value"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" must be a boolean value"))
+
 		return
 	}
 	toDisable := *toDisableOptional
 
-	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool("to_disable", toDisable).Msg("Disabling miner by worker")
+	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool(DISABLE_KEY, toDisable).Msg("Disabling miner by worker")
 
 	if toDisable {
-		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(worker.ID, minerSubscriptionKey, toDisable)
+		count, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(worker.ID, minerSubscriptionKey, toDisable)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
@@ -662,17 +666,20 @@ func DisableWorkerByMinerController(c *gin.Context) {
 		return
 	}
 
-	workerIdInterface, workerIdExists := requestMap["workerId"]
+	const WORKER_KEY = "workerId"
+	const DISABLE_KEY = "toDisable"
+
+	workerIdInterface, workerIdExists := requestMap[WORKER_KEY]
 	workerId, ok := workerIdInterface.(string)
 	if !workerIdExists || workerId == "" || !ok {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("workerId is required and must be a string"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(WORKER_KEY+" is required and must be a string"))
 		return
 	}
 
-	toDisableInterface, toDisableExists := requestMap["toDisable"]
+	toDisableInterface, toDisableExists := requestMap[DISABLE_KEY]
 	toDisableOptional, parseError := parseBool(toDisableInterface)
 	if !toDisableExists || parseError != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" must be a boolean value"))
 		return
 	}
 	toDisable := *toDisableOptional
@@ -683,7 +690,7 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
-	log.Info().Str("workerId", workerId).Bool("toDisable", toDisable).Str("subscriptionKey", minerUser.SubscriptionKey).Msg("Attempting to disable worker by miner")
+	log.Info().Str(WORKER_KEY, workerId).Bool(DISABLE_KEY, toDisable).Str("subscriptionKey", minerUser.SubscriptionKey).Msg("Attempting to disable worker by miner")
 
 	if toDisable {
 

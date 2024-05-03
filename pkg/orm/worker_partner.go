@@ -126,7 +126,7 @@ func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscript
 	return updatedRecord, nil
 }
 
-func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
+func (m *WorkerPartnerORM) DisablePartnerByWorker(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
 	ctx := context.Background()
 
 	updateParams := []db.WorkerPartnerSetParam{
