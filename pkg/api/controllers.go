@@ -368,13 +368,16 @@ func GetWorkerPartnersController(c *gin.Context) {
 		return
 	}
 
-	var subscriptionKeys []string
+	activeSubscriptionKeys := make([]string, 0)
 	for _, workerPartner := range workerPartners {
-		subscriptionKeys = append(subscriptionKeys, workerPartner.MinerSubscriptionKey)
+		if workerPartner.IsDeleteByWorker {
+			continue
+		}
+		activeSubscriptionKeys = append(activeSubscriptionKeys, workerPartner.MinerSubscriptionKey)
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"subscriptionKeys": subscriptionKeys,
+		"subscriptionKeys": activeSubscriptionKeys,
 	}))
 }
 
