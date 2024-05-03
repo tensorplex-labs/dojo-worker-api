@@ -380,12 +380,11 @@ func GetWorkerPartnerListController(c *gin.Context) {
 		if workerPartner.IsDeleteByWorker {
 			continue
 		}
-		name, _ := workerPartner.Name()
 		listWorkerPartnersResponse.Partners = append(listWorkerPartnersResponse.Partners, worker.WorkerPartner{
 			Id:              workerPartner.ID,
 			CreatedAt:       workerPartner.CreatedAt,
 			SubscriptionKey: workerPartner.MinerSubscriptionKey,
-			Name:            name,
+			Name:            workerPartner.Name,
 		})
 	}
 
@@ -577,7 +576,7 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 			Id:              updatedWorkerPartner.ID,
 			CreatedAt:       updatedWorkerPartner.CreatedAt,
 			SubscriptionKey: updatedWorkerPartner.MinerSubscriptionKey,
-			Name:            *updatedWorkerPartner.InnerWorkerPartner.Name,
+			Name:            updatedWorkerPartner.InnerWorkerPartner.Name,
 		},
 	}))
 }
