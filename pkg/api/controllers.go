@@ -616,27 +616,14 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	}
 
 	// check if bool
-	var toDisable bool
-	var parseError error
-	toDisableBool, ok := toDisableInterface.(bool)
-	if ok {
-		toDisable = toDisableBool
-	} else {
-		var toDisableParsed bool
-		toDisableParsed, parseError = strconv.ParseBool(toDisableInterface.(string))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable must be a boolean value"))
-			return
-		}
-		toDisable = toDisableParsed
-	}
-
-	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool("to_disable", toDisable).Msg("Disabling miner by worker")
-
-	if !ok || parseError != nil {
+	toDisableOptional, parseError := parseBool(toDisableInterface)
+	if parseError != nil {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable must be a boolean value"))
 		return
 	}
+	toDisable := *toDisableOptional
+
+	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool("to_disable", toDisable).Msg("Disabling miner by worker")
 
 	if toDisable {
 		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(worker.ID, minerSubscriptionKey, toDisable)
@@ -655,37 +642,46 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	}
 }
 
+func parseBool(value interface{}) (*bool, error) {
+	valueBool, ok := value.(bool)
+	if ok {
+		return &valueBool, nil
+	}
+	valueParsed, err := strconv.ParseBool(value.(string))
+	if err != nil {
+		return nil, err
+	}
+	return &valueParsed, nil
+}
+
 func DisableWorkerByMinerController(c *gin.Context) {
-	var requestMap map[string]string
+	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
 		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	workerId, workerIdExists := requestMap["workerId"]
-	if !workerIdExists || workerId == "" {
+	workerIdInterface, workerIdExists := requestMap["workerId"]
+	workerId, ok := workerIdInterface.(string)
+	if !workerIdExists || workerId == "" || !ok {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("workerId is required and must be a string"))
 		return
 	}
 
-	toDisableValue, toDisableExists := requestMap["toDisable"]
-	if !toDisableExists {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable is required and must be a boolean"))
+	toDisableInterface, toDisableExists := requestMap["toDisable"]
+	toDisableOptional, parseError := parseBool(toDisableInterface)
+	if !toDisableExists || parseError != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
 		return
 	}
+	toDisable := *toDisableOptional
 
 	minerUserValue, exists := c.Get("minerUser")
 	if !exists {
 		return
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
-
-	toDisable, err := strconv.ParseBool(toDisableValue)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
-		return
-	}
 
 	if toDisable {
 
