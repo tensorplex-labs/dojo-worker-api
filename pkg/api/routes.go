@@ -26,7 +26,7 @@ func LoginRoutes(router *gin.Engine) {
 
 		miner := apiV1.Group("/miner")
 		{
-			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
+			// miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
 			miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
 			miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
 			miner.PUT("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
