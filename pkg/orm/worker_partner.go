@@ -148,6 +148,28 @@ func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubs
 	return result.Count, nil
 }
 
+func (m *WorkerPartnerORM) DisablePartnerByMiner(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
+	ctx := context.Background()
+
+	filterParams := []db.WorkerPartnerWhereParam{
+		db.WorkerPartner.WorkerID.Equals(workerId),
+		db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
+	}
+
+	result, err := m.dbClient.WorkerPartner.FindMany(
+		filterParams...,
+	).Update(
+		db.WorkerPartner.IsDeleteByMiner.Set(toDisable),
+	).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update worker partner while disabling by miner")
+		return 0, fmt.Errorf("failed to update worker partner while disabling by miner %w", err)
+	}
+
+	log.Info().Msgf("Updated %d worker partner records, disabling by miner", result.Count)
+	return result.Count, nil
+}
+
 func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerId(workerId string) ([]db.WorkerPartnerModel, error) {
 	ctx := context.Background()
 
