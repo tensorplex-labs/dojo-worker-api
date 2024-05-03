@@ -563,7 +563,7 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 	var updatedWorkerPartner interface{}
 	if minerSubscriptionKey != "" || newMinerSubscriptionKey != "" || name != "" {
 
-		updatedWorkerPartner, err = workerPartnerORM.Update(worker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
+		updatedWorkerPartner, err = workerPartnerORM.UpdateSubscriptionKey(worker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
 	} else {
 
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing required param for update"))

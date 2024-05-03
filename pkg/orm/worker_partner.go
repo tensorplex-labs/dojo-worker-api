@@ -48,7 +48,7 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string, optionalName 
 	return workerPartner, nil
 }
 
-func (m *WorkerPartnerORM) Update(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) (*db.WorkerPartnerModel, error) {
+func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) ([]db.WorkerPartnerModel, error) {
 	ctx := context.Background()
 
 	var updateParams []db.WorkerPartnerSetParam
@@ -71,31 +71,32 @@ func (m *WorkerPartnerORM) Update(workerId string, minerSubscriptionKey string, 
 		}
 	}
 
-	if len(updateParams) > 0 {
-		updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindMany(
-			db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
-			db.WorkerPartner.WorkerID.Equals(workerId),
-		).Update(
-			updateParams...,
-		).Exec(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to update worker partner: %w", err)
-		}
-		if updatedWorkerPartner.Count == 0 {
-			return nil, fmt.Errorf("no worker partner updated")
-		}
-		// Assuming only one worker partner is updated, fetch the updated record
-		updatedRecord, err := m.dbClient.WorkerPartner.FindFirst(
-			db.WorkerPartner.MinerSubscriptionKey.Equals(newMinerSubscriptionKey),
-			db.WorkerPartner.WorkerID.Equals(workerId),
-		).Exec(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch updated worker partner: %w", err)
-		}
-		return updatedRecord, nil
-	} else {
+	if len(updateParams) == 0 {
 		return nil, fmt.Errorf("no update parameters provided")
 	}
+
+	updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
+		db.WorkerPartner.WorkerID.Equals(workerId),
+	).Update(
+		updateParams...,
+	).Exec(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update worker partner: %w", err)
+	}
+
+	if updatedWorkerPartner.Count == 0 {
+		return nil, fmt.Errorf("no worker partner updated")
+	}
+	// Assuming only one worker partner is updated, fetch the updated record
+	updatedRecords, err := m.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.MinerSubscriptionKey.Equals(newMinerSubscriptionKey),
+		db.WorkerPartner.WorkerID.Equals(workerId),
+	).Exec(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch updated worker partner: %w", err)
+	}
+	return updatedRecords, nil
 }
 
 func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
