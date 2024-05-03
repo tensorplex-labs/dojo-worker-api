@@ -34,7 +34,7 @@ func main() {
 	log.Info().Msgf("Allowed origins: %v", allowedOrigins)
 	config := cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-KEY"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,

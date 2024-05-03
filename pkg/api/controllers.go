@@ -13,6 +13,8 @@ import (
 	"dojo-api/pkg/email"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
+	"dojo-api/pkg/worker"
+	"dojo-api/utils"
 
 	"github.com/spruceid/siwe-go"
 
@@ -112,7 +114,6 @@ func CreateTasksController(c *gin.Context) {
 		Error:   errors,
 	})
 }
-
 func SubmitTaskResultController(c *gin.Context) {
 	// TODO possibly refactor after merging with oolwin's MR
 	jwtClaims, ok := c.Get("userInfo")
@@ -174,34 +175,34 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
-func MinerLoginController(c *gin.Context) {
-	verified, _ := c.Get("verified")
-	hotkey, _ := c.Get("hotkey")
-	apiKey, _ := c.Get("apiKey")
-	expiry, _ := c.Get("expiry")
-	email, _ := c.Get("email")
-	organisation, organisationExists := c.Get("organisationName")
+// func MinerLoginController(c *gin.Context) {
+// 	verified, _ := c.Get("verified")
+// 	hotkey, _ := c.Get("hotkey")
+// 	apiKey, _ := c.Get("apiKey")
+// 	expiry, _ := c.Get("expiry")
+// 	email, _ := c.Get("email")
+// 	organisation, organisationExists := c.Get("organisationName")
 
-	minerUserORM := orm.NewMinerUserORM()
-	var err error
-	if organisationExists {
-		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
-	} else {
-		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
-	}
+// 	minerUserORM := orm.NewMinerUserORM()
+// 	var err error
+// 	if organisationExists {
+// 		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
+// 	} else {
+// 		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
+// 	}
 
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to save miner user")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
-		return
-	}
+// 	if err != nil {
+// 		log.Error().Err(err).Msg("Failed to save miner user")
+// 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
+// 		return
+// 	}
 
-	if verified.(bool) {
-		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
-	} else {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
-	}
-}
+// 	if verified.(bool) {
+// 		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
+// 	} else {
+// 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
+// 	}
+// }
 
 func MinerApplicationController(c *gin.Context) {
 	requestInterface, exists := c.Get("requestMap")
@@ -228,22 +229,23 @@ func MinerApplicationController(c *gin.Context) {
 
 	minerUserORM := orm.NewMinerUserORM()
 	organisation, organisationExists := requestMap["organisationName"]
+	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
+	if subscriptionKey == "" {
+		log.Error().Err(err).Msg("Failed to generate subscription key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
+		return
+	}
+
 	if organisationExists {
-		if _, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
+		if _, err = minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey, organisation); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	} else {
-		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
+		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"], subscriptionKey); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
-	}
-
-	subscriptionKey, err := generateRandomMinerSubscriptionKey()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
 	}
 
 	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
@@ -336,6 +338,58 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
+}
+
+func GetWorkerPartnerListController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	walletAddress := userInfo.Subject
+	foundWorker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	if foundWorker == nil {
+		log.Error().Msg("Worker not found")
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Worker not found"))
+		return
+	}
+	workerPartners, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerId(foundWorker.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker partners")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker partners"))
+		return
+	}
+
+	listWorkerPartnersResponse := &worker.ListWorkerPartnersResponse{
+		Partners: make([]worker.WorkerPartner, 0),
+	}
+	for _, workerPartner := range workerPartners {
+		if workerPartner.IsDeleteByWorker {
+			continue
+		}
+		name, _ := workerPartner.Name()
+		listWorkerPartnersResponse.Partners = append(listWorkerPartnersResponse.Partners, worker.WorkerPartner{
+			Id:              workerPartner.ID,
+			CreatedAt:       workerPartner.CreatedAt,
+			SubscriptionKey: workerPartner.MinerSubscriptionKey,
+			Name:            name,
+		})
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(listWorkerPartnersResponse))
 }
 
 func GetTaskByIdController(c *gin.Context) {

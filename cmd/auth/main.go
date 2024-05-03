@@ -3,6 +3,7 @@ package main
 import (
 	"dojo-api/pkg/auth"
 	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 	"fmt"
 	"time"
 )
@@ -13,5 +14,6 @@ func main() {
 	authClient := auth.NewAuthService()
 	fmt.Println(authClient)
 	minerUserORM := orm.NewMinerUserORM()
-	minerUserORM.CreateUserWithOrganisation("hotkey123", "apiKey123", time.Now().Add(24*time.Hour), true, "email", "organisation")
+	subscriptionKey, _ := utils.GenerateRandomMinerSubscriptionKey()
+	minerUserORM.CreateUserWithOrganisation("hotkey123", "apiKey123", time.Now().Add(24*time.Hour), true, "email", subscriptionKey, "organisation")
 }

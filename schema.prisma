@@ -45,13 +45,10 @@ model MinerUser {
     hotkey            String          @unique
     api_key           String          @unique
     api_key_expire_at DateTime
-    // not necessary anymore since GET APIs must be public
-    // ip_address        String?
-    // user_type         NetworkUserType
     is_verified       Boolean         @default(false)
     tasks             Task[]
     worker_partners   WorkerPartner[]
-    subscription_key  String          @unique @default(uuid())
+    subscription_key  String          @unique
     email             String
     organizationName  String?
 }
@@ -115,7 +112,7 @@ model WorkerPartner {
     worker_id              String
     is_delete_by_miner     Boolean    @default(false)
     is_delete_by_worker    Boolean    @default(false)
-    name                   String?     
+    name                   String?
 
     @@unique([miner_subscription_key, worker_id])
 }
