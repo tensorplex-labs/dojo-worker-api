@@ -683,9 +683,11 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
+	log.Info().Str("workerId", workerId).Bool("toDisable", toDisable).Str("subscriptionKey", minerUser.SubscriptionKey).Msg("Attempting to disable worker by miner")
+
 	if toDisable {
 
-		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(workerId, minerUser.APIKey, toDisable)
+		count, err := orm.NewWorkerPartnerORM().DisablePartnerByMiner(workerId, minerUser.SubscriptionKey, toDisable)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
 			return
@@ -693,7 +695,7 @@ func DisableWorkerByMinerController(c *gin.Context) {
 		if count > 0 {
 			c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"message": "Worker disabled successfully"}))
 		} else {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner, no records updated"))
+			c.JSON(http.StatusNotFound, defaultErrorResponse("Failed to disable worker partner, no records updated"))
 		}
 	} else {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
