@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -82,4 +84,16 @@ func ParseDate(date string) *time.Time {
 		return nil
 	}
 	return &parsedDate
+}
+
+func GenerateRandomMinerSubscriptionKey() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Error().Stack().Err(err).Msg("Error generating random bytes")
+		return "", err
+	}
+	key := hex.EncodeToString(b)
+	key = "sk-" + key
+	return key, nil
 }
