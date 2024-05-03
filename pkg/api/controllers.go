@@ -231,12 +231,12 @@ func MinerApplicationController(c *gin.Context) {
 	organisation, organisationExists := requestMap["organisationName"]
 	var createdMinerUser *db.MinerUserModel
 	if organisationExists {
-		if createdMinerUser, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
+		if createdMinerUser, err = minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	} else {
-		if createdMinerUser, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
+		if createdMinerUser, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
