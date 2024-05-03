@@ -229,24 +229,20 @@ func MinerApplicationController(c *gin.Context) {
 
 	minerUserORM := orm.NewMinerUserORM()
 	organisation, organisationExists := requestMap["organisationName"]
+	var createdMinerUser *db.MinerUserModel
 	if organisationExists {
-		if _, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
+		if createdMinerUser, err := minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], organisation); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	} else {
-		if _, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
+		if createdMinerUser, err := minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"]); err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	}
 
-	subscriptionKey, err := generateRandomMinerSubscriptionKey()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
-	}
-
+	subscriptionKey := createdMinerUser.SubscriptionKey
 	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
 	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
 	err = email.SendEmail(requestMap["email"], body)

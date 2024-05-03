@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -399,18 +397,4 @@ func isTimestampValid(requestTimestamp int64) bool {
 	const tolerance = 15 * 60 // 15 minutes in seconds
 	currentTime := time.Now().Unix()
 	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
-}
-
-// Generates a random key of 64 characters.
-func generateRandomMinerSubscriptionKey() (string, error) {
-	// Generate a slice of random bytes.
-	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-
-	apiKey := hex.EncodeToString(b)
-
-	return apiKey, nil
 }
