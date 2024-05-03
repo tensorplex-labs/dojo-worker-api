@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -401,7 +401,7 @@ func isTimestampValid(requestTimestamp int64) bool {
 	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
 }
 
-// GenerateRandomMinerSubscriptionKey generates a random API key of the specified length.
+// Generates a random key of 64 characters.
 func generateRandomMinerSubscriptionKey() (string, error) {
 	// Generate a slice of random bytes.
 	b := make([]byte, 32)
@@ -410,8 +410,7 @@ func generateRandomMinerSubscriptionKey() (string, error) {
 		return "", err
 	}
 
-	// Encode the random bytes to a URL-safe base64 string.
-	apiKey := base64.URLEncoding.EncodeToString(b)
+	apiKey := hex.EncodeToString(b)
 
 	return apiKey, nil
 }
