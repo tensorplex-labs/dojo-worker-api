@@ -5,6 +5,9 @@ import (
 	"dojo-api/db"
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type WorkerPartnerORM struct {
@@ -48,55 +51,79 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string, optionalName 
 	return workerPartner, nil
 }
 
-func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) ([]db.WorkerPartnerModel, error) {
+func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) (*db.WorkerPartnerModel, error) {
 	ctx := context.Background()
 
-	var updateParams []db.WorkerPartnerSetParam
+	type RawQueryParams struct {
+		Name                    *string
+		NewMinerSubscriptionKey *string
+		TargetID                *string
+	}
 
+	var rawQueryParams RawQueryParams
+	var existingWorkerPartner *db.WorkerPartnerModel
+	var err error
 	if minerSubscriptionKey != "" {
-		existingWorkerPartner, err := m.dbClient.WorkerPartner.FindFirst(
+		existingWorkerPartner, err = m.dbClient.WorkerPartner.FindFirst(
 			db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
 			db.WorkerPartner.WorkerID.Equals(workerId),
 		).Exec(ctx)
 		if err != nil || existingWorkerPartner == nil {
 			return nil, fmt.Errorf("no existing miner key: %s with this worker", minerSubscriptionKey)
 		}
-
-		if name != "" {
-			updateParams = append(updateParams, db.WorkerPartner.Name.Set(name))
-		}
-
-		if newMinerSubscriptionKey != "" {
-			updateParams = append(updateParams, db.WorkerPartner.MinerSubscriptionKey.Set(newMinerSubscriptionKey))
-		}
 	}
 
-	if len(updateParams) == 0 {
+	if name != "" {
+		rawQueryParams.Name = &name
+	}
+
+	if newMinerSubscriptionKey != "" {
+		rawQueryParams.NewMinerSubscriptionKey = &newMinerSubscriptionKey
+	}
+
+	if rawQueryParams.NewMinerSubscriptionKey == nil && rawQueryParams.Name == nil {
 		return nil, fmt.Errorf("no update parameters provided")
 	}
 
-	updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindMany(
-		db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
-		db.WorkerPartner.WorkerID.Equals(workerId),
-	).Update(
-		updateParams...,
-	).Exec(ctx)
+	count := 1
+	statements := make([]string, 0)
+	params := make([]interface{}, 0)
+	if rawQueryParams.Name != nil {
+		statements = append(statements, fmt.Sprintf(`name = $%d`, count))
+		params = append(params, *rawQueryParams.Name)
+		count++
+	}
+
+	if rawQueryParams.NewMinerSubscriptionKey != nil {
+		statements = append(statements, fmt.Sprintf(`miner_subscription_key = $%d`, count))
+		params = append(params, *rawQueryParams.NewMinerSubscriptionKey)
+		count++
+	}
+
+	params = append(params, existingWorkerPartner.ID)
+
+	sep := " , "
+	setStatement := strings.TrimSuffix(strings.Join(statements, sep), sep)
+	preparedStatement := fmt.Sprintf(`UPDATE "WorkerPartner" SET %s WHERE id = $%d`, setStatement, count)
+
+	log.Info().Msgf("Prepared statement: %s", preparedStatement)
+	log.Info().Msgf("Params: %v", params)
+
+	execResult, err := m.dbClient.Prisma.ExecuteRaw(preparedStatement, params...).Exec(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update worker partner: %w", err)
 	}
 
-	if updatedWorkerPartner.Count == 0 {
-		return nil, fmt.Errorf("no worker partner updated")
-	}
+	log.Info().Msgf("Updated %d worker partner records", execResult.Count)
+
 	// Assuming only one worker partner is updated, fetch the updated record
-	updatedRecords, err := m.dbClient.WorkerPartner.FindMany(
-		db.WorkerPartner.MinerSubscriptionKey.Equals(newMinerSubscriptionKey),
-		db.WorkerPartner.WorkerID.Equals(workerId),
+	updatedRecord, err := m.dbClient.WorkerPartner.FindFirst(
+		db.WorkerPartner.ID.Equals(existingWorkerPartner.ID),
 	).Exec(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch updated worker partner: %w", err)
 	}
-	return updatedRecords, nil
+	return updatedRecord, nil
 }
 
 func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {

@@ -544,40 +544,42 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 		return
 	}
 
-	minerSubscriptionKey, _ := requestMap["miner_subscription_key"]
-	newMinerSubscriptionKey, _ := requestMap["new_miner_subscription_key"]
-	name, _ := requestMap["name"]
+	minerSubscriptionKey := requestMap["miner_subscription_key"]
+	newMinerSubscriptionKey := requestMap["new_miner_subscription_key"]
+	name := requestMap["name"]
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
-	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	dojoWorker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
 
 	workerPartnerORM := orm.NewWorkerPartnerORM()
-	var updatedWorkerPartner interface{}
-	if minerSubscriptionKey != "" || newMinerSubscriptionKey != "" || name != "" {
-
-		updatedWorkerPartner, err = workerPartnerORM.UpdateSubscriptionKey(worker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
-	} else {
-
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Missing required param for update"))
+	if minerSubscriptionKey == "" && newMinerSubscriptionKey == "" && name == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing required param for update"))
 		return
 	}
-
+	updatedWorkerPartner, err := workerPartnerORM.UpdateSubscriptionKey(dojoWorker.ID, minerSubscriptionKey, newMinerSubscriptionKey, name)
 	if err != nil {
-		log.Error().Err(err).Msg("Miner key does not exist with this worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Miner key does not exist with this worker"))
+		log.Error().Err(err).Msg("Failed updating subscription key for worker")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		return
 	}
 
 	log.Info().Msg("Worker partner updated successfully")
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"workerPartner": updatedWorkerPartner}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"workerPartner": worker.WorkerPartner{
+			Id:              updatedWorkerPartner.ID,
+			CreatedAt:       updatedWorkerPartner.CreatedAt,
+			SubscriptionKey: updatedWorkerPartner.MinerSubscriptionKey,
+			Name:            *updatedWorkerPartner.InnerWorkerPartner.Name,
+		},
+	}))
 }
 
 func DisableMinerByWorkerController(c *gin.Context) {
