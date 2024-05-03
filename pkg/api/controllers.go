@@ -316,17 +316,13 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	existingPartnership, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
+	existingPartnership, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
 	if existingPartnership != nil {
 		c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership already exists"))
 		return
 	}
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get worker-miner partnership")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Failed to get worker-miner partnership"))
-		return
-	}
 
+	// Continue with your function if there was no error or if the "not found" condition was handled
 	foundMinerUser, _ := orm.NewMinerUserORM().GetUserBySubscriptionKey(minerSubscriptionKey)
 	if foundMinerUser == nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Miner subscription key is invalid"))
