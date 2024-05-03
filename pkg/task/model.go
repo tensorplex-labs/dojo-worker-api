@@ -3,6 +3,8 @@ package task
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"dojo-api/db"
@@ -26,6 +28,7 @@ const (
 	SortCreatedAt    SortField = "createdAt"
 	SortNumResult    SortField = "numResult"
 	SortHighestYield SortField = "highestYield"
+	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
 type Pagination struct {
@@ -105,6 +108,24 @@ type (
 	MultiSelectValue []string
 )
 
+func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
+	var floatStr string
+	err := json.Unmarshal(v, &floatStr)
+	if err == nil {
+		res, err := strconv.ParseFloat(floatStr, 64)
+		if err != nil {
+			return SENTINEL_VALUE, err
+		}
+		return res, nil
+	}
+
+	var floatVal float64
+	if err := json.Unmarshal(v, &floatVal); err != nil {
+		return SENTINEL_VALUE, err
+	}
+	return floatVal, nil
+}
+
 // UnmarshalJSON implements the json.Unmarshaler interface for Result,
 // allowing for custom unmarshalling logic based on the type of value.
 func (r *Result) UnmarshalJSON(data []byte) error {
@@ -124,11 +145,11 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 
 	switch tempType {
 	case CriteriaTypeScore:
-		var v ScoreValue
-		if err := json.Unmarshal(i.Value, &v); err != nil {
+		value, err := parseJsonStringOrFloat(i.Value)
+		if err != nil {
 			return err
 		}
-		r.Value = v
+		r.Value = ScoreValue(value)
 	case CriteriaTypeRanking:
 		var v RankingValue
 		if err := json.Unmarshal(i.Value, &v); err != nil {
