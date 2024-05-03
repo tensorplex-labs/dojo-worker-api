@@ -304,12 +304,8 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	name, ok := requestMap["name"]
-	if !ok {
-		log.Error().Msg("Missing Miner Name")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing Miner Name"))
-		return
-	}
+	// this represents label for the key for workers to reference
+	optionalLabel := requestMap["name"]
 
 	minerSubscriptionKey, ok := requestMap["minerSubscriptionKey"]
 	if !ok {
@@ -331,7 +327,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, foundMinerUser.ID, name)
+	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, foundMinerUser.ID, optionalLabel)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker-miner partnership"))
 		return
