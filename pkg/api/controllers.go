@@ -583,20 +583,21 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 }
 
 func DisableMinerByWorkerController(c *gin.Context) {
-	var requestMap map[string]string
+	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
 		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	minerSubscriptionKey, minerSubscriptionKeyExists := requestMap["miner_subscription_key"]
-	if !minerSubscriptionKeyExists || minerSubscriptionKey == "" {
+	minerSubKeyInterface, minerSubscriptionKeyExists := requestMap["miner_subscription_key"]
+	minerSubscriptionKey, ok := minerSubKeyInterface.(string)
+	if !minerSubscriptionKeyExists || minerSubscriptionKey == "" || !ok {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("miner_subscription_key is required, must be a string, and cannot be empty"))
 		return
 	}
 
-	toDisableValue, toDisableExists := requestMap["to_disable"]
+	toDisableInterface, toDisableExists := requestMap["to_disable"]
 	if !toDisableExists {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable is required"))
 		return
@@ -614,9 +615,26 @@ func DisableMinerByWorkerController(c *gin.Context) {
 		return
 	}
 
-	toDisable, err := strconv.ParseBool(toDisableValue)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
+	// check if bool
+	var toDisable bool
+	var parseError error
+	toDisableBool, ok := toDisableInterface.(bool)
+	if ok {
+		toDisable = toDisableBool
+	} else {
+		var toDisableParsed bool
+		toDisableParsed, parseError = strconv.ParseBool(toDisableInterface.(string))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable must be a boolean value"))
+			return
+		}
+		toDisable = toDisableParsed
+	}
+
+	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool("to_disable", toDisable).Msg("Disabling miner by worker")
+
+	if !ok || parseError != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable must be a boolean value"))
 		return
 	}
 
@@ -629,9 +647,9 @@ func DisableMinerByWorkerController(c *gin.Context) {
 		}
 		if count > 0 {
 			c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"message": "Miner disabled successfully"}))
-		} else {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner, no records updated"))
+			return
 		}
+		c.JSON(http.StatusNotFound, defaultErrorResponse("Failed to disable worker partner, no records updated"))
 	} else {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
 	}
