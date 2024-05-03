@@ -104,7 +104,7 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 	if javascript {
 		response.Url = "https://" + response.Sandbox_id + ".csb.app/"
 	}else if python {
-		response.Url = "https://" + response.Sandbox_id + "-8050.csb.app/"
+		response.Url = "https://" + response.Sandbox_id + "-8888.csb.app/"
 	}else {
 		log.Error().Msg("Invalid language")
 		response.Error = "Invalid language"

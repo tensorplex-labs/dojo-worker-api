@@ -29,15 +29,16 @@ func main() {
 	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
 	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
-	allowedOrigins = append(allowedOrigins, "http://localhost")
+	allowedOrigins = append(allowedOrigins, "http://localhost*")
 
 	log.Info().Msgf("Allowed origins: %v", allowedOrigins)
 	config := cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-KEY"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
+		AllowWildcard:    true,
 	}
 	router.Use(cors.New(config))
 	api.LoginRoutes(router)
