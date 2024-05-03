@@ -140,9 +140,11 @@ func (m *WorkerPartnerORM) WorkerPartnerDisableUpdate(workerId string, minerSubs
 		updateParams...,
 	).Exec(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to update worker partner")
 		return 0, fmt.Errorf("failed to update worker partner: %w", err)
 	}
 
+	log.Info().Msgf("Updated %d worker partner records", result.Count)
 	return result.Count, nil
 }
 
