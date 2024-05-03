@@ -13,6 +13,7 @@ import (
 	"dojo-api/pkg/email"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
+	"dojo-api/pkg/worker"
 
 	"github.com/spruceid/siwe-go"
 
@@ -335,7 +336,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
 }
 
-func GetWorkerPartnersController(c *gin.Context) {
+func GetWorkerPartnerListController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
@@ -368,17 +369,23 @@ func GetWorkerPartnersController(c *gin.Context) {
 		return
 	}
 
-	activeSubscriptionKeys := make([]string, 0)
+	listWorkerPartnersResponse := &worker.ListWorkerPartnersResponse{
+		Partners: make([]worker.WorkerPartner, 0),
+	}
 	for _, workerPartner := range workerPartners {
 		if workerPartner.IsDeleteByWorker {
 			continue
 		}
-		activeSubscriptionKeys = append(activeSubscriptionKeys, workerPartner.MinerSubscriptionKey)
+		name, _ := workerPartner.Name()
+		listWorkerPartnersResponse.Partners = append(listWorkerPartnersResponse.Partners, worker.WorkerPartner{
+			Id:              workerPartner.ID,
+			CreatedAt:       workerPartner.CreatedAt,
+			SubscriptionKey: workerPartner.MinerSubscriptionKey,
+			Name:            name,
+		})
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"subscriptionKeys": activeSubscriptionKeys,
-	}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(listWorkerPartnersResponse))
 }
 
 func GetTaskByIdController(c *gin.Context) {
