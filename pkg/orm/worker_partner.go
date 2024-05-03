@@ -72,15 +72,27 @@ func (m *WorkerPartnerORM) Update(workerId string, minerSubscriptionKey string, 
 	}
 
 	if len(updateParams) > 0 {
-		updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindUnique(
-			db.WorkerPartner.ID.Equals(workerId),
+		updatedWorkerPartner, err := m.dbClient.WorkerPartner.FindMany(
+			db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),
+			db.WorkerPartner.WorkerID.Equals(workerId),
 		).Update(
 			updateParams...,
 		).Exec(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update worker partner: %w", err)
 		}
-		return updatedWorkerPartner, nil
+		if updatedWorkerPartner.Count == 0 {
+			return nil, fmt.Errorf("no worker partner updated")
+		}
+		// Assuming only one worker partner is updated, fetch the updated record
+		updatedRecord, err := m.dbClient.WorkerPartner.FindFirst(
+			db.WorkerPartner.MinerSubscriptionKey.Equals(newMinerSubscriptionKey),
+			db.WorkerPartner.WorkerID.Equals(workerId),
+		).Exec(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch updated worker partner: %w", err)
+		}
+		return updatedRecord, nil
 	} else {
 		return nil, fmt.Errorf("no update parameters provided")
 	}

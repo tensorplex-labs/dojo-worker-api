@@ -302,7 +302,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	name, ok := requestMap["name"]
+	name, _ := requestMap["name"]
 	minerSubscriptionKey, ok := requestMap["minerSubscriptionKey"]
 	if !ok {
 		log.Error().Msg("Missing minerSubscriptionKey")
@@ -310,7 +310,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	existingPartnership, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
+	existingPartnership, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
 	if existingPartnership != nil {
 		c.AbortWithStatusJSON(http.StatusOK, &ApiResponse{
 			Success: true,
@@ -480,12 +480,16 @@ func GetTaskResultsController(c *gin.Context) {
 func UpdateWorkerPartnerController(c *gin.Context) {
 	jwtClaims, _ := c.Get("userInfo")
 
-	minerSubscriptionKeyValue, _ := c.Get("miner_subscription_key")
-	minerSubscriptionKey, _ := minerSubscriptionKeyValue.(string)
-	newMinerSubscriptionKeyValue, _ := c.Get("new_miner_subscription_key")
-	newMinerSubscriptionKey, _ := newMinerSubscriptionKeyValue.(string)
-	nameValue, _ := c.Get("name")
-	name, _ := nameValue.(string)
+	var requestMap map[string]string
+	if err := c.BindJSON(&requestMap); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	minerSubscriptionKey, _ := requestMap["miner_subscription_key"]
+	newMinerSubscriptionKey, _ := requestMap["new_miner_subscription_key"]
+	name, _ := requestMap["name"]
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
@@ -520,17 +524,22 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 }
 
 func DisableMinerByWorkerController(c *gin.Context) {
-	minerSubscriptionKeyValue, minerSubscriptionKeyExists := c.Get("miner_subscription_key")
-	minerSubscriptionKey, okMinerSubscriptionKey := minerSubscriptionKeyValue.(string)
-	if !minerSubscriptionKeyExists || !okMinerSubscriptionKey || minerSubscriptionKey == "" {
+	var requestMap map[string]string
+	if err := c.BindJSON(&requestMap); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+	
+	minerSubscriptionKey, minerSubscriptionKeyExists := requestMap["miner_subscription_key"]
+	if !minerSubscriptionKeyExists || minerSubscriptionKey == "" {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("miner_subscription_key is required, must be a string, and cannot be empty"))
 		return
 	}
 
-	toDisableValue, toDisableExists := c.Get("to_disable")
-	toDisable, okToDisable := toDisableValue.(bool)
-	if !toDisableExists || !okToDisable {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable is required and must be a boolean"))
+	toDisableValue, toDisableExists := requestMap["to_disable"]
+	if !toDisableExists {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("to_disable is required"))
 		return
 	}
 	jwtClaims, _ := c.Get("userInfo")
@@ -545,6 +554,12 @@ func DisableMinerByWorkerController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
+
+	toDisable, err := strconv.ParseBool(toDisableValue)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
+        return
+    }
 
 	if toDisable {
 		count, err := orm.NewWorkerPartnerORM().WorkerPartnerDisableUpdate(worker.ID, minerSubscriptionKey, toDisable)
@@ -564,16 +579,21 @@ func DisableMinerByWorkerController(c *gin.Context) {
 }
 
 func DisableWorkerByMinerController(c *gin.Context) {
-	workerIdValue, workerIdExists := c.Get("workerId")
-	workerId, okWorkerId := workerIdValue.(string)
-	if !workerIdExists || !okWorkerId || workerId == "" {
+	var requestMap map[string]string
+	if err := c.BindJSON(&requestMap); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	workerId, workerIdExists := requestMap["workerId"]
+	if !workerIdExists || workerId == "" {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("workerId is required and must be a string"))
 		return
 	}
 
-	toDisableValue, toDisableExists := c.Get("toDisable")
-	toDisable, okToDisable := toDisableValue.(bool)
-	if !toDisableExists || !okToDisable {
+	toDisableValue, toDisableExists := requestMap["toDisable"]
+	if !toDisableExists {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable is required and must be a boolean"))
 		return
 	}
@@ -583,6 +603,12 @@ func DisableWorkerByMinerController(c *gin.Context) {
 		return
 	}
 	minerUser, _ := minerUserValue.(*db.MinerUserModel)
+
+	toDisable, err := strconv.ParseBool(toDisableValue)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, defaultErrorResponse("toDisable must be a boolean value"))
+        return
+    }
 
 	if toDisable {
 
