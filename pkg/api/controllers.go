@@ -335,6 +335,49 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
 }
 
+func GetWorkerPartnersController(c *gin.Context) {
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	walletAddress := userInfo.Subject
+	foundWorker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
+	if foundWorker == nil {
+		log.Error().Msg("Worker not found")
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Worker not found"))
+		return
+	}
+	workerPartners, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerId(foundWorker.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker partners")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker partners"))
+		return
+	}
+
+	var subscriptionKeys []string
+	for _, workerPartner := range workerPartners {
+		subscriptionKeys = append(subscriptionKeys, workerPartner.MinerSubscriptionKey)
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
+		"subscriptionKeys": subscriptionKeys,
+	}))
+}
+
 func GetTaskByIdController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
