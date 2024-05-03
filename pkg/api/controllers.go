@@ -303,6 +303,12 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	name, ok := requestMap["name"]
+	if !ok {
+		log.Error().Msg("Missing Miner Name")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing Miner Name"))
+		return
+	}
+
 	minerSubscriptionKey, ok := requestMap["minerSubscriptionKey"]
 	if !ok {
 		log.Error().Msg("Missing minerSubscriptionKey")
@@ -312,11 +318,12 @@ func WorkerPartnerCreateController(c *gin.Context) {
 
 	existingPartnership, err := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
 	if existingPartnership != nil {
-		c.AbortWithStatusJSON(http.StatusOK, &ApiResponse{
-			Success: true,
-			Body:    "Worker-miner partnership already exists",
-			Error:   nil,
-		})
+		c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership already exists"))
+		return
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker-miner partnership")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Failed to get worker-miner partnership"))
 		return
 	}
 
