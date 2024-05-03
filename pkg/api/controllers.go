@@ -544,8 +544,8 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 		return
 	}
 
-	minerSubscriptionKey := requestMap["miner_subscription_key"]
-	newMinerSubscriptionKey := requestMap["new_miner_subscription_key"]
+	minerSubscriptionKey := requestMap["minerSubscriptionKey"]
+	newMinerSubscriptionKey := requestMap["newMinerSubscriptionKey"]
 	name := requestMap["name"]
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
