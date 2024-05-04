@@ -135,7 +135,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
 	}
 
-	log.Info().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
+	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
 
 	// Fetch tasks associated with these subscription keys
 	tasks, err := o.dbClient.Task.FindMany(
