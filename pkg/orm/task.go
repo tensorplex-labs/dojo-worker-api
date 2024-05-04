@@ -125,11 +125,30 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, err
 	}
 
-	// Fetch tasks associated with these subscription keys
-	tasks, err := o.dbClient.Task.FindMany(
+	filterParams := []db.TaskWhereParam{
 		db.Task.MinerUser.Where(
 			db.MinerUser.SubscriptionKey.In(subscriptionKeys),
-		), db.Task.Type.In(taskTypes),
+		),
+	}
+
+	validTaskTypes := make([]db.TaskType, 0)
+	// filter out empty strings
+	for _, taskType := range taskTypes {
+		if taskType == "" {
+			continue
+		}
+		validTaskTypes = append(validTaskTypes, taskType)
+	}
+
+	if len(validTaskTypes) > 0 {
+		filterParams = append(filterParams, db.Task.Type.In(validTaskTypes))
+	}
+
+	log.Info().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
+
+	// Fetch tasks associated with these subscription keys
+	tasks, err := o.dbClient.Task.FindMany(
+		filterParams...,
 	).OrderBy(sortQuery).
 		Skip(offset).
 		Take(limit).
