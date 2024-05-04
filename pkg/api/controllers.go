@@ -476,10 +476,22 @@ func GetTasksByPageController(c *gin.Context) {
 
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, err := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
-	if err != nil {
-		log.Error().Err(err).Msg("Error getting tasks by pagination")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+	taskPagination, taskErrors := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
+	if len(taskErrors) > 0 {
+		isBadRequest := false
+		errorDetails := make([]string, 0)
+		for _, err := range taskErrors {
+			errorDetails = append(errorDetails, err.Error())
+			if _, ok := err.(*task.ErrInvalidTaskType); ok {
+				isBadRequest = true
+			}
+		}
+		log.Error().Interface("errors", errorDetails).Msg("Error getting tasks by pagination")
+		if isBadRequest {
+			c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errorDetails))
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse(errorDetails))
 		return
 	}
 
