@@ -19,6 +19,7 @@ type TaskResponse struct {
 	Type       db.TaskType     `json:"type"`
 	TaskData   json.RawMessage `json:"taskData"`
 	Status     db.TaskStatus   `json:"status"`
+	NumResults int             `json:"numResults"`
 	MaxResults int             `json:"maxResults"`
 }
 

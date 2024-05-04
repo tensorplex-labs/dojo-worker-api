@@ -107,6 +107,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 			ExpireAt:   task.ExpireAt,
 			TaskData:   rawJSON,
 			Status:     task.Status,
+			NumResults: task.NumResults,
 			MaxResults: task.MaxResults,
 		}
 		taskResponses = append(taskResponses, taskResponse)
