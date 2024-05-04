@@ -63,7 +63,7 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 }
 
 // TODO: Implement yieldMin, yieldMax
-func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, error) {
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
 	offset := (page - 1) * limit
 
@@ -78,26 +78,29 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	}
 
-	taskTypes := convertStringToTaskType(types)
+	taskTypes, errors := convertStringToTaskTypes(types)
+	if len(errors) > 0 {
+		return nil, errors
+	}
 
 	tasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
-		return nil, err
+		return nil, []error{err}
 	}
 
-	if len(tasks) == 0 {
-		return nil, fmt.Errorf("no tasks found")
-	}
+	// if len(tasks) == 0 {
+	// 	return nil, fmt.Errorf("no tasks found")
+	// }
 
 	// Convert tasks to TaskResponse model
-	var taskResponses []TaskResponse
+	taskResponses := make([]TaskResponse, 0)
 	for _, task := range tasks {
 		var rawJSON json.RawMessage
 		err = json.Unmarshal([]byte(task.TaskData), &rawJSON)
 		if err != nil {
 			log.Error().Err(err).Msg("Error parsing task data")
-			return nil, err
+			return nil, []error{err}
 		}
 		taskResponse := TaskResponse{
 			ID:         task.ID,
@@ -127,22 +130,50 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 	return &TaskPagination{
 		Tasks:      taskResponses,
 		Pagination: pagination,
-	}, nil
+	}, []error{}
 }
 
-func convertStringToTaskType(taskTypes []string) []db.TaskType {
-	var convertedTypes []db.TaskType
+func convertStringToTaskTypes(taskTypes []string) ([]db.TaskType, []error) {
+	convertedTypes := make([]db.TaskType, 0)
+	errors := make([]error, 0)
 	for _, t := range taskTypes {
+		isValid, err := IsValidTaskType(t)
+		if !isValid {
+			errors = append(errors, err)
+			continue
+		}
 		convertedTypes = append(convertedTypes, db.TaskType(t))
 	}
-	return convertedTypes
+	return convertedTypes, errors
 }
 
-func IsValidTaskType(taskType TaskType) bool {
-	if taskType == TaskTypeCodeGen || taskType == TaskTypeTextToImage || taskType == TaskTypeDialogue {
-		return true
+type ErrInvalidTaskType struct {
+	Type interface{}
+}
+
+func (e *ErrInvalidTaskType) Error() string {
+	return fmt.Sprintf("invalid task type: '%v', supported types are %v", e.Type, ValidTaskTypes)
+}
+
+func IsValidTaskType(taskType interface{}) (bool, error) {
+	switch t := taskType.(type) {
+	case string, db.TaskType:
+		for _, validType := range ValidTaskTypes {
+			switch v := t.(type) {
+			case string:
+				if v == string(validType) {
+					return true, nil
+				}
+			case db.TaskType:
+				if v == validType {
+					return true, nil
+				}
+			}
+		}
+		return false, &ErrInvalidTaskType{Type: t}
+	default:
+		return false, fmt.Errorf("invalid task type argument: %T, supported types are string and db.TaskType", t)
 	}
-	return false
 }
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
@@ -323,8 +354,9 @@ func ValidateTaskData(taskData TaskData) error {
 		return errors.New("task is required")
 	}
 
-	if !IsValidTaskType(taskData.Task) {
-		return fmt.Errorf("unsupported task: %v", taskData.Task)
+	isValid, err := IsValidTaskType(taskData.Task)
+	if !isValid {
+		return err
 	}
 
 	if taskData.Task == TaskTypeDialogue {

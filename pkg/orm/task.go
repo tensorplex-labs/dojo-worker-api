@@ -131,20 +131,11 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		),
 	}
 
-	validTaskTypes := make([]db.TaskType, 0)
-	// filter out empty strings
-	for _, taskType := range taskTypes {
-		if taskType == "" {
-			continue
-		}
-		validTaskTypes = append(validTaskTypes, taskType)
+	if len(taskTypes) > 0 {
+		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
 	}
 
-	if len(validTaskTypes) > 0 {
-		filterParams = append(filterParams, db.Task.Type.In(validTaskTypes))
-	}
-
-	log.Info().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
+	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
 
 	// Fetch tasks associated with these subscription keys
 	tasks, err := o.dbClient.Task.FindMany(
