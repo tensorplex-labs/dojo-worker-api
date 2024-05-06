@@ -51,14 +51,16 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	}
 
 	return &TaskResponse{
-		ID:         task.ID,
-		Title:      task.Title,
-		Body:       task.Body,
-		ExpireAt:   task.ExpireAt,
-		Type:       task.Type,
-		TaskData:   rawJSON,
-		Status:     task.Status,
-		MaxResults: task.MaxResults,
+		ID:          task.ID,
+		Title:       task.Title,
+		Body:        task.Body,
+		ExpireAt:    task.ExpireAt,
+		Type:        task.Type,
+		TaskData:    rawJSON,
+		Status:      task.Status,
+		MaxResults:  task.MaxResults,
+		NumResults:  task.NumResults,
+		NumCriteria: task.NumCriteria,
 	}, nil
 }
 
