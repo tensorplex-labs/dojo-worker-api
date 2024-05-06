@@ -61,17 +61,9 @@ type TaskData struct {
 	Prompt    string          `json:"prompt"`
 	Dialogue  []Message       `json:"dialogue,omitempty"`
 	Responses []ModelResponse `json:"responses,omitempty"`
-	Task      TaskType        `json:"task"`
+	Task      db.TaskType     `json:"task"`
 	Criteria  []Criteria      `json:"criteria"`
 }
-
-type TaskType string
-
-const (
-	TaskTypeCodeGen     TaskType = TaskType(db.TaskTypeCodeGeneration)
-	TaskTypeDialogue    TaskType = TaskType(db.TaskTypeDialogue)
-	TaskTypeTextToImage TaskType = TaskType(db.TaskTypeTextToImage)
-)
 
 type ModelResponse struct {
 	Model      string      `json:"model"`

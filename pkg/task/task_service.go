@@ -193,7 +193,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 
 	taskORM := orm.NewTaskORM()
 	for _, currTask := range request.TaskData {
-		taskType := TaskType(currTask.Task)
+		taskType := db.TaskType(currTask.Task)
 
 		_, err := json.Marshal(currTask.Criteria)
 		if err != nil {
@@ -359,7 +359,7 @@ func ValidateTaskData(taskData TaskData) error {
 		return err
 	}
 
-	if taskData.Task == TaskTypeDialogue {
+	if taskData.Task == db.TaskTypeDialogue {
 		if len(taskData.Dialogue) == 0 {
 			return errors.New("dialogue cannot be empty")
 		}
@@ -370,13 +370,13 @@ func ValidateTaskData(taskData TaskData) error {
 	}
 
 	task := taskData.Task
-	if task == TaskTypeTextToImage || task == TaskTypeCodeGen {
+	if task == db.TaskTypeTextToImage || task == db.TaskTypeCodeGeneration {
 		for _, taskresponse := range taskData.Responses {
-			if task == TaskTypeTextToImage {
+			if task == db.TaskTypeTextToImage {
 				if _, ok := taskresponse.Completion.(string); !ok {
 					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 				}
-			} else if task == TaskTypeCodeGen {
+			} else if task == db.TaskTypeCodeGeneration {
 				if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 				}
@@ -395,7 +395,7 @@ func ValidateTaskData(taskData TaskData) error {
 		if len(taskData.Dialogue) != 0 {
 			return errors.New("dialogue should be empty for code generation and text to image tasks")
 		}
-	} else if task == TaskTypeDialogue {
+	} else if task == db.TaskTypeDialogue {
 		if len(taskData.Responses) != 0 {
 			return errors.New("responses should be empty for dialogue task")
 		}
@@ -427,7 +427,7 @@ func ValidateTaskData(taskData TaskData) error {
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-			if task != TaskTypeDialogue {
+			if task != db.TaskTypeDialogue {
 				if len(criteria.Options) != len(taskData.Responses) {
 					return fmt.Errorf("number of options for criteria: %v should match number of responses: %v", CriteriaTypeRanking, len(taskData.Responses))
 				}
@@ -480,7 +480,7 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	processedTaskData := make([]TaskData, 0)
 	for _, taskInterface := range taskData.TaskData {
-		if taskInterface.Task == TaskTypeCodeGen {
+		if taskInterface.Task == db.TaskTypeCodeGeneration {
 			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")
