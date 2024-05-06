@@ -5,6 +5,7 @@ import (
 	"dojo-api/pkg/api"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
+	"dojo-api/pkg/sync"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,6 +53,9 @@ func main() {
 		Addr:    ":" + port,
 		Handler: router,
 	}
+
+	go sync.SyncDB()
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
