@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dojo-api/utils"
+	"dojo-api/pkg/orm"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -104,6 +105,11 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 			s.SubnetState.ActiveAxonInfos = append(s.SubnetState.ActiveAxonInfos[:i], s.SubnetState.ActiveAxonInfos[i+1:]...)
 			break
 		}
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	if err := minerUserORM.DeregisterMiner(hotkey); err != nil{
+		log.Error().Err(err).Msg("Error deregistering miner")
 	}
 }
 

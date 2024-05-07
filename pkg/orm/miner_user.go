@@ -100,26 +100,10 @@ func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.Min
 	return user, nil
 }
 
-func (s *MinerUserORM) GetMinerHotkeys() (map[string]string, error) {
-	ctx := context.Background()
-	miners, err := s.dbClient.MinerUser.FindMany().Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Error retrieving user by email")
-		return nil, err
-	}
-
-	hotkeys := make(map[string]string)
-	for _, miner := range miners {
-		hotkeys[miner.ID] = miner.Hotkey
-	}
-
-	return hotkeys, nil
-}
-
-func (s *MinerUserORM) DeregisterMiner(id string) error {
+func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 	ctx := context.Background()
 	_, err := s.dbClient.MinerUser.FindUnique(
-		db.MinerUser.ID.Equals(id),
+		db.MinerUser.Hotkey.Equals(hotkey),
 	).Update(
 		db.MinerUser.IsVerified.Set(false),
 		db.MinerUser.APIKeyExpireAt.Set(time.Now()),
