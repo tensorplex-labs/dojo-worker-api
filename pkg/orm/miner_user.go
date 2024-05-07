@@ -99,3 +99,20 @@ func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.Min
 	}
 	return user, nil
 }
+
+func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
+	ctx := context.Background()
+	_, err := s.dbClient.MinerUser.FindUnique(
+		db.MinerUser.Hotkey.Equals(hotkey),
+	).Update(
+		db.MinerUser.IsVerified.Set(false),
+		db.MinerUser.APIKeyExpireAt.Set(time.Now()),
+	).Exec(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error deregistering user")
+		return err
+	}
+	log.Info().Msg("Miner deregistered successfully")
+	return nil
+}
