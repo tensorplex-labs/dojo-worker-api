@@ -743,19 +743,25 @@ func DisableWorkerByMinerController(c *gin.Context) {
 
 func GenerateNonceController(c *gin.Context) {
 	address := c.Param("address")
+	log.Info().Str("address", address).Msg("Getting address from param")
 	if address == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "address parameter is required"})
 		return
 	}
+
 	cache := GetCacheInstance()
 	nonce := siwe.GenerateNonce()
+	log.Info().Msgf("Wallet address %s generated nonce %s", address, nonce)
 	err := cache.SetWithExpire(address, nonce, 1*time.Minute)
+	log.Info().Interface("keys", cache.Keys()).Msg("Checking cache keys")
+	// TODO remove after debugging
+	cache.ShowAll()
+
 	if err != nil {
 		log.Error().Str("address", address).Str("nonce", nonce).Err(err).Msg("Failed to store nonce")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
 		return
 	}
-	log.Debug().Interface("keys", cache.Keys()).Msg("Checking cache keys")
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))

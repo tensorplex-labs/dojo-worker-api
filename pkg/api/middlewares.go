@@ -316,6 +316,7 @@ func verifySignature(walletAddress string, message string, signatureHex string) 
 	log.Info().Str("SIWE Message", messageDomain.String()).Msg("SIWE message parsed successfully")
 
 	cache := GetCacheInstance()
+	cache.ShowAll()
 	addressNonce, err := cache.Get(walletAddress)
 	if err != nil {
 		log.Error().Str("walletAddress", walletAddress).Err(err).Msg("Failed to retrieve nonce from cache")

@@ -16,12 +16,12 @@ type Cache struct {
 
 type cacheItem struct {
 	value     interface{}
-	expiresAt time.Time
+	expiresAt int64 // Unix timestamp
 }
 
 func NewCache(initialSize int, defaultExpires time.Duration) *Cache {
 	if defaultExpires <= 0 {
-		log.Fatal().Msg("default expiration time must be greater than 0")
+		log.Info().Msg("default expiration time must be greater than 0")
 		return nil
 	}
 	c := &Cache{
@@ -36,19 +36,19 @@ func (c *Cache) Set(key, value interface{}) {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
-	now := time.Now()
+	now := time.Now().Unix()
 	if _, ok := c.kvStore[key]; ok {
 		// if item exists, overwrite it
 		c.kvStore[key] = cacheItem{
 			value:     value,
-			expiresAt: now.Add(c.defaultExpireAt),
+			expiresAt: now + int64(c.defaultExpireAt.Seconds()),
 		}
 		return
 	}
 
 	c.kvStore[key] = cacheItem{
 		value:     value,
-		expiresAt: now.Add(c.defaultExpireAt),
+		expiresAt: now + int64(c.defaultExpireAt.Seconds()),
 	}
 }
 
@@ -63,7 +63,7 @@ func (c *Cache) Get(key interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("key not found")
 	}
 
-	if time.Now().After(item.expiresAt) {
+	if time.Now().Unix() > item.expiresAt {
 		return nil, fmt.Errorf("key expired")
 	}
 	return item.value, nil
@@ -77,7 +77,7 @@ func (c *Cache) SetWithExpire(key, value interface{}, expiration time.Duration) 
 		return fmt.Errorf("expiration time must be greater than 0")
 	}
 
-	expiresAt := time.Now().Add(expiration)
+	expiresAt := time.Now().UTC().Unix() + int64(expiration.Seconds())
 	if item, ok := c.kvStore[key]; ok {
 		// if item exists, set the new expiration time
 		item.expiresAt = expiresAt
@@ -106,13 +106,14 @@ func (c *Cache) StartExpiryRoutine() {
 }
 
 func (c *Cache) evictExpiredItems() {
-	now := time.Now()
+	now := time.Now().Unix()
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
 	for key, item := range c.kvStore {
-		if item.expiresAt.Before(now) {
-			log.Debug().Time("triggerTime", now).Time("keyExpireAt", item.expiresAt).Msgf("Evicting key: %v", key)
+		if item.expiresAt < now {
+			log.Warn().Int64("triggerTime", now).Interface("key", key).Int64("expireAt", item.expiresAt).Msgf("Evicting key: %v", key)
+
 			delete(c.kvStore, key)
 		}
 	}
@@ -127,4 +128,20 @@ func (c *Cache) Keys() []interface{} {
 		keys = append(keys, key)
 	}
 	return keys
+}
+
+func (c *Cache) ShowAll() {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+	log.Info().Msg("Cache entries START")
+	log.Info().Msg("Cache entries START")
+	log.Info().Msg("Cache entries START")
+
+	for key, item := range c.kvStore {
+		log.Info().Interface("Key", key).Interface("Value", item.value).Int64("expireAt", item.expiresAt).Msg("Cache entry details")
+	}
+
+	log.Info().Msg("Cache entries END")
+	log.Info().Msg("Cache entries END")
+	log.Info().Msg("Cache entries END")
 }
