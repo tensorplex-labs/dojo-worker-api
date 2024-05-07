@@ -36,14 +36,19 @@ func (c *Cache) Set(key, value interface{}) {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
+	now := time.Now()
 	if _, ok := c.kvStore[key]; ok {
-		// if item exists, skip adding it
+		// if item exists, overwrite it
+		c.kvStore[key] = cacheItem{
+			value:     value,
+			expiresAt: now.Add(c.defaultExpireAt),
+		}
 		return
 	}
 
 	c.kvStore[key] = cacheItem{
 		value:     value,
-		expiresAt: time.Now().Add(c.defaultExpireAt),
+		expiresAt: now.Add(c.defaultExpireAt),
 	}
 }
 
@@ -76,6 +81,7 @@ func (c *Cache) SetWithExpire(key, value interface{}, expiration time.Duration) 
 	if item, ok := c.kvStore[key]; ok {
 		// if item exists, set the new expiration time
 		item.expiresAt = expiresAt
+		item.value = value
 		c.kvStore[key] = item
 		return nil
 	}
