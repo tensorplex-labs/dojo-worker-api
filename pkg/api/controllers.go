@@ -460,8 +460,20 @@ func GetTasksByPageController(c *gin.Context) {
 
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
+	if taskParam == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
+		return
+	}
 	// Split the string into a slice of strings
 	taskTypes := strings.Split(taskParam, ",")
+	if len(taskTypes) == 0 {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
+		return
+	}
+
+	if len(taskTypes) == 1 && taskTypes[0] == "All" {
+		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE"}
+	}
 
 	// Parsing "page" and "limit" as integers with default values
 	pageStr := c.DefaultQuery("page", "1")
