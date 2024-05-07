@@ -391,7 +391,7 @@ func generateRandomApiKey() (string, time.Time, error) {
 		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
 	}
 	expiry := time.Now().Add(24 * time.Hour)
-	return apiKey.String(), expiry, nil
+	return "sk-" + apiKey.String(), expiry, nil
 }
 
 func isTimestampValid(requestTimestamp int64) bool {

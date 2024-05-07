@@ -24,7 +24,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Msg("Error loading .env file")
 	}
-
 	port := utils.LoadDotEnv("SERVER_PORT")
 
 	router := gin.Default()
