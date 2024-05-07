@@ -1,145 +1,95 @@
 package cache
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/redis/rueidis"
 
 	"github.com/rs/zerolog/log"
 )
 
+type RedisConfig struct {
+	Address  string
+	Password string
+	Db       int
+}
+
 type Cache struct {
-	kvStore         sync.Map
-	defaultExpireAt time.Duration
-	mutex           sync.Mutex
+	redis rueidis.Client
 }
 
-type cacheItem struct {
-	value     interface{}
-	expiresAt int64 // Unix timestamp
+var (
+	instance *Cache
+	once     sync.Once
+)
+
+func GetCacheInstance() *Cache {
+	once.Do(func() {
+		host := os.Getenv("REDIS_HOST")
+		port := os.Getenv("REDIS_PORT")
+		redis_url := host + ":" + port
+		clientOpts := rueidis.ClientOption{
+			InitAddress: []string{redis_url},
+		}
+
+		password, passwordSet := os.LookupEnv("REDIS_PASSWORD")
+		if passwordSet {
+			clientOpts.Password = password
+		}
+
+		username, usernameSet := os.LookupEnv("REDIS_USERNAME")
+		if usernameSet {
+			clientOpts.Username = username
+		}
+
+		redisClient, err := rueidis.NewClient(clientOpts)
+		if err != nil {
+			log.Panic().Err(err).Msg("Failed to initialise Redis connection!")
+		}
+		log.Info().Msgf("Successfully connected to Redis at %s", host)
+		instance = &Cache{redis: redisClient}
+	})
+	return instance
 }
 
-func NewCache(initialSize int, defaultExpires time.Duration) *Cache {
-	if defaultExpires <= 0 {
-		log.Info().Msg("default expiration time must be greater than 0")
-		return nil
-	}
-	c := &Cache{
-		defaultExpireAt: defaultExpires,
-	}
-	c.StartExpiryRoutine()
-	return c
-}
-
-func (c *Cache) Set(key, value interface{}) {
-	now := time.Now().Unix()
-	c.mutex.Lock()
-	c.kvStore.Store(key, cacheItem{value: value, expiresAt: now + int64(c.defaultExpireAt.Seconds())})
-	c.mutex.Unlock()
-	log.Info().Interface("key", key).Interface("value", value).Msg("Setting key value pair")
-
-}
-
-// Get returns the value associated with the key and a boolean value indicating
-// whether the key was found.
-func (c *Cache) Get(key interface{}) (interface{}, error) {
-	c.mutex.Lock()
-	item, ok := c.kvStore.Load(key)
-	c.mutex.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("key not found")
+func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Duration) error {
+	switch v := value.(type) {
+	case string:
+		// do nothing, it's expected
+	case []byte:
+		value = string(v)
+	default:
+		fmt.Println("Unknown type, ignoring and storing directly in Redis")
 	}
 
-	cachedItem, ok := item.(cacheItem)
-	if !ok {
-		return nil, fmt.Errorf("type assertion to cacheItem failed")
+	ctx := context.Background()
+	err := c.redis.Do(
+		ctx,
+		c.redis.B().Set().Key(key).Value(value.(string)).Ex(expiration).Build(),
+	).Error()
+	if err != nil {
+		log.Error().Err(err).Str("key", key).Interface("value", value).Msg("Failed to write to Redis ...")
+		return err
 	}
-
-	if time.Now().Unix() > cachedItem.expiresAt {
-		return nil, fmt.Errorf("key expired")
-	}
-	return cachedItem.value, nil
-}
-
-func (c *Cache) SetWithExpire(key, value interface{}, expiration time.Duration) error {
-	if expiration <= 0 {
-		return fmt.Errorf("expiration time must be greater than 0")
-	}
-
-	expiresAt := time.Now().Unix() + int64(expiration.Seconds())
-
-	// Create the new cache item
-	newItem := cacheItem{
-		value:     value,
-		expiresAt: expiresAt,
-	}
-
-	// Store the new item, whether or not the key already exists
-	c.mutex.Lock()
-	c.kvStore.Store(key, newItem)
-	c.mutex.Unlock()
 	return nil
 }
 
-func (c *Cache) StartExpiryRoutine() {
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			c.mutex.Lock()
-			c.evictExpiredItems()
-			c.mutex.Unlock()
-		}
-	}()
+func (rc *Cache) Get(key string) (string, error) {
+	ctx := context.Background()
+	val, err := rc.redis.Do(ctx, rc.redis.B().Get().Key(key).Build()).AsBytes()
+	if err == rueidis.Nil {
+		return "", err
+	} else if err != nil {
+		log.Panic().Err(err).Msg("Failed to get from Redis ...")
+	}
+	return string(val), err
 }
 
-func (c *Cache) evictExpiredItems() {
-	now := time.Now().Unix()
-
-	c.kvStore.Range(func(key, value interface{}) bool {
-		item, ok := value.(cacheItem)
-		if !ok {
-			log.Error().Interface("key", key).Msg("Type assertion to cacheItem failed during eviction")
-			return true
-		}
-
-		if item.expiresAt < now {
-			log.Warn().Int64("triggerTime", now).Interface("key", key).Int64("expireAt", item.expiresAt).Msgf("Evicting key: %v", key)
-			c.kvStore.Delete(key)
-		}
-		return true
-	})
-}
-
-func (c *Cache) Keys() []interface{} {
-	c.mutex.Lock()
-	keys := make([]interface{}, 0)
-	c.kvStore.Range(func(key, value interface{}) bool {
-		keys = append(keys, key)
-		return true
-	})
-	c.mutex.Unlock()
-	return keys
-}
-
-func (c *Cache) ShowAll() {
-	log.Info().Msg("Cache entries START")
-	log.Info().Msg("Cache entries START")
-	log.Info().Msg("Cache entries START")
-
-	c.mutex.Lock()
-	c.kvStore.Range(func(key, value interface{}) bool {
-		item, ok := value.(cacheItem)
-		if !ok {
-			log.Error().Interface("key", key).Msg("Type assertion to cacheItem failed")
-			return true
-		}
-		log.Info().Interface("Key", key).Interface("Value", item.value).Int64("expireAt", item.expiresAt).Msg("Cache entry details")
-		return true
-	})
-	c.mutex.Unlock()
-
-	log.Info().Msg("Cache entries END")
-	log.Info().Msg("Cache entries END")
-	log.Info().Msg("Cache entries END")
+func (c *Cache) Shutdown() {
+	c.redis.Close()
+	log.Info().Msg("Successfully closed Redis connection")
 }
