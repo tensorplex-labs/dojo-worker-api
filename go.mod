@@ -9,6 +9,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/joho/godotenv v1.5.1
+	github.com/redis/rueidis v1.0.36
 	github.com/rs/zerolog v1.32.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/spruceid/siwe-go v0.2.1
@@ -18,7 +19,6 @@ require (
 
 require (
 	github.com/dchest/uniuri v1.2.0 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/relvacode/iso8601 v1.4.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect

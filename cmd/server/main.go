@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
-	
+
 	"net/http"
 	"os"
 	"os/signal"
@@ -55,13 +56,6 @@ func main() {
 	}
 
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().Msgf("Recovered from panic: %v", r)
-			}
-			// Ensure onShutdown is called even after a panic
-			onShutdown()
-		}()
 		// service connections
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("listen")
@@ -92,4 +86,6 @@ func onShutdown() {
 	log.Info().Msg("Shutting down server")
 	connHandler := orm.GetConnHandler()
 	connHandler.OnShutdown()
+	cache := cache.GetCacheInstance()
+	cache.Shutdown()
 }
