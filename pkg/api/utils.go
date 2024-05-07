@@ -1,13 +1,13 @@
 package api
 
 import (
+	"dojo-api/pkg/cache"
 	"sync"
-
-	"github.com/bluele/gcache"
+	"time"
 )
 
 var (
-	cacheInstance gcache.Cache
+	cacheInstance *cache.Cache
 	once          sync.Once
 )
 
@@ -26,9 +26,9 @@ func defaultSuccessResponse(body interface{}) ApiResponse {
 	return ApiResponse{Success: true, Body: body, Error: nil}
 }
 
-func GetCacheInstance() gcache.Cache {
+func GetCacheInstance() *cache.Cache {
 	once.Do(func() {
-		cacheInstance = gcache.New(100).ARC().Build()
+		cacheInstance = cache.NewCache(1000, 10*time.Minute)
 	})
 	return cacheInstance
 }

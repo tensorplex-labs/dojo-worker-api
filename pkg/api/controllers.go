@@ -743,6 +743,7 @@ func GenerateNonceController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
 		return
 	}
+	log.Debug().Interface("keys", cache.Keys()).Msg("Checking cache keys")
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
