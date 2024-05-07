@@ -7,17 +7,23 @@ import (
 )
 
 type TaskResultORM struct {
-	client *db.PrismaClient
+	client        *db.PrismaClient
+	clientWrapper *PrismaClientWrapper
 }
 
 func NewTaskResultORM() *TaskResultORM {
+	clientWrapper := GetPrismaClient()
 	return &TaskResultORM{
-		client: GetPrismaClient(),
+		client:        clientWrapper.Client,
+		clientWrapper: clientWrapper,
 	}
 }
 
 // In a transaction creates the TaskResult and updates the Task.NumResults
 func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
 	// TODO add web3 integration fields when the time comes
 	updateTaskTx := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Update(db.Task.NumResults.Increment(1)).Tx()
 	createResultTx := t.client.TaskResult.CreateOne(
@@ -39,5 +45,7 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 }
 
 func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId string) ([]db.TaskResultModel, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
 	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
 }

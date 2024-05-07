@@ -9,18 +9,22 @@ import (
 )
 
 type TaskORM struct {
-	dbClient *db.PrismaClient
+	dbClient      *db.PrismaClient
+	clientWrapper *PrismaClientWrapper
 }
 
 func NewTaskORM() *TaskORM {
-	client := GetPrismaClient()
-	return &TaskORM{dbClient: client}
+	clientWrapper := GetPrismaClient()
+	return &TaskORM{dbClient: clientWrapper.Client, clientWrapper: clientWrapper}
 }
 
 // DOES NOT USE ANY DEFAULT VALUES, SO REMEMBER TO SET THE RIGHT STATUS
 // CreateTask creates a new task in the database with the provided details.
 // Ignores `Status` and `NumResults` fields as they are set to default values.
 func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId string) (*db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
 	createdTask, err := o.dbClient.Task.CreateOne(
 		db.Task.ExpireAt.Set(task.ExpireAt),
 		db.Task.Title.Set(task.Title),
@@ -39,6 +43,9 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 }
 
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
+
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).Exec(ctx)
@@ -46,6 +53,9 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
 	tasks, err := o.dbClient.Task.FindMany(
 		db.Task.Type.In(taskTypes),
 	).OrderBy(sortQuery).
@@ -57,6 +67,9 @@ func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db
 
 // TODO: Optimization
 func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
+
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
 	// Fetch the task along with its associated MinerUser
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
@@ -104,6 +117,8 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 
 // TODO: Optimization
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
 	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),

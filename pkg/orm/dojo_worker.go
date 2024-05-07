@@ -10,15 +10,19 @@ import (
 )
 
 type DojoWorkerORM struct {
-	dbClient *db.PrismaClient
+	dbClient      *db.PrismaClient
+	clientWrapper *PrismaClientWrapper
 }
 
 func NewDojoWorkerORM() *DojoWorkerORM {
-	client := GetPrismaClient()
-	return &DojoWorkerORM{dbClient: client}
+	clientWrapper := GetPrismaClient()
+	return &DojoWorkerORM{dbClient: clientWrapper.Client, clientWrapper: clientWrapper}
 }
 
 func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (*db.DojoWorkerModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	worker, err := s.dbClient.DojoWorker.CreateOne(
 		db.DojoWorker.WalletAddress.Set(walletAddress),
@@ -28,6 +32,9 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 }
 
 func (s *DojoWorkerORM) GetById(ctx context.Context, workerId string) (*db.DojoWorkerModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	worker, err := s.dbClient.DojoWorker.FindUnique(
 		db.DojoWorker.ID.Equals(workerId),
 	).Exec(ctx)
@@ -42,6 +49,9 @@ func (s *DojoWorkerORM) GetById(ctx context.Context, workerId string) (*db.DojoW
 }
 
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	worker, err := s.dbClient.DojoWorker.FindFirst(
 		db.DojoWorker.WalletAddress.Equals(walletAddress),
