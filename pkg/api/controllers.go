@@ -318,16 +318,24 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	existingPartnership, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
-	if existingPartnership != nil {
-		c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership already exists"))
-		return
-	}
-
 	// Continue with your function if there was no error or if the "not found" condition was handled
 	foundMinerUser, _ := orm.NewMinerUserORM().GetUserBySubscriptionKey(minerSubscriptionKey)
 	if foundMinerUser == nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Miner subscription key is invalid"))
+		return
+	}
+
+	existingPartner, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
+	if existingPartner != nil {
+		log.Debug().Interface("existingPartner", existingPartner).Msg("Existing partnership found")
+		numRowsChanged, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(worker.ID, minerSubscriptionKey, false)
+		if numRowsChanged > 0 && err == nil {
+			log.Info().Int("numRowsChanged", numRowsChanged).Err(err).Msg("Worker-miner partnership re-enabled")
+			c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership re-enabled"))
+			return
+		}
+		log.Error().Int("numRowsChanged", numRowsChanged).Err(err).Msg("Failed to re-enable worker-miner partnership")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to re-enable worker-miner partnership"))
 		return
 	}
 
