@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"dojo-api/utils"
 	"fmt"
 	"os"
 	"sync"
@@ -29,23 +30,20 @@ var (
 
 func GetCacheInstance() *Cache {
 	once.Do(func() {
-		host := os.Getenv("REDIS_HOST")
-		port := os.Getenv("REDIS_PORT")
+		host := utils.LoadDotEnv("REDIS_HOST")
+		port := utils.LoadDotEnv("REDIS_PORT")
+
 		redis_url := host + ":" + port
 		clientOpts := rueidis.ClientOption{
-			InitAddress: []string{redis_url},
+			InitAddress:  []string{redis_url},
+			DisableCache: true,
 		}
-
-		password, passwordSet := os.LookupEnv("REDIS_PASSWORD")
-		if passwordSet {
-			clientOpts.Password = password
-		}
-
-		username, usernameSet := os.LookupEnv("REDIS_USERNAME")
-		if usernameSet {
+		if username, usernameSet := os.LookupEnv("REDIS_USERNAME"); usernameSet {
 			clientOpts.Username = username
 		}
-
+		if password, passwordSet := os.LookupEnv("REDIS_PASSWORD"); passwordSet {
+			clientOpts.Password = password
+		}
 		redisClient, err := rueidis.NewClient(clientOpts)
 		if err != nil {
 			log.Panic().Err(err).Msg("Failed to initialise Redis connection!")
