@@ -12,6 +12,7 @@ import (
 	"github.com/spruceid/siwe-go"
 
 	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -315,8 +316,7 @@ func verifySignature(walletAddress string, message string, signatureHex string) 
 	}
 	log.Info().Str("SIWE Message", messageDomain.String()).Msg("SIWE message parsed successfully")
 
-	cache := GetCacheInstance()
-	cache.ShowAll()
+	cache := cache.GetCacheInstance()
 	addressNonce, err := cache.Get(walletAddress)
 	if err != nil {
 		log.Error().Str("walletAddress", walletAddress).Err(err).Msg("Failed to retrieve nonce from cache")
@@ -324,10 +324,9 @@ func verifySignature(walletAddress string, message string, signatureHex string) 
 	}
 
 	nonceFromMessage := messageDomain.GetNonce()
-	addressNonceStr, ok := addressNonce.(string)
-	if !ok || nonceFromMessage != addressNonceStr {
-		log.Error().Str("expectedNonce", addressNonceStr).Str("actualNonce", nonceFromMessage).Msg("Nonce mismatch")
-		return false, fmt.Errorf("nonce mismatch: expected %s, got %s", addressNonceStr, nonceFromMessage)
+	if nonceFromMessage != addressNonce {
+		log.Error().Str("cachedNonce", addressNonce).Str("messageNonce", nonceFromMessage).Msg("Nonce mismatch")
+		return false, fmt.Errorf("nonce mismatch: expected %s, got %s", addressNonce, nonceFromMessage)
 	}
 
 	verifiedPublicKey, err := messageDomain.Verify(signatureHex, nil, nil, nil)

@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
-	
+
 	"net/http"
 	"os"
 	"os/signal"
@@ -85,4 +86,6 @@ func onShutdown() {
 	log.Info().Msg("Shutting down server")
 	connHandler := orm.GetConnHandler()
 	connHandler.OnShutdown()
+	cache := cache.GetCacheInstance()
+	cache.Shutdown()
 }

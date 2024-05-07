@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
@@ -749,14 +750,10 @@ func GenerateNonceController(c *gin.Context) {
 		return
 	}
 
-	cache := GetCacheInstance()
+	cache := cache.GetCacheInstance()
 	nonce := siwe.GenerateNonce()
 	log.Info().Msgf("Wallet address %s generated nonce %s", address, nonce)
 	err := cache.SetWithExpire(address, nonce, 1*time.Minute)
-	log.Info().Interface("keys", cache.Keys()).Msg("Checking cache keys")
-	// TODO remove after debugging
-	cache.ShowAll()
-
 	if err != nil {
 		log.Error().Str("address", address).Str("nonce", nonce).Err(err).Msg("Failed to store nonce")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
