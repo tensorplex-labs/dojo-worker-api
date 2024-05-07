@@ -51,14 +51,16 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	}
 
 	return &TaskResponse{
-		ID:         task.ID,
-		Title:      task.Title,
-		Body:       task.Body,
-		ExpireAt:   task.ExpireAt,
-		Type:       task.Type,
-		TaskData:   rawJSON,
-		Status:     task.Status,
-		MaxResults: task.MaxResults,
+		ID:          task.ID,
+		Title:       task.Title,
+		Body:        task.Body,
+		ExpireAt:    task.ExpireAt,
+		Type:        task.Type,
+		TaskData:    rawJSON,
+		Status:      task.Status,
+		MaxResults:  task.MaxResults,
+		NumResults:  task.NumResults,
+		NumCriteria: task.NumCriteria,
 	}, nil
 }
 
@@ -74,6 +76,8 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	case "numResults":
 		sortQuery = db.Task.NumResults.Order(db.SortOrderDesc)
+	case "numCriteria":
+		sortQuery = db.Task.NumCriteria.Order(db.SortOrderDesc)
 	default:
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	}
@@ -103,15 +107,16 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 			return nil, []error{err}
 		}
 		taskResponse := TaskResponse{
-			ID:         task.ID,
-			Title:      task.Title,
-			Body:       task.Body,
-			Type:       task.Type,
-			ExpireAt:   task.ExpireAt,
-			TaskData:   rawJSON,
-			Status:     task.Status,
-			NumResults: task.NumResults,
-			MaxResults: task.MaxResults,
+			ID:          task.ID,
+			Title:       task.Title,
+			Body:        task.Body,
+			Type:        task.Type,
+			ExpireAt:    task.ExpireAt,
+			TaskData:    rawJSON,
+			Status:      task.Status,
+			NumResults:  task.NumResults,
+			MaxResults:  task.MaxResults,
+			NumCriteria: task.NumCriteria,
 		}
 		taskResponses = append(taskResponses, taskResponse)
 	}
@@ -216,14 +221,15 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		}
 
 		taskToCreate := db.InnerTask{
-			ExpireAt:   *expireAt,
-			Title:      request.Title,
-			Body:       request.Body,
-			Type:       db.TaskType(taskType),
-			TaskData:   taskData,
-			MaxResults: request.MaxResults,
-			NumResults: 0,
-			Status:     db.TaskStatusInProgress,
+			ExpireAt:    *expireAt,
+			Title:       request.Title,
+			Body:        request.Body,
+			Type:        db.TaskType(taskType),
+			TaskData:    taskData,
+			MaxResults:  request.MaxResults,
+			NumResults:  0,
+			Status:      db.TaskStatusInProgress,
+			NumCriteria: len(currTask.Criteria),
 		}
 
 		if request.TotalRewards > 0 {
