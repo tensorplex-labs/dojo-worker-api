@@ -23,7 +23,6 @@ func init() {
 	}
 
 	// sanity checks
-	LoadDotEnv("DATABASE_URL")
 	LoadDotEnv("SUBSTRATE_API_URL")
 	LoadDotEnv("VALIDATOR_MIN_STAKE")
 	LoadDotEnv("JWT_SECRET")
