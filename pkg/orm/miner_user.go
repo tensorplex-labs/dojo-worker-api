@@ -113,6 +113,6 @@ func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 		log.Error().Err(err).Msg("Error deregistering user")
 		return err
 	}
-	log.Info().Msg("User deregistered successfully")
+	log.Info().Msg("Miner deregistered successfully")
 	return nil
 }
