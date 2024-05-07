@@ -739,9 +739,11 @@ func GenerateNonceController(c *gin.Context) {
 	nonce := siwe.GenerateNonce()
 	err := cache.SetWithExpire(address, nonce, time.Minute*2)
 	if err != nil {
+		log.Error().Str("address", address).Str("nonce", nonce).Err(err).Msg("Failed to store nonce")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
 		return
 	}
 
+	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
 }
