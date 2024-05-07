@@ -330,9 +330,11 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		log.Debug().Interface("existingPartner", existingPartner).Msg("Existing partnership found")
 		numRowsChanged, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(worker.ID, minerSubscriptionKey, false)
 		if numRowsChanged > 0 && err == nil {
+			log.Info().Int("numRowsChanged", numRowsChanged).Err(err).Msg("Worker-miner partnership re-enabled")
 			c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership re-enabled"))
 			return
 		}
+		log.Error().Int("numRowsChanged", numRowsChanged).Err(err).Msg("Failed to re-enable worker-miner partnership")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to re-enable worker-miner partnership"))
 		return
 	}
