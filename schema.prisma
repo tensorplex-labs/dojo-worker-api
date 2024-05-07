@@ -66,6 +66,7 @@ model Task {
     status        TaskStatus
     max_results   Int
     num_results   Int
+    num_criteria  Int
     total_reward  Float?
     task_results  TaskResult[]
     MinerUser     MinerUser?   @relation(fields: [miner_user_id], references: [id])
