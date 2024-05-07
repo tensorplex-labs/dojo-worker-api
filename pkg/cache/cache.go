@@ -11,6 +11,7 @@ import (
 type Cache struct {
 	kvStore         sync.Map
 	defaultExpireAt time.Duration
+	mutex           sync.Mutex
 }
 
 type cacheItem struct {
@@ -32,7 +33,9 @@ func NewCache(initialSize int, defaultExpires time.Duration) *Cache {
 
 func (c *Cache) Set(key, value interface{}) {
 	now := time.Now().Unix()
+	c.mutex.Lock()
 	c.kvStore.Store(key, cacheItem{value: value, expiresAt: now + int64(c.defaultExpireAt.Seconds())})
+	c.mutex.Unlock()
 	log.Info().Interface("key", key).Interface("value", value).Msg("Setting key value pair")
 
 }
@@ -40,7 +43,9 @@ func (c *Cache) Set(key, value interface{}) {
 // Get returns the value associated with the key and a boolean value indicating
 // whether the key was found.
 func (c *Cache) Get(key interface{}) (interface{}, error) {
+	c.mutex.Lock()
 	item, ok := c.kvStore.Load(key)
+	c.mutex.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("key not found")
 	}
@@ -61,28 +66,18 @@ func (c *Cache) SetWithExpire(key, value interface{}, expiration time.Duration) 
 		return fmt.Errorf("expiration time must be greater than 0")
 	}
 
-	expiresAt := time.Now().UTC().Unix() + int64(expiration.Seconds())
-	if item, ok := c.kvStore.Load(key); ok {
-		cachedItem, ok := item.(cacheItem)
-		if !ok {
-			return fmt.Errorf("type assertion to cacheItem failed")
-		}
+	expiresAt := time.Now().Unix() + int64(expiration.Seconds())
 
-		// if item exists, set the new expiration time
-		cachedItem.expiresAt = expiresAt
-		cachedItem.value = value
-		c.kvStore.Store(key, cacheItem{
-			value:     value,
-			expiresAt: expiresAt,
-		})
-		return nil
-	}
-
-	// add the new item with the specified expiration time.
-	c.kvStore.Store(key, cacheItem{
+	// Create the new cache item
+	newItem := cacheItem{
 		value:     value,
 		expiresAt: expiresAt,
-	})
+	}
+
+	// Store the new item, whether or not the key already exists
+	c.mutex.Lock()
+	c.kvStore.Store(key, newItem)
+	c.mutex.Unlock()
 	return nil
 }
 
@@ -91,7 +86,9 @@ func (c *Cache) StartExpiryRoutine() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
+			c.mutex.Lock()
 			c.evictExpiredItems()
+			c.mutex.Unlock()
 		}
 	}()
 }
@@ -115,11 +112,13 @@ func (c *Cache) evictExpiredItems() {
 }
 
 func (c *Cache) Keys() []interface{} {
+	c.mutex.Lock()
 	keys := make([]interface{}, 0)
 	c.kvStore.Range(func(key, value interface{}) bool {
 		keys = append(keys, key)
 		return true
 	})
+	c.mutex.Unlock()
 	return keys
 }
 
@@ -128,6 +127,7 @@ func (c *Cache) ShowAll() {
 	log.Info().Msg("Cache entries START")
 	log.Info().Msg("Cache entries START")
 
+	c.mutex.Lock()
 	c.kvStore.Range(func(key, value interface{}) bool {
 		item, ok := value.(cacheItem)
 		if !ok {
@@ -137,6 +137,7 @@ func (c *Cache) ShowAll() {
 		log.Info().Interface("Key", key).Interface("Value", item.value).Int64("expireAt", item.expiresAt).Msg("Cache entry details")
 		return true
 	})
+	c.mutex.Unlock()
 
 	log.Info().Msg("Cache entries END")
 	log.Info().Msg("Cache entries END")
