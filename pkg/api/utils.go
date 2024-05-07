@@ -28,7 +28,7 @@ func defaultSuccessResponse(body interface{}) ApiResponse {
 
 func GetCacheInstance() *cache.Cache {
 	once.Do(func() {
-		cacheInstance = cache.NewCache(1000, 10*time.Minute)
+		cacheInstance = cache.NewCache(10000, 10*time.Minute)
 	})
 	return cacheInstance
 }

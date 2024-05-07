@@ -91,7 +91,7 @@ func (c *Cache) SetWithExpire(key, value interface{}, expiration time.Duration) 
 
 func (c *Cache) StartExpiryRoutine() {
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			c.evictExpiredItems()
