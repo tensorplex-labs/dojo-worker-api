@@ -460,8 +460,20 @@ func GetTasksByPageController(c *gin.Context) {
 
 	// Get the task query parameter as a single string
 	taskParam := c.Query("task")
+	if taskParam == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
+		return
+	}
 	// Split the string into a slice of strings
 	taskTypes := strings.Split(taskParam, ",")
+	if len(taskTypes) == 0 {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
+		return
+	}
+
+	if len(taskTypes) == 1 && taskTypes[0] == "All" {
+		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE"}
+	}
 
 	// Parsing "page" and "limit" as integers with default values
 	pageStr := c.DefaultQuery("page", "1")
@@ -737,12 +749,13 @@ func GenerateNonceController(c *gin.Context) {
 	}
 	cache := GetCacheInstance()
 	nonce := siwe.GenerateNonce()
-	err := cache.SetWithExpire(address, nonce, time.Minute*2)
+	err := cache.SetWithExpire(address, nonce, 1*time.Minute)
 	if err != nil {
 		log.Error().Str("address", address).Str("nonce", nonce).Err(err).Msg("Failed to store nonce")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to store nonce"))
 		return
 	}
+	log.Debug().Interface("keys", cache.Keys()).Msg("Checking cache keys")
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
