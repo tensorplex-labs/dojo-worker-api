@@ -68,7 +68,7 @@ func GetPrismaClient() *PrismaClientWrapper {
 
 	existingWrapper, exists := handler.clientWrappers[currentConnString]
 	if exists {
-		log.Info().Msg("Reusing existing Prisma client for connString " + currentConnString)
+		log.Info().Msg("Reusing existing Prisma client for connString")
 		return &existingWrapper
 	}
 
@@ -76,24 +76,15 @@ func GetPrismaClient() *PrismaClientWrapper {
 		QueryTracker: &QueryTracker{},
 		Client:       db.NewClient(getPrismaConfig()),
 	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().Msgf("Recovered from panic while connecting to Prisma client: %v", r)
 		}
-		// // failed to use latest connection string, try to connect to any other client
-		// for _, wrapper := range handler.clientWrappers {
-		// 	log.Info().Interface("clientWrapper", wrapper).Msg("Existing client wrapper")
-		// }
-
-		// log.Error().Err(err).Msg("Failed to connect to Prisma client")
-		// for key, wrapper := range handler.clientWrappers {
-		// 	log.Info().Str("connString", key).Interface("clientWrapper", wrapper).Msg("Trying to connect to another Prisma client")
-		// 	return &wrapper
-		// }
-		// return nil
 	}()
 
 	err := clientWrapper.Client.Prisma.Connect()
+	log.Warn().Msg("Trying to connect to Prisma...")
 	if err == nil {
 		log.Info().Msg("Successfully connected for new connection string")
 		handler.clientWrappers[currentConnString] = clientWrapper
@@ -102,26 +93,11 @@ func GetPrismaClient() *PrismaClientWrapper {
 
 	log.Warn().Msg("Failed to connect Prisma client for new connection string, attempting reuse...")
 	for _, wrapper := range handler.clientWrappers {
-		log.Info().Msg("Reusing existing Prisma client")
+		log.Debug().Msg("Reusing existing Prisma client")
 		return &wrapper
 	}
 	log.Error().Err(err).Msg("No existing Prisma clients to reuse")
 	return nil
-
-	// // remove older clients since probably invalid now
-	// for connString, existingWrapper := range handler.clientWrappers {
-	// 	if connString != currentConnString {
-	// 		existingWrapper.QueryTracker.WaitForAllQueries()
-	// 		if existingWrapper.QueryTracker.activeQueries == 0 {
-	// 			if err := existingWrapper.Client.Prisma.Disconnect(); err != nil {
-	// 				log.Error().Err(err).Msg("Failed to disconnect from Prisma client")
-	// 			}
-	// 			delete(handler.clientWrappers, connString)
-	// 		} else {
-	// 			log.Warn().Msgf("Not disconnecting from Prisma client with connection string: %s because there are still active queries", connString)
-	// 		}
-	// 	}
-	// }
 }
 
 func (h *ConnHandler) OnShutdown() error {
@@ -145,6 +121,7 @@ type DbSecrets struct {
 }
 
 func getPostgresCredentials() DbSecrets {
+	// TODO @dev pull from aws secrets
 	username := utils.LoadDotEnv("DB_USERNAME")
 	password := utils.LoadDotEnv("DB_PASSWORD")
 	return DbSecrets{
