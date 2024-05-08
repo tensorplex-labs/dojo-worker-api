@@ -121,6 +121,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		c.Abort()
 		return
 	}
 
@@ -128,12 +129,14 @@ func SubmitTaskResultController(c *gin.Context) {
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", userInfo)).Msg("Failed to assert type for userInfo")
 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		c.Abort()
 		return
 	}
 	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
 	if err != nil {
 		log.Error().Err(err).Str("walletAddress", userInfo.Subject).Msg("Failed to get worker by wallet address")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		c.Abort()
 		return
 	}
 
@@ -141,6 +144,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		c.Abort()
 		return
 	}
 
@@ -148,6 +152,23 @@ func SubmitTaskResultController(c *gin.Context) {
 	taskId := c.Param("task-id")
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
+
+	isCompletedTask, err := taskService.ValidateCompletedTask(ctx, taskId, worker.ID)
+
+	if err != nil {
+		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
+		return
+	}
+
+	if isCompletedTask {
+		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task is already completed by worker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task is already completed by worker"))
+		c.Abort()
+		return
+	}
+
 	task, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -168,6 +189,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	if err != nil {
 		log.Error().Err(err).Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Error updating task with result data")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
 		return
 	}
 
@@ -402,28 +424,11 @@ func GetWorkerPartnerListController(c *gin.Context) {
 }
 
 func GetTaskByIdController(c *gin.Context) {
-	jwtClaims, ok := c.Get("userInfo")
-	if !ok {
-		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
-
-	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
-
-	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
-		return
-	}
 
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
-	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID, worker.ID)
+
+	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))
 		c.Abort()
