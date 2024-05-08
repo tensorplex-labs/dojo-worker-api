@@ -480,10 +480,6 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 		return errors.New("maxResults is required")
 	}
 
-	if request.TotalRewards == 0 {
-		return errors.New("totalRewards is required")
-	}
-
 	return nil
 }
 
