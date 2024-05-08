@@ -23,13 +23,14 @@ func init() {
 	}
 	// sanity checks
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
-		LoadDotEnv("DB_USERNAME")
-		LoadDotEnv("DB_PASSWORD")
 		LoadDotEnv("DB_HOST")
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
 		// } else {
 		// 	LoadDotEnv("DATABASE_URL")
+	} else {
+		LoadDotEnv("DB_USERNAME")
+		LoadDotEnv("DB_PASSWORD")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")

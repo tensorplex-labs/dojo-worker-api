@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -78,7 +79,8 @@ func getAwsSecret(secretId string, region string) (AwsSecret, error) {
 	retryDelay := time.Second
 
 	for i := 0; i < maxRetries; i++ {
-		config, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+		// TODO try without region on staging first
+		config, err := config.LoadDefaultConfig(context.TODO())
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to load SDK config")
 			time.Sleep(retryDelay)
@@ -130,7 +132,7 @@ func GetPrismaClient() *PrismaClientWrapper {
 
 	existingWrapper, exists := handler.clientWrappers[currentConnString]
 	if exists {
-		log.Debug().Msg("Reusing existing Prisma client for connString")
+		log.Debug().Msg("Reusing existing Prisma client for connection string")
 		return &existingWrapper
 	}
 
@@ -186,6 +188,7 @@ func getPostgresCredentials() *DbSecrets {
 		secretId := utils.LoadDotEnv("AWS_SECRET_ID")
 		region := utils.LoadDotEnv("AWS_REGION")
 		awsSecret, err := getAwsSecret(secretId, region)
+		log.Info().Interface("secrets", awsSecret).Msg("Got AWS secrets")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error getting secrets")
 			return nil
@@ -213,9 +216,11 @@ func buildPostgresConnString(secrets *DbSecrets) string {
 
 	host := utils.LoadDotEnv("DB_HOST")
 	dbName := utils.LoadDotEnv("DB_NAME")
-	databaseUrl := "postgresql://" + secrets.username + ":" + secrets.password + "@" + host + "/" + dbName
+	safePassword := url.QueryEscape(secrets.password)
+	databaseUrl := "postgresql://" + secrets.username + ":" + safePassword + "@" + host + "/" + dbName
 	// hack this so Prisma can read it directly, handle complexities here
 	os.Setenv("DATABASE_URL", databaseUrl)
+	log.Info().Msgf("Built database connection string")
 	return databaseUrl
 }
 

@@ -98,7 +98,7 @@ func loadEnvVars() {
 func continuouslyReadEnv() {
 	loadEnvVars()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
