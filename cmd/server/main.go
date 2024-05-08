@@ -21,11 +21,8 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal().Msg("Error loading .env file")
-	}
-
+	loadEnvVars()
+	go continuouslyReadEnv()
 	port := utils.LoadDotEnv("SERVER_PORT")
 
 	router := gin.Default()
@@ -88,4 +85,24 @@ func onShutdown() {
 	connHandler.OnShutdown()
 	cache := cache.GetCacheInstance()
 	cache.Shutdown()
+}
+
+func loadEnvVars() {
+	// we need this to grab latest env varsfrom .env
+	err := godotenv.Overload()
+	if err != nil {
+		log.Error().Err(err).Msg("Error loading .env file")
+	}
+}
+
+func continuouslyReadEnv() {
+	loadEnvVars()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		log.Debug().Msg("Reloading & overloading .env file")
+		loadEnvVars()
+	}
 }

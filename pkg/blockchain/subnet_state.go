@@ -9,6 +9,7 @@ import (
 
 	"dojo-api/utils"
 	"dojo-api/pkg/orm"
+	"dojo-api/db"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -113,6 +114,30 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 	}
 }
 
+func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
+	if hotkey == "" {
+		log.Fatal().Msg("Hotkey is empty, cannot add to active validators/miners/axons")
+		return
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	minerUser, err := minerUserORM.GetUserByHotkey(hotkey)
+	if err != nil {
+		if err == db.ErrNotFound {
+			log.Info().Msg("User not found, continuing...")
+			return
+		}
+		log.Error().Err(err).Msg("Error getting user by hotkey")
+		return
+	}
+
+	if !minerUser.IsVerified {
+		if err := minerUserORM.ReregisterMiner(hotkey); err != nil{
+			log.Error().Err(err).Msg("Error reregistering miner")
+		}
+	}
+}
+
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	axonInfos, err := s.substrateService.GetAllAxons(subnetId)
 	if err != nil {
@@ -158,6 +183,8 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 			if !isRegistered {
 				log.Warn().Msgf("Hotkey %s is not registered", currAxonInfo.Hotkey)
 				s.OnNonRegisteredFound(currAxonInfo.Hotkey)
+			}else{
+				s.OnRegisteredFound(currAxonInfo.Hotkey)
 			}
 		}(axonInfo)
 	}

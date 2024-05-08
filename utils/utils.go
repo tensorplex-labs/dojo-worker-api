@@ -21,9 +21,18 @@ func init() {
 	if err != nil {
 		log.Fatal().Msg("Error loading .env file")
 	}
-
 	// sanity checks
-	LoadDotEnv("DATABASE_URL")
+	if LoadDotEnv("RUNTIME_ENV") == "aws" {
+		LoadDotEnv("DB_HOST")
+		LoadDotEnv("AWS_SECRET_ID")
+		LoadDotEnv("AWS_REGION")
+		// } else {
+		// 	LoadDotEnv("DATABASE_URL")
+	} else {
+		LoadDotEnv("DB_USERNAME")
+		LoadDotEnv("DB_PASSWORD")
+	}
+
 	LoadDotEnv("SUBSTRATE_API_URL")
 	LoadDotEnv("VALIDATOR_MIN_STAKE")
 	LoadDotEnv("JWT_SECRET")
