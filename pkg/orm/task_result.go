@@ -49,3 +49,18 @@ func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId strin
 	defer t.clientWrapper.AfterQuery()
 	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
 }
+
+func (orm *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
+	return orm.client.TaskResult.FindMany(
+		db.TaskResult.TaskID.Equals(taskId),
+		db.TaskResult.WorkerID.Equals(workerId),
+		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
+	).Exec(ctx)
+}
+
+func (orm *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
+	return orm.client.TaskResult.FindMany(
+		db.TaskResult.WorkerID.Equals(workerId),
+		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
+	).Exec(ctx)
+}
