@@ -23,7 +23,6 @@ import (
 func main() {
 	loadEnvVars()
 	go continuouslyReadEnv()
-
 	port := utils.LoadDotEnv("SERVER_PORT")
 
 	router := gin.Default()
