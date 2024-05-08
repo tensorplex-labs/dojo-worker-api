@@ -10,19 +10,15 @@ import (
 
 	"dojo-api/db"
 	"dojo-api/utils"
-	"os"
-	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-type Secret struct {
+type AwsSecret struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
@@ -75,8 +71,8 @@ func GetConnHandler() *ConnHandler {
 	return connHandler
 }
 
-func getSecret(secretName string, region string) (Secret, error) {
-	var unmarshalledSecrets Secret
+func getAwsSecret(secretId string, region string) (AwsSecret, error) {
+	var awsSecret AwsSecret
 
 	maxRetries := 10
 	retryDelay := time.Second
@@ -93,7 +89,7 @@ func getSecret(secretName string, region string) (Secret, error) {
 		svc := secretsmanager.NewFromConfig(config)
 
 		input := &secretsmanager.GetSecretValueInput{
-			SecretId:     aws.String(secretName),
+			SecretId:     aws.String(secretId),
 			VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
 		}
 
@@ -107,63 +103,34 @@ func getSecret(secretName string, region string) (Secret, error) {
 		// Decrypts secret using the associated KMS key.
 		var secretString string = *result.SecretString
 
-		if err := json.Unmarshal([]byte(secretString), &unmarshalledSecrets); err != nil {
+		if err := json.Unmarshal([]byte(secretString), &awsSecret); err != nil {
 			log.Error().Err(err).Msg("Unable to unmarshal secret")
 			time.Sleep(retryDelay)
 			continue
 		}
 
-		if unmarshalledSecrets.Username == "" || unmarshalledSecrets.Password == "" {
+		if awsSecret.Username == "" || awsSecret.Password == "" {
 			log.Error().Msg("Unable to retrieve username or password from secret")
 			time.Sleep(retryDelay)
 			continue
 		}
 
-		return unmarshalledSecrets, nil
+		return awsSecret, nil
 	}
 
-	return unmarshalledSecrets, fmt.Errorf("failed to retrieve secret after %d retries", maxRetries)
-}
-func GetPostgresConnString() string {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal().Err(err).Msg("Error loading .env file")
-		return ""
-	}
-
-	if utils.LoadDotEnv("RUNTIME_ENV") == "local" {
-		return utils.LoadDotEnv("DATABASE_URL")
-	} else {
-		var username string
-		var password string
-		postgresBase := "postgresql://%s:%s@%s:5432/%s?schema=public"
-
-		if os.Getenv("DB_USERNAME") == "" || os.Getenv("DB_PASSWORD") == "" {
-			secrets, err := getSecret(utils.LoadDotEnv("AWS_SECRET_NAME"), utils.LoadDotEnv("AWS_REGION"))
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error getting secrets")
-				return ""
-			}
-			username = secrets.Username
-			password = secrets.Password
-		} else {
-			username = os.Getenv("DB_USERNAME")
-			password = os.Getenv("DB_PASSWORD")
-		}
-
-		return fmt.Sprintf(postgresBase, username, password, utils.LoadDotEnv("DATABASE_HOST"), "subnet_db")
-	}
+	return awsSecret, fmt.Errorf("failed to retrieve secret after %d retries", maxRetries)
 }
 
 func GetPrismaClient() *PrismaClientWrapper {
 	handler := GetConnHandler()
 	credentials := getPostgresCredentials()
-	currentConnString := buildPostgresConnString(credentials.username, credentials.password)
+	currentConnString := buildPostgresConnString(credentials)
 	handler.mu.Lock()
 	defer handler.mu.Unlock()
 
 	existingWrapper, exists := handler.clientWrappers[currentConnString]
 	if exists {
-		log.Info().Msg("Reusing existing Prisma client for connString")
+		log.Debug().Msg("Reusing existing Prisma client for connString")
 		return &existingWrapper
 	}
 
@@ -188,7 +155,7 @@ func GetPrismaClient() *PrismaClientWrapper {
 
 	log.Warn().Msg("Failed to connect Prisma client for new connection string, attempting reuse...")
 	for _, wrapper := range handler.clientWrappers {
-		log.Debug().Msg("Reusing existing Prisma client")
+		log.Info().Msg("Reusing existing Prisma client")
 		return &wrapper
 	}
 	log.Error().Err(err).Msg("No existing Prisma clients to reuse")
@@ -212,23 +179,41 @@ func (h *ConnHandler) OnShutdown() error {
 type DbSecrets struct {
 	username string
 	password string
-	url      string
 }
 
-func getPostgresCredentials() DbSecrets {
-	// TODO @dev pull from aws secrets
+func getPostgresCredentials() *DbSecrets {
+	if utils.LoadDotEnv("RUNTIME_ENV") == "aws" {
+		secretId := utils.LoadDotEnv("AWS_SECRET_ID")
+		region := utils.LoadDotEnv("AWS_REGION")
+		awsSecret, err := getAwsSecret(secretId, region)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error getting secrets")
+			return nil
+		}
+
+		return &DbSecrets{
+			username: awsSecret.Username,
+			password: awsSecret.Password,
+		}
+	}
+
 	username := utils.LoadDotEnv("DB_USERNAME")
 	password := utils.LoadDotEnv("DB_PASSWORD")
-	return DbSecrets{
+	return &DbSecrets{
 		username: username,
 		password: password,
 	}
 }
 
-func buildPostgresConnString(user string, password string) string {
-	url := utils.LoadDotEnv("DB_URL")
+func buildPostgresConnString(secrets *DbSecrets) string {
+	if secrets == nil {
+		log.Warn().Msg("No secrets provided, using DATABASE_URL directly")
+		return utils.LoadDotEnv("DATABASE_URL")
+	}
+
+	host := utils.LoadDotEnv("DB_HOST")
 	dbName := utils.LoadDotEnv("DB_NAME")
-	databaseUrl := "postgresql://" + user + ":" + password + "@" + url + "/" + dbName
+	databaseUrl := "postgresql://" + secrets.username + ":" + secrets.password + "@" + host + "/" + dbName
 	// hack this so Prisma can read it directly, handle complexities here
 	os.Setenv("DATABASE_URL", databaseUrl)
 	return databaseUrl
@@ -236,6 +221,6 @@ func buildPostgresConnString(user string, password string) string {
 
 func getPrismaConfig() func(*db.PrismaConfig) {
 	secrets := getPostgresCredentials()
-	prismaConfig := db.WithDatasourceURL(buildPostgresConnString(secrets.username, secrets.password))
+	prismaConfig := db.WithDatasourceURL(buildPostgresConnString(secrets))
 	return prismaConfig
 }

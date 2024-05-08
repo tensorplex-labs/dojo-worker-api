@@ -22,17 +22,16 @@ func init() {
 		log.Fatal().Msg("Error loading .env file")
 	}
 	// sanity checks
-	if LoadDotEnv("RUNTIME_ENV") == "local" {
-		LoadDotEnv("DATABASE_URL")
-	} else {
-		if os.Getenv("DB_USERNAME") == "" || os.Getenv("DB_PASSWORD") == "" {
-			if os.Getenv("AWS_SECRET_NAME") == "" || os.Getenv("AWS_REGION") == "" {
-				log.Fatal().Msg("Either AWS credentials or database username and password must be set")
-			}
-		}
-
-		LoadDotEnv("DATABASE_HOST")
+	if LoadDotEnv("RUNTIME_ENV") == "aws" {
+		LoadDotEnv("DB_USERNAME")
+		LoadDotEnv("DB_PASSWORD")
+		LoadDotEnv("DB_HOST")
+		LoadDotEnv("AWS_SECRET_ID")
+		LoadDotEnv("AWS_REGION")
+		// } else {
+		// 	LoadDotEnv("DATABASE_URL")
 	}
+
 	LoadDotEnv("SUBSTRATE_API_URL")
 	LoadDotEnv("VALIDATOR_MIN_STAKE")
 	LoadDotEnv("JWT_SECRET")
