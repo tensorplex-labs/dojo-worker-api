@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"crypto/rand"
+	"encoding/hex"
 
 	"github.com/spruceid/siwe-go"
 
@@ -20,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -386,12 +387,17 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 }
 
 func generateRandomApiKey() (string, time.Time, error) {
-	apiKey, err := uuid.NewRandom()
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
+		log.Error().Stack().Err(err).Msg("Error generating random bytes")
+		return "", time.Time{}, err
 	}
-	expiry := time.Now().Add(24 * time.Hour)
-	return apiKey.String(), expiry, nil
+	key := hex.EncodeToString(b)
+	key = "sk-" + key
+
+	expiry := time.Now().Add(time.Hour * 24)
+	return key, expiry, nil
 }
 
 func isTimestampValid(requestTimestamp int64) bool {

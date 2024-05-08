@@ -11,17 +11,22 @@ import (
 )
 
 type MinerUserORM struct {
-	dbClient *db.PrismaClient
+	dbClient      *db.PrismaClient
+	clientWrapper *PrismaClientWrapper
 }
 
 func NewMinerUserORM() *MinerUserORM {
-	client := GetPrismaClient()
+	clientWrapper := GetPrismaClient()
 	return &MinerUserORM{
-		dbClient: client,
+		dbClient:      clientWrapper.Client,
+		clientWrapper: clientWrapper,
 	}
 }
 
 func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string, organisation string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
@@ -41,6 +46,9 @@ func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, 
 }
 
 func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
@@ -59,6 +67,9 @@ func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time
 }
 
 func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key cannot be an empty string")
 	}
@@ -74,6 +85,8 @@ func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error
 }
 
 func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
 	if hotkey == "" {
 		return nil, fmt.Errorf("hotkey cannot be an empty string")
 	}
@@ -89,6 +102,9 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 }
 
 func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	user, err := s.dbClient.MinerUser.FindFirst(
 		db.MinerUser.SubscriptionKey.Equals(subscriptionKey),
@@ -101,6 +117,9 @@ func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.Min
 }
 
 func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
 	ctx := context.Background()
 	_, err := s.dbClient.MinerUser.FindUnique(
 		db.MinerUser.Hotkey.Equals(hotkey),
