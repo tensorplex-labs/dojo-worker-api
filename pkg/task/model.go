@@ -24,6 +24,11 @@ type TaskResponse struct {
 	NumCriteria int             `json:"numCriteria"`
 }
 
+type TaskPaginationResponse struct {
+	TaskResponse
+	IsCompletedByWorker bool `json:"isCompletedByWorker"`
+}
+
 type SortField string
 
 const (
@@ -45,8 +50,8 @@ type Pagination struct {
 }
 
 type TaskPagination struct {
-	Tasks      []TaskResponse `json:"tasks"`
-	Pagination Pagination     `json:"pagination"`
+	Tasks      []TaskPaginationResponse `json:"tasks"`
+	Pagination Pagination               `json:"pagination"`
 }
 
 type CreateTaskRequest struct {

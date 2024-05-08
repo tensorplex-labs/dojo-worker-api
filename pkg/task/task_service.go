@@ -29,10 +29,10 @@ func NewTaskService() *TaskService {
 }
 
 // get task by id
-func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string, workerId string) (*TaskResponse, error) {
+func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id string) (*TaskResponse, error) {
 	taskORM := orm.NewTaskORM()
 
-	task, err := taskORM.GetTaskByIdWithSub(ctx, id, workerId)
+	task, err := taskORM.GetById(ctx, id)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Error in getting task by Id")
@@ -87,18 +87,19 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		return nil, errors
 	}
 
+	// Fetch all completed task by this worker
+	completedTaskMap, _ := taskService.GetCompletedTaskMap(ctx, workerId)
+
+	log.Debug().Interface("completedTaskMap", completedTaskMap).Msg("Completed Task Mapping -------")
+
 	tasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, []error{err}
 	}
 
-	// if len(tasks) == 0 {
-	// 	return nil, fmt.Errorf("no tasks found")
-	// }
-
 	// Convert tasks to TaskResponse model
-	taskResponses := make([]TaskResponse, 0)
+	taskResponses := make([]TaskPaginationResponse, 0)
 	for _, task := range tasks {
 		var rawJSON json.RawMessage
 		err = json.Unmarshal([]byte(task.TaskData), &rawJSON)
@@ -106,17 +107,20 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 			log.Error().Err(err).Msg("Error parsing task data")
 			return nil, []error{err}
 		}
-		taskResponse := TaskResponse{
-			ID:          task.ID,
-			Title:       task.Title,
-			Body:        task.Body,
-			Type:        task.Type,
-			ExpireAt:    task.ExpireAt,
-			TaskData:    rawJSON,
-			Status:      task.Status,
-			NumResults:  task.NumResults,
-			MaxResults:  task.MaxResults,
-			NumCriteria: task.NumCriteria,
+		taskResponse := TaskPaginationResponse{
+			TaskResponse: TaskResponse{ // Fill the embedded TaskResponse structure.
+				ID:          task.ID,
+				Title:       task.Title,
+				Body:        task.Body,
+				ExpireAt:    task.ExpireAt,
+				Type:        task.Type,
+				TaskData:    rawJSON,
+				Status:      task.Status,
+				NumResults:  task.NumResults,
+				MaxResults:  task.MaxResults,
+				NumCriteria: task.NumCriteria,
+			},
+			IsCompletedByWorker: completedTaskMap[task.ID], // Set the completion status.
 		}
 		taskResponses = append(taskResponses, taskResponse)
 	}
@@ -529,4 +533,37 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 		taskData.Responses[i].Completion = completionMap
 	}
 	return taskData, nil
+}
+
+func (t *TaskService) ValidateCompletedTask(ctx context.Context, taskId string, workerId string) (bool, error) {
+	taskResult, err := t.taskResultORM.GetCompletedTResultByTaskAndWorker(ctx, taskId, workerId)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil // No existing task result found
+		}
+		return false, err // An error occurred while fetching the task result
+	}
+	return len(taskResult) > 0, nil // Task result exists
+}
+
+func (t *TaskService) GetCompletedTaskMap(ctx context.Context, workerId string) (map[string]bool, error) {
+	// Fetch all completed task by this worker
+	completedtResult, err := t.taskResultORM.GetCompletedTResultByWorker(ctx, workerId)
+	// Convert to a map for quick lookup
+	completedTaskMap := make(map[string]bool)
+
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return completedTaskMap, nil // No existing task result found
+		}
+		return nil, err
+	}
+
+	if len(completedtResult) > 0 {
+		for _, ts := range completedtResult {
+			completedTaskMap[ts.TaskID] = true
+		}
+	}
+
+	return completedTaskMap, nil // Task result exists
 }
