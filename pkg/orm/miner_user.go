@@ -110,9 +110,34 @@ func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 	).Exec(ctx)
 
 	if err != nil {
+		if err == db.ErrNotFound {
+			log.Info().Msg("User not found, continuing...")
+			return nil
+		}
 		log.Error().Err(err).Msg("Error deregistering user")
 		return err
 	}
 	log.Info().Msg("Miner deregistered successfully")
+	return nil
+}
+
+func (s *MinerUserORM) ReregisterMiner(hotkey string) error {
+	ctx := context.Background()
+	_, err := s.dbClient.MinerUser.FindUnique(
+		db.MinerUser.Hotkey.Equals(hotkey),
+	).Update(
+		db.MinerUser.IsVerified.Set(true),
+		db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour * 24)),
+	).Exec(ctx)
+
+	if err != nil {
+		if err == db.ErrNotFound {
+			log.Info().Msg("User not found, continuing...")
+			return nil
+		}
+		log.Error().Err(err).Msg("Error reregistering user")
+		return err
+	}
+	log.Info().Msg("Miner reregistered successfully")
 	return nil
 }
