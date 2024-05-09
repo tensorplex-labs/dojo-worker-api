@@ -116,7 +116,6 @@ func CreateTasksController(c *gin.Context) {
 	})
 }
 func SubmitTaskResultController(c *gin.Context) {
-	// TODO possibly refactor after merging with oolwin's MR
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
 		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")

@@ -335,9 +335,6 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 			}
 		case CriteriaTypeMultiSelect:
 			multiSelect, _ := item.Value.(MultiSelectValue)
-			if len(multiSelect) == 0 {
-				return nil, fmt.Errorf("multi-select criteria provided but no selections found")
-			}
 
 			for _, criteria := range taskData.Criteria {
 				if criteria.Type != itemType {
