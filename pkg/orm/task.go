@@ -116,7 +116,7 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 }
 
 // TODO: Optimization
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
@@ -127,7 +127,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Collect Subscription keys from the fetched WorkerPartner records
@@ -138,7 +138,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	if len(subscriptionKeys) == 0 {
 		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
-		return nil, err
+		return nil, 0, err
 	}
 
 	filterParams := []db.TaskWhereParam{
@@ -163,8 +163,17 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
-		return nil, err
+		return nil, 0, err
 	}
 
-	return tasks, nil
+	totalTasks, err := o.dbClient.Task.FindMany(
+		filterParams...,
+	).Exec(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching total Tasks")
+		return nil, 0, err
+	}
+
+	return tasks, len(totalTasks), nil
 }
