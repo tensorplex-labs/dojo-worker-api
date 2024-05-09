@@ -93,14 +93,9 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 
 	log.Debug().Interface("completedTaskMap", completedTaskMap).Msg("Completed Task Mapping -------")
 
-	tasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
+	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
-		return nil, []error{err}
-	}
-
-	tasksByType, err := taskService.taskORM.GetTasksByTaskType(ctx, taskTypes)
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return nil, []error{err}
 	}
 
@@ -131,7 +126,6 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		taskResponses = append(taskResponses, taskResponse)
 	}
 
-	totalTasks := len(tasksByType)
 	totalPages := int(math.Ceil(float64(totalTasks) / float64(limit)))
 
 	// Construct pagination metadata
