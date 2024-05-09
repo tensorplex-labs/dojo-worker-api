@@ -188,7 +188,7 @@ func getPostgresCredentials() *DbSecrets {
 		secretId := utils.LoadDotEnv("AWS_SECRET_ID")
 		region := utils.LoadDotEnv("AWS_REGION")
 		awsSecret, err := getAwsSecret(secretId, region)
-		log.Info().Interface("secrets", awsSecret).Msg("Got AWS secrets")
+		log.Debug().Msg("Got AWS secrets")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error getting secrets")
 			return nil
@@ -220,7 +220,6 @@ func buildPostgresConnString(secrets *DbSecrets) string {
 	databaseUrl := "postgresql://" + secrets.username + ":" + safePassword + "@" + host + "/" + dbName
 	// hack this so Prisma can read it directly, handle complexities here
 	os.Setenv("DATABASE_URL", databaseUrl)
-	log.Info().Msgf("Built database connection string")
 	return databaseUrl
 }
 
