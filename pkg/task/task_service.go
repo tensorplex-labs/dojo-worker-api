@@ -68,6 +68,7 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
 	offset := (page - 1) * limit
+	// taskORM := orm.NewTaskORM()
 
 	// Determine the sort order dynamically
 	var sortQuery db.TaskOrderByParam
@@ -82,9 +83,9 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	}
 
-	taskTypes, errors := convertStringToTaskTypes(types)
-	if len(errors) > 0 {
-		return nil, errors
+	taskTypes, errs := convertStringToTaskTypes(types)
+	if len(errs) > 0 {
+		return nil, errs
 	}
 
 	// Fetch all completed task by this worker
@@ -95,6 +96,11 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 	tasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
+		return nil, []error{err}
+	}
+
+	tasksByType, err := taskService.taskORM.GetTasksByTaskType(ctx, taskTypes)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return nil, []error{err}
 	}
 
@@ -125,7 +131,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		taskResponses = append(taskResponses, taskResponse)
 	}
 
-	totalTasks := len(tasks)
+	totalTasks := len(tasksByType)
 	totalPages := int(math.Ceil(float64(totalTasks) / float64(limit)))
 
 	// Construct pagination metadata

@@ -65,6 +65,16 @@ func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db
 	return tasks, err
 }
 
+func (o *TaskORM) GetTasksByTaskType(ctx context.Context, taskTypes []db.TaskType) ([]db.TaskModel, error) {
+
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+	tasks, err := o.dbClient.Task.FindMany(
+		db.Task.Type.In(taskTypes),
+	).Exec(ctx)
+	return tasks, err
+}
+
 // TODO: Optimization
 func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
 
