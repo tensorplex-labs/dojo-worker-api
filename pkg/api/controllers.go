@@ -239,14 +239,13 @@ func MinerApplicationController(c *gin.Context) {
 	requestMap, ok := requestInterface.(map[string]string)
 	if !ok {
 		log.Error().Msg("Invalid request body")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
-		c.Abort()
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
 		return
 	}
 
@@ -261,12 +260,12 @@ func MinerApplicationController(c *gin.Context) {
 
 	if organisationExists {
 		if _, err = minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey, organisation); err != nil {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	} else {
 		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"], subscriptionKey); err != nil {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
 	}
@@ -275,10 +274,11 @@ func MinerApplicationController(c *gin.Context) {
 	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
 	err = email.SendEmail(requestMap["email"], body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
 		return
 	}
 
+	c.JSON(http.StatusOK, defaultSuccessResponse("We are currently reviewing your application. Once approved, we will send you a miner API key and subscription key via the email you provided."))
 }
 
 func MinerInfoController(c *gin.Context) {
