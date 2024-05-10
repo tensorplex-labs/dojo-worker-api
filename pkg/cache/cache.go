@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"crypto/tls"
 	"dojo-api/utils"
 	"fmt"
 	"os"
@@ -38,6 +39,12 @@ func GetCacheInstance() *Cache {
 			InitAddress:  []string{redis_url},
 			DisableCache: true,
 		}
+		if runtime_env := utils.LoadDotEnv("RUNTIME_ENV"); runtime_env == "aws" {
+			clientOpts.TLSConfig = &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			}
+		}
+
 		if username, usernameSet := os.LookupEnv("REDIS_USERNAME"); usernameSet {
 			clientOpts.Username = username
 		}
