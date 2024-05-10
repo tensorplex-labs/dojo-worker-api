@@ -55,7 +55,7 @@ func GetCacheInstance() *Cache {
 		if err != nil {
 			log.Panic().Err(err).Msg("Failed to initialise Redis connection!")
 		}
-		log.Info().Msgf("Successfully connected to Redis at %s", host)
+		log.Info().Msgf("Successfully connected to Redis")
 		instance = &Cache{redis: redisClient}
 	})
 	return instance
