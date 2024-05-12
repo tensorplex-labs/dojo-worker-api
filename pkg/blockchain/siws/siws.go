@@ -1,4 +1,4 @@
-package blockchain
+package siws
 
 import (
 	"encoding/hex"
@@ -53,7 +53,7 @@ func checkAddressChecksum(decoded []byte) (bool, int, int, int) {
 }
 
 // replicated from polkadot util-crypto's decodeAddress function
-func ss58AddressToPublickey(address string) ([]byte, error) {
+func SS58AddressToPublickey(address string) ([]byte, error) {
 	decoded := base58.Decode(address)
 	allowedDecodedLengths := []int{3, 4, 6, 10, 35, 36, 37, 38}
 	isValidLength := false
@@ -78,7 +78,7 @@ func ss58AddressToPublickey(address string) ([]byte, error) {
 // given a message, ss58 address and signature from frontend generated using polkadot.js
 // This is meant to be used together with libraries like SIWS (https://github.com/TalismanSociety/siws)
 func SS58VerifySignature(siwsMessage, ss58address, signatureFromFrontend string) (bool, error) {
-	pubkeyBytes, err := ss58AddressToPublickey(ss58address)
+	pubkeyBytes, err := SS58AddressToPublickey(ss58address)
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to derive public key from address: %s", ss58address)
 		return false, err
