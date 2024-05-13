@@ -113,7 +113,7 @@ func SS58VerifySignature(siwsMessage, ss58address, signatureFromFrontend string)
 		return false, err
 	}
 	log.Info().Msgf("Signature verification result: %v", ok)
-	return true, nil
+	return ok, nil
 }
 
 // UNUSED for now, can't remember which was working
