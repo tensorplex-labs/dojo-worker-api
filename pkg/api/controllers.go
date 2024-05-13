@@ -12,18 +12,30 @@ import (
 	"dojo-api/db"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
+	"dojo-api/pkg/miner"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 	"dojo-api/pkg/worker"
 	"dojo-api/utils"
 
-	"github.com/spruceid/siwe-go"
-
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
+	"github.com/spruceid/siwe-go"
 )
 
+// WorkerLoginController godoc
+//
+//	@Summary		Worker login
+//	@Description	Log in a worker by providing their wallet address, chain ID, message, signature, and timestamp
+//	@Tags			Authentication
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		worker.WorkerLoginRequest						true	"Request body containing the worker login details"
+//	@Success		200		{object}	ApiResponse{body=worker.WorkerLoginSuccessResp}	"Worker logged in successfully"
+//	@Failure		400		{object}	ApiResponse										"Invalid wallet address or chain ID"
+//	@Failure		500		{object}	ApiResponse										"Failed to create worker"
+//	@Router			/api/v1/worker/login/auth [post]
 func WorkerLoginController(c *gin.Context) {
 	walletAddressInterface, _ := c.Get("WalletAddress")
 	chainIdInterface, _ := c.Get("ChainId")
@@ -54,11 +66,13 @@ func WorkerLoginController(c *gin.Context) {
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"token": token,
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(worker.WorkerLoginSuccessResp{
+		Token: token,
 	}))
 }
 
+// TODO add notation after S3 MR merged
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
@@ -115,6 +129,23 @@ func CreateTasksController(c *gin.Context) {
 		Error:   errors,
 	})
 }
+
+// SubmitTaskResultController godoc
+//
+//	@Summary		Submit task result
+//	@Description	Submit the result of a task
+//	@Tags			Tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string											true	"Bearer token"
+//	@Param			task-id			path		string											true	"Task ID"
+//	@Param			body			body		task.SubmitTaskResultRequest					true	"Request body containing the task result data"
+//	@Success		200				{object}	ApiResponse{body=task.SubmitTaskResultResponse}	"Task result submitted successfully"
+//	@Failure		400				{object}	ApiResponse										"Invalid request body"
+//	@Failure		401				{object}	ApiResponse										"Unauthorized"
+//	@Failure		404				{object}	ApiResponse										"Task not found"
+//	@Failure		500				{object}	ApiResponse										"Internal server error"
+//	@Router			/api/v1/tasks/submit-result/{task-id} [put]
 func SubmitTaskResultController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -168,7 +199,7 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
-	task, err := taskService.GetTaskById(ctx, taskId)
+	taskData, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			log.Error().Err(err).Str("taskId", taskId).Msg("Task not found")
@@ -184,7 +215,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	log.Info().Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Dojo Worker and Task ID pulled")
 
 	// Update the task with the result data
-	updatedTask, err := taskService.UpdateTaskResults(ctx, task, worker.ID, requestBody.ResultData)
+	updatedTask, err := taskService.UpdateTaskResults(ctx, taskData, worker.ID, requestBody.ResultData)
 	if err != nil {
 		log.Error().Err(err).Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Error updating task with result data")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -192,8 +223,8 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
-		"numResults": updatedTask.NumResults,
+	c.JSON(http.StatusOK, defaultSuccessResponse(task.SubmitTaskResultResponse{
+		NumResults: updatedTask.NumResults,
 	}))
 }
 
@@ -226,6 +257,18 @@ func SubmitTaskResultController(c *gin.Context) {
 // 	}
 // }
 
+// MinerApplicationController godoc
+//
+//	@Summary		Apply for a miner API key and subscription key
+//	@Description	Submit an application for a miner API key and subscription key by providing the necessary details
+//	@Tags			Miner
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		miner.MinerApplicationRequest	true	"Request body containing the miner application details (organisationName is optional)"
+//	@Success		200		{object}	ApiResponse{body=string}		"Application submitted successfully"
+//	@Failure		400		{object}	ApiResponse						"Invalid request body or parameters"
+//	@Failure		500		{object}	ApiResponse						"Internal server error"
+//	@Router			/api/v1/miner/miner-application [post]
 func MinerApplicationController(c *gin.Context) {
 	requestInterface, exists := c.Get("requestMap")
 	if !exists {
@@ -280,6 +323,18 @@ func MinerApplicationController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse("We are currently reviewing your application. Once approved, we will send you a miner API key and subscription key via the email you provided."))
 }
 
+// MinerInfoController godoc
+//
+//	@Summary		Get miner information
+//	@Description	Retrieve miner information using the miner's user context
+//	@Tags			Miner
+//	@Accept			json
+//	@Produce		json
+//	@Param			hotkey		path		string										true	"Hot Key"
+//	@Param			x-api-key	header		string										true	"API Key"
+//	@Success		200			{object}	ApiResponse{body=miner.MinerInfoResponse}	"Miner information retrieved successfully"
+//	@Failure		401			{object}	ApiResponse									"Unauthorized"
+//	@Router			/api/v1/miner/info/{hotkey} [get]
 func MinerInfoController(c *gin.Context) {
 	minerUserInterface, ok := c.Get("minerUser")
 	if !ok {
@@ -288,12 +343,24 @@ func MinerInfoController(c *gin.Context) {
 		return
 	}
 	minerUser := minerUserInterface.(*db.MinerUserModel)
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]string{
-		"minerId":         minerUser.ID,
-		"subscriptionKey": minerUser.SubscriptionKey,
+	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerInfoResponse{
+		MinerId:         minerUser.ID,
+		SubscriptionKey: minerUser.SubscriptionKey,
 	}))
 }
 
+// WorkerPartnerCreateController godoc
+//
+//	@Summary		Create worker-miner partnership
+//	@Description	Create a partnership between a worker and a miner
+//	@Tags			Worker Partner
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string								true	"Bearer token"
+//	@Param			body			body		worker.WorkerPartnerCreateRequest	true	"Request body containing the name and miner subscription key"
+//	@Success		200				{object}	ApiResponse{body=string}			"Successfully created worker-miner partnership"
+//	@Failure		500				{object}	ApiResponse							"Internal server error"
+//	@Router			/api/v1/worker/partner [post]
 func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	var walletAddress string
@@ -370,6 +437,19 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
 }
 
+// GetWorkerPartnerListController godoc
+//
+//	@Summary		Get worker partner list
+//	@Description	Retrieve a list of partners for the authenticated worker
+//	@Tags			Worker Partner
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string												true	"Bearer token"
+//	@Success		200				{object}	ApiResponse{body=worker.ListWorkerPartnersResponse}	"Successfully retrieved worker partners"
+//	@Failure		401				{object}	ApiResponse											"Unauthorized"
+//	@Failure		404				{object}	ApiResponse											"Worker not found"
+//	@Failure		500				{object}	ApiResponse											"Internal server error"
+//	@Router			/api/v1/worker/partner/list [get]
 func GetWorkerPartnerListController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -422,6 +502,18 @@ func GetWorkerPartnerListController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(listWorkerPartnersResponse))
 }
 
+// GetTaskById godoc
+//
+//	@Summary		Retrieve task by ID
+//	@Description	Get details of a task by its ID
+//	@Tags			Tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			task-id	path		string								true	"Task ID"
+//	@Success		200		{object}	ApiResponse{body=task.TaskResponse}	"Successfully retrieved task response"
+//	@Failure		404		{object}	ApiResponse{error=string}			"Task not found, error message wrapped in ApiResponse structure"
+//	@Failure		500		{object}	ApiResponse{error=string}			"Internal server error, error message wrapped in ApiResponse structure"
+//	@Router			/api/v1/tasks/{task-id} [get]
 func GetTaskByIdController(c *gin.Context) {
 
 	taskID := c.Param("task-id")
@@ -443,6 +535,21 @@ func GetTaskByIdController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(task))
 }
 
+// GetTasksByPage godoc
+//
+//	@Summary		Retrieve tasks by pagination
+//	@Description	Get a paginated list of tasks based on the specified parameters
+//	@Tags			Tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string									true	"Bearer token"
+//	@Param			task			query		string									true	"Comma-separated list of task types (e.g., CODE_GENERATION,TEXT_TO_IMAGE,DIALOGUE). Use 'All' to include all types."
+//	@Param			page			query		int										false	"Page number (default is 1)"
+//	@Param			limit			query		int										false	"Number of tasks per page (default is 10)"
+//	@Param			sort			query		string									false	"Sort field (default is createdAt)"
+//	@Success		200				{object}	ApiResponse{body=task.TaskPagination}	"Successfully retrieved task pagination response"
+//	@Failure		500				{object}	ApiResponse								"Internal server error - success is always false"	{ "success": false, "error": "Internal server error", "body": null }
+//	@Router			/api/v1/tasks [get]
 func GetTasksByPageController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -571,6 +678,18 @@ func GetTaskResultsController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"taskResults": formattedTaskResults}))
 }
 
+// UpdateWorkerPartnerController godoc
+//
+//	@Summary		Update worker partner details
+//	@Description	Update the subscription key and name of a worker partner
+//	@Tags			Worker Partner
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string													true	"Bearer token"
+//	@Param			body			body		worker.UpdateWorkerPartnerRequest						true	"Request body containing the details to update"
+//	@Success		200				{object}	ApiResponse{body=worker.UpdateWorkerPartnerResponse}	"Successfully updated worker partner"
+//	@Failure		500				{object}	ApiResponse												"Internal server error - failed to update worker partner"
+//	@Router			/api/v1/partner/edit [put]
 func UpdateWorkerPartnerController(c *gin.Context) {
 	jwtClaims, _ := c.Get("userInfo")
 
@@ -619,6 +738,18 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 	}))
 }
 
+// DisableMinerByWorkerController godoc
+//
+//	@Summary		Disable miner by worker
+//	@Description	Disable a miner by providing the worker's subscription key and a disable flag
+//	@Tags			Worker Partner
+//	@Accept			json
+//	@Produce		json
+//	@Param			Authorization	header		string											true	"Bearer token"
+//	@Param			body			body		worker.DisableMinerRequest						true	"Request body containing the miner subscription key and disable flag"
+//	@Success		200				{object}	ApiResponse{body=worker.DisableSucessResponse}	"Miner disabled successfully"
+//	@Failure		500				{object}	ApiResponse										"Internal server error - failed to disable worker partner"
+//	@Router			/api/v1/worker/partner/disable [put]
 func DisableMinerByWorkerController(c *gin.Context) {
 	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
@@ -695,6 +826,18 @@ func parseBool(value interface{}) (*bool, error) {
 	return &valueParsed, nil
 }
 
+// DisableWorkerByMinerController godoc
+//
+//	@Summary		Disable worker by miner
+//	@Description	Disable a worker by providing the worker's ID and a disable flag
+//	@Tags			Worker Partner
+//	@Accept			json
+//	@Produce		json
+//	@Param			x-api-key	header		string											true	"API Key"
+//	@Param			body		body		worker.DisableWorkerRequest						true	"Request body containing the worker ID and disable flag"
+//	@Success		200			{object}	ApiResponse{body=worker.DisableSucessResponse}	"Worker disabled successfully"
+//	@Failure		500			{object}	ApiResponse										"Internal server error - failed to disable worker partner"
+//	@Router			/api/v1/miner/partner/disable [put]
 func DisableWorkerByMinerController(c *gin.Context) {
 	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
@@ -746,6 +889,18 @@ func DisableWorkerByMinerController(c *gin.Context) {
 	}
 }
 
+// GenerateNonceController godoc
+//
+//	@Summary		Generate nonce
+//	@Description	Generate a nonce for a given wallet address
+//	@Tags			Authentication
+//	@Accept			json
+//	@Produce		json
+//	@Param			address	path		string											true	"Wallet address"
+//	@Success		200		{object}	ApiResponse{body=worker.GenerateNonceResponse}	"Nonce generated successfully"
+//	@Failure		400		{object}	ApiResponse										"Address parameter is required"
+//	@Failure		500		{object}	ApiResponse										"Failed to store nonce"
+//	@Router			/api/v1/auth/{address} [get]
 func GenerateNonceController(c *gin.Context) {
 	address := c.Param("address")
 	log.Info().Str("address", address).Msg("Getting address from param")
@@ -765,5 +920,5 @@ func GenerateNonceController(c *gin.Context) {
 	}
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
-	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(worker.GenerateNonceResponse{Nonce: nonce}))
 }

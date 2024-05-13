@@ -12,16 +12,16 @@ import (
 
 // TaskResponse reflects the task structure used in API responses
 type TaskResponse struct {
-	ID          string          `json:"taskId"`
-	Title       string          `json:"title"`
-	Body        string          `json:"body"`
-	ExpireAt    time.Time       `json:"expireAt"`
-	Type        db.TaskType     `json:"type"`
-	TaskData    json.RawMessage `json:"taskData"`
-	Status      db.TaskStatus   `json:"status"`
-	NumResults  int             `json:"numResults"`
-	MaxResults  int             `json:"maxResults"`
-	NumCriteria int             `json:"numCriteria"`
+	ID          string        `json:"taskId"`
+	Title       string        `json:"title"`
+	Body        string        `json:"body"`
+	ExpireAt    time.Time     `json:"expireAt"`
+	Type        db.TaskType   `json:"type"`
+	TaskData    interface{}   `json:"taskData"`
+	Status      db.TaskStatus `json:"status"`
+	NumResults  int           `json:"numResults"`
+	MaxResults  int           `json:"maxResults"`
+	NumCriteria int           `json:"numCriteria"`
 }
 
 type TaskPaginationResponse struct {
@@ -103,6 +103,10 @@ type Result struct {
 
 type SubmitTaskResultRequest struct {
 	ResultData []Result `json:"resultData"`
+}
+
+type SubmitTaskResultResponse struct {
+	NumResults int `json:"numResults"`
 }
 
 type (

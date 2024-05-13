@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "dojo-api/docs"
 	"dojo-api/pkg/api"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
@@ -18,13 +19,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+//	@title			Dojo Worker API
+//	@version		1.0
+//	@description	This is the worker API for the Dojo project.
 
 func main() {
 	loadEnvVars()
 	go continuouslyReadEnv()
 	port := utils.LoadDotEnv("SERVER_PORT")
-
 	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
 	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
@@ -41,6 +47,9 @@ func main() {
 	}
 	router.Use(cors.New(config))
 	api.LoginRoutes(router)
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Hello, this is dojo-go-api",
