@@ -20,16 +20,18 @@ const _SIWE_DATETIME = "([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([0
 
 var SiwsExpireAtExp = fmt.Sprintf("Expiration Time: (?P<expireAt>%s)?", _SIWE_DATETIME)
 
-var SiwsUriExp = fmt.Sprintf("URI: (?P<uri>%s?)\\n", _RFC3986)
+var SiwsUriExp = fmt.Sprintf("URI: (?P<uri>%s?)\n", _RFC3986)
 
+const SiwsVersionExp = "Version: (?P<version>.+?)\n"
 const SiwsDomainExp = "(?P<domain>.+?) wants you to sign in with your .+? account:\n"
 
 // use dotall as prefix
-var SiwsMessageExp = regexp.MustCompile(strings.Join([]string{SiwsDomainExp, SiwsAccountExp, SiwsStatementExp, SiwsUriExp, SiwsNonceExp, SiwsIssuedAtExp, SiwsExpireAtExp}, ".*?"))
+var SiwsMessageExp = regexp.MustCompile(strings.Join([]string{SiwsDomainExp, SiwsAccountExp, SiwsStatementExp, SiwsUriExp, SiwsVersionExp, SiwsNonceExp, SiwsIssuedAtExp, SiwsExpireAtExp}, ".*?"))
 
 type SiwsMessage struct {
 	rawMessage   string
 	matchResults map[string]interface{}
+	Version      string
 	URI          string
 	Statement    string
 	Domain       string
@@ -81,6 +83,7 @@ func ParseMessage(message string) (*SiwsMessage, error) {
 	log.Debug().Msgf("Nonce: %v", result["nonce"])
 	log.Debug().Msgf("Issued At: %v", result["issuedAt"])
 	log.Debug().Msgf("Expire At: %v\n", result["expireAt"])
+	log.Debug().Msgf("version %v\n", result["version"])
 
 	if _, ok := result["uri"].(string); !ok {
 		log.Error().Msg("URI is required")
@@ -158,6 +161,11 @@ func ParseMessage(message string) (*SiwsMessage, error) {
 	} else {
 		log.Error().Err(err).Msg("Failed to parse Expire At")
 		return nil, fmt.Errorf("failed to parse expire at: %v", err)
+	}
+
+	if version, ok := result["version"]; ok {
+		versionStr := version.(string)
+		siwsMessage.Version = versionStr
 	}
 
 	return siwsMessage, nil
