@@ -22,7 +22,7 @@ var SiwsExpireAtExp = fmt.Sprintf("Expiration Time: (?P<expireAt>%s)?", _SIWE_DA
 
 var SiwsUriExp = fmt.Sprintf("URI: (?P<uri>%s?)\\n", _RFC3986)
 
-const SiwsDomainExp = "(?P<domain>.+?) wants you to sign in with your Polkadot account:\n"
+const SiwsDomainExp = "(?P<domain>.+?) wants you to sign in with your .+? account:\n"
 
 // use dotall as prefix
 var SiwsMessageExp = regexp.MustCompile(strings.Join([]string{SiwsDomainExp, SiwsAccountExp, SiwsStatementExp, SiwsUriExp, SiwsNonceExp, SiwsIssuedAtExp, SiwsExpireAtExp}, ".*?"))
@@ -74,13 +74,13 @@ func ParseMessage(message string) (*SiwsMessage, error) {
 			}
 		}
 
-		fmt.Println("uri:", result["uri"])
-		fmt.Println("statement:", result["statement"])
-		fmt.Println("domain:", result["domain"])
-		fmt.Println("Account:", result["account"])
-		fmt.Println("Nonce:", result["nonce"])
-		fmt.Println("Issued At:", result["issuedAt"])
-		fmt.Println("Expire At", result["expireAt"])
+		log.Debug().Msgf("uri: %v", result["uri"])
+		log.Debug().Msgf("statement: %v", result["statement"])
+		log.Debug().Msgf("domain: %v", result["domain"])
+		log.Debug().Msgf("Account: %v", result["account"])
+		log.Debug().Msgf("Nonce: %v", result["nonce"])
+		log.Debug().Msgf("Issued At: %v", result["issuedAt"])
+		log.Debug().Msgf("Expire At: %v", result["expireAt"])
 	}
 
 	if _, ok := result["uri"].(string); !ok {
