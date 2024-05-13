@@ -73,15 +73,14 @@ func ParseMessage(message string) (*SiwsMessage, error) {
 				result[name] = match[i]
 			}
 		}
-
-		log.Debug().Msgf("uri: %v", result["uri"])
-		log.Debug().Msgf("statement: %v", result["statement"])
-		log.Debug().Msgf("domain: %v", result["domain"])
-		log.Debug().Msgf("Account: %v", result["account"])
-		log.Debug().Msgf("Nonce: %v", result["nonce"])
-		log.Debug().Msgf("Issued At: %v", result["issuedAt"])
-		log.Debug().Msgf("Expire At: %v", result["expireAt"])
 	}
+	log.Debug().Msgf("uri: %v", result["uri"])
+	log.Debug().Msgf("statement: %v", result["statement"])
+	log.Debug().Msgf("domain: %v", result["domain"])
+	log.Debug().Msgf("Account: %v", result["account"])
+	log.Debug().Msgf("Nonce: %v", result["nonce"])
+	log.Debug().Msgf("Issued At: %v", result["issuedAt"])
+	log.Debug().Msgf("Expire At: %v\n", result["expireAt"])
 
 	if _, ok := result["uri"].(string); !ok {
 		log.Error().Msg("URI is required")
