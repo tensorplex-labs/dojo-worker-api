@@ -186,10 +186,12 @@ func IsValidTaskType(taskType interface{}) (bool, error) {
 }
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
-	if criteriaType == CriteriaTypeMultiSelect || criteriaType == CriteriaTypeRanking || criteriaType == CriteriaTypeScore {
-		return true
-	}
-	return false
+    switch criteriaType {
+    case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
+        return true
+    default:
+        return false
+    }
 }
 
 // create task
@@ -430,18 +432,28 @@ func ValidateTaskData(taskData TaskData) error {
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-		case CriteriaTypeRanking:
+		case CriteriaTypeRanking, CriteriaMultiScore:
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
 			if task != db.TaskTypeDialogue {
 				if len(criteria.Options) != len(taskData.Responses) {
-					return fmt.Errorf("number of options for criteria: %v should match number of responses: %v", CriteriaTypeRanking, len(taskData.Responses))
+					return fmt.Errorf("number of options should match number of responses: %v", len(taskData.Responses))
+				}
+			}
+
+			if criteria.Type == CriteriaMultiScore {
+				if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
+					return errors.New("valid min or max is required for numeric criteria")
+				}
+
+				if criteria.Min >= criteria.Max {
+					return errors.New("min must be less than max")
 				}
 			}
 		case CriteriaTypeScore:
-			if criteria.Min == 0 && criteria.Max == 0 {
-				return errors.New("min or max is required for numeric criteria")
+			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
+				return errors.New("valid min or max is required for numeric criteria")
 			}
 
 			if criteria.Min >= criteria.Max {

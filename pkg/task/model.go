@@ -94,6 +94,7 @@ const (
 	CriteriaTypeRanking     CriteriaType = "ranking"
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
+	CriteriaMultiScore CriteriaType = "multi-score"
 )
 
 type Result struct {

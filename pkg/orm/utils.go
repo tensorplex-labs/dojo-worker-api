@@ -209,11 +209,6 @@ func getPostgresCredentials() *DbSecrets {
 }
 
 func buildPostgresConnString(secrets *DbSecrets) string {
-	if secrets == nil {
-		log.Warn().Msg("No secrets provided, using DATABASE_URL directly")
-		return utils.LoadDotEnv("DATABASE_URL")
-	}
-
 	host := utils.LoadDotEnv("DB_HOST")
 	dbName := utils.LoadDotEnv("DB_NAME")
 	safePassword := url.QueryEscape(secrets.password)
