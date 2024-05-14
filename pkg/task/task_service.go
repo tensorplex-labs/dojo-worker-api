@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"time"
+	"slices"
 
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
@@ -347,7 +348,28 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 					return nil, fmt.Errorf("number of selections provided exceeds number of options")
 				}
 			}
+		case CriteriaMultiScore:
+			multiScore, _ := item.Value.(MultiScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type != itemType {
+					continue
+				}
 
+				if len(multiScore) != len(criteria.Options) {
+					return nil, fmt.Errorf("number of scores provided does not match number of options")
+				}
+
+				for option, score := range multiScore {
+					minScore, maxScore := criteria.Min, criteria.Max
+					if float64(score) < minScore || float64(score) > maxScore {
+						return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
+					}
+
+					if !slices.Contains(criteria.Options, option){
+						return nil, fmt.Errorf("option %v not found in criteria options", option)
+					}
+				}
+			}
 		default:
 			return nil, fmt.Errorf("unknown result data type: %s", item.Type)
 		}

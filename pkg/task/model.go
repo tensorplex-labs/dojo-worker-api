@@ -109,6 +109,7 @@ type SubmitTaskResultRequest struct {
 type (
 	ScoreValue       float64
 	RankingValue     map[string]string
+	MultiScoreValue  map[string]float64
 	MultiSelectValue []string
 )
 
@@ -162,6 +163,12 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 		r.Value = v
 	case CriteriaTypeMultiSelect:
 		var v MultiSelectValue
+		if err := json.Unmarshal(i.Value, &v); err != nil {
+			return err
+		}
+		r.Value = v
+	case CriteriaMultiScore:
+		var v MultiScoreValue
 		if err := json.Unmarshal(i.Value, &v); err != nil {
 			return err
 		}
