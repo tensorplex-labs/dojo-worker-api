@@ -199,6 +199,15 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(loginRequest.Hotkey)
+		if !found {
+			log.Error().Msg("Hotkey is not registered")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
+			c.Abort()
+			return
+		}
+
 		c.Set("loginRequest", loginRequest)
 		c.Next()
 	}

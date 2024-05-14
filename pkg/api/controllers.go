@@ -222,70 +222,67 @@ func MinerLoginController(c *gin.Context) {
 	}
 	
 	minerService := orm.NewMinerUserORM()
-	if minerUser, err := minerService.GetUserByHotkey(loginRequest.Hotkey); err != nil {
+	minerUser, err := minerService.GetUserByHotkey(loginRequest.Hotkey); 
+	if err == db.ErrNotFound {
+		if apiKey, new_err := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); new_err != nil {
+			log.Error().Err(new_err).Msg("Failed to create new miner user")
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
+			return
+		}else{
+			c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
+			return
+		}
+	}else if err != nil {
 		log.Error().Err(err).Msg("Failed to get miner user by hotkey")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
 		return
-	}else if minerUser == nil {
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+	}
+	
+	if _, err = minerService.SetVerified(true, minerUser.ID); err != nil {
+		log.Error().Err(err).Msg("Failed to set miner user as verified")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to set miner user as verified"))
 		return
-	}else{
-		c.JSON(http.StatusOK, defaultSuccessResponse(minerUser.APIKey))
-	}	
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(minerUser.APIKey))
 }
 
-func MinerApplicationController(c *gin.Context) {
-	requestInterface, exists := c.Get("requestMap")
-	if !exists {
-		log.Error().Msg("Request map not found in context")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Request map not found in context"))
-		c.Abort()
-		return
-	}
-
-	requestMap, ok := requestInterface.(map[string]string)
-	if !ok {
-		log.Error().Msg("Invalid request body")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
-		return
-	}
-
+func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (string, error) {
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
-		return
+		log.Error().Err(err).Msg("Failed to generate random api key")
+		return "", err
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	organisation, organisationExists := requestMap["organisationName"]
+	organisationExists := organisation == ""
 	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
 	if subscriptionKey == "" {
 		log.Error().Err(err).Msg("Failed to generate subscription key")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
+		return "", err
 	}
 
 	if organisationExists {
-		if _, err = minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey, organisation); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
-			return
+		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, true, emailAddress, subscriptionKey, organisation); err != nil {
+			log.Error().Err(err).Msg("Failed to save miner user")
+			return "", err
 		}
 	} else {
-		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
-			return
+		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, true, emailAddress, subscriptionKey); err != nil {
+			log.Error().Err(err).Msg("Failed to save miner user")
+			return "", err
 		}
 	}
 
-	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
+	person := map[bool]string{true: organisation, false: "User"}[organisationExists]
 	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
-	err = email.SendEmail(requestMap["email"], body)
+	err = email.SendEmail(emailAddress, body)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
-		return
+		log.Error().Err(err).Msg("Failed to send email")
+		return "", err
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse("We are currently reviewing your application. Once approved, we will send you a miner API key and subscription key via the email you provided."))
+	return apiKey, nil
 }
 
 func MinerInfoController(c *gin.Context) {
