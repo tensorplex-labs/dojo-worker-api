@@ -21,9 +21,10 @@ func init() {
 	if err != nil {
 		log.Fatal().Msg("Error loading .env file")
 	}
+	LoadDotEnv("DB_HOST")
+	LoadDotEnv("DB_NAME")
 	// sanity checks
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
-		LoadDotEnv("DB_HOST")
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
 		// } else {
