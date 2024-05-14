@@ -14,8 +14,10 @@ import (
 	"github.com/spruceid/siwe-go"
 
 	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
+	"dojo-api/pkg/auth"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -173,53 +175,31 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 // login middleware for miner user
 func MinerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var requestMap map[string]string
-		if err := c.BindJSON(&requestMap); err != nil {
+		var loginRequest auth.MinerLoginRequest
+		if err := c.BindJSON(&loginRequest); err != nil {
 			log.Error().Err(err).Msg("Invalid request body")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
 			c.Abort()
 			return
 		}
 
-		hotkey, hotkeyExists := requestMap["hotkey"]
-		if !hotkeyExists {
-			log.Error().Msg("hotkey is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
+		isVerified, err := siws.SS58VerifySignature(loginRequest.Message, loginRequest.Hotkey, loginRequest.Signature)
+		if err != nil {
+			log.Error().Err(err).Msg("Error verifying signature")
+			println(loginRequest.Message, loginRequest.Signature, loginRequest.Hotkey)
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("error verifying signature"))
 			c.Abort()
 			return
 		}
 
-		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
-		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
-		var verified bool
-		var apiKey string
-		var expiry time.Time
-		if found {
-			verified = true
-			minerUserORM := orm.NewMinerUserORM()
-			minerUser, err := minerUserORM.GetUserByAPIKey(hotkey)
-			if err != nil || minerUser == nil || minerUser.APIKeyExpireAt.Before(time.Now()) {
-				apiKey, expiry, err = generateRandomApiKey()
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to generate random API key")
-					c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to generate random API key"))
-					c.Abort()
-					return
-				}
-			} else {
-				apiKey = minerUser.APIKey
-				expiry = minerUser.APIKeyExpireAt
-			}
-		} else {
-			verified, apiKey, expiry = false, "", time.Time{}
+		if !isVerified {
+			log.Error().Msg("Invalid signature")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("invalid signature"))
+			c.Abort()
+			return
 		}
 
-		c.Set("verified", verified)
-		c.Set("hotkey", hotkey)
-		c.Set("apiKey", apiKey)
-		c.Set("expiry", expiry)
-		c.Set("email", requestMap["email"])
-		c.Set("organisationName", requestMap["organisationName"])
+		c.Set("loginRequest", loginRequest)
 		c.Next()
 	}
 }

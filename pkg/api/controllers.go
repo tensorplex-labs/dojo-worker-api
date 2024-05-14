@@ -15,6 +15,8 @@ import (
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 	"dojo-api/pkg/worker"
+	"dojo-api/pkg/auth"
+	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/utils"
 
 	"github.com/spruceid/siwe-go"
@@ -197,34 +199,40 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
-// func MinerLoginController(c *gin.Context) {
-// 	verified, _ := c.Get("verified")
-// 	hotkey, _ := c.Get("hotkey")
-// 	apiKey, _ := c.Get("apiKey")
-// 	expiry, _ := c.Get("expiry")
-// 	email, _ := c.Get("email")
-// 	organisation, organisationExists := c.Get("organisationName")
+func MinerLoginController(c *gin.Context) {
+	loginInterface, _ := c.Get("loginRequest")
+	loginRequest := loginInterface.(auth.MinerLoginRequest)
 
-// 	minerUserORM := orm.NewMinerUserORM()
-// 	var err error
-// 	if organisationExists {
-// 		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
-// 	} else {
-// 		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
-// 	}
+	parsedMessage , err := siws.ParseMessage(loginRequest.Message)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to parse message")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
+		return
+	}
 
-// 	if err != nil {
-// 		log.Error().Err(err).Msg("Failed to save miner user")
-// 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
-// 		return
-// 	}
-
-// 	if verified.(bool) {
-// 		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
-// 	} else {
-// 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
-// 	}
-// }
+	nonce := parsedMessage.Nonce
+	if addressNonce, err := cache.GetCacheInstance().Get(loginRequest.Hotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to get nonce from cache")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get nonce from cache"))
+		return
+	}else if addressNonce != nonce {
+		log.Error().Msg("Nonce does not match")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+	
+	minerService := orm.NewMinerUserORM()
+	if minerUser, err := minerService.GetUserByHotkey(loginRequest.Hotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to get miner user by hotkey")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
+		return
+	}else if minerUser == nil {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}else{
+		c.JSON(http.StatusOK, defaultSuccessResponse(minerUser.APIKey))
+	}	
+}
 
 func MinerApplicationController(c *gin.Context) {
 	requestInterface, exists := c.Get("requestMap")
@@ -263,7 +271,7 @@ func MinerApplicationController(c *gin.Context) {
 			return
 		}
 	} else {
-		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"], subscriptionKey); err != nil {
+		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
 			return
 		}
