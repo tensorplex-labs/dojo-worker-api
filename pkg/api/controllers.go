@@ -221,11 +221,11 @@ func MinerLoginController(c *gin.Context) {
 		return
 	}
 	
-	minerService := orm.NewMinerUserORM()
-	minerUser, err := minerService.GetUserByHotkey(loginRequest.Hotkey); 
+	minerUserORM := orm.NewMinerUserORM()
+	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey); 
 	if err == db.ErrNotFound {
-		if apiKey, new_err := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); new_err != nil {
-			log.Error().Err(new_err).Msg("Failed to create new miner user")
+		if apiKey, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); newErr != nil {
+			log.Error().Err(newErr).Msg("Failed to create new miner user")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
 			return
 		}else{
@@ -238,12 +238,6 @@ func MinerLoginController(c *gin.Context) {
 		return
 	}
 	
-	if _, err = minerService.SetVerified(true, minerUser.ID); err != nil {
-		log.Error().Err(err).Msg("Failed to set miner user as verified")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to set miner user as verified"))
-		return
-	}
-
 	c.JSON(http.StatusOK, defaultSuccessResponse(minerUser.APIKey))
 }
 
@@ -263,12 +257,12 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 	}
 
 	if organisationExists {
-		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, true, emailAddress, subscriptionKey, organisation); err != nil {
+		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey, organisation); err != nil {
 			log.Error().Err(err).Msg("Failed to save miner user")
 			return "", err
 		}
 	} else {
-		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, true, emailAddress, subscriptionKey); err != nil {
+		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey); err != nil {
 			log.Error().Err(err).Msg("Failed to save miner user")
 			return "", err
 		}
