@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"dojo-api/utils"
-	"dojo-api/pkg/orm"
 	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -109,7 +109,7 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	if err := minerUserORM.DeregisterMiner(hotkey); err != nil{
+	if err := minerUserORM.DeregisterMiner(hotkey); err != nil {
 		log.Error().Err(err).Msg("Error deregistering miner")
 	}
 }
@@ -132,7 +132,7 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 	}
 
 	if !minerUser.IsVerified {
-		if err := minerUserORM.ReregisterMiner(hotkey); err != nil{
+		if err := minerUserORM.ReregisterMiner(hotkey); err != nil {
 			log.Error().Err(err).Msg("Error reregistering miner")
 		}
 	}
@@ -183,7 +183,7 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 			if !isRegistered {
 				log.Warn().Msgf("Hotkey %s is not registered", currAxonInfo.Hotkey)
 				s.OnNonRegisteredFound(currAxonInfo.Hotkey)
-			}else{
+			} else {
 				s.OnRegisteredFound(currAxonInfo.Hotkey)
 			}
 		}(axonInfo)
@@ -214,7 +214,7 @@ func (s *SubnetStateSubscriber) IsInitialised() bool {
 }
 
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
-	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
+	ticker := time.NewTicker(5 * BlockTimeInSeconds * time.Second)
 	s.mutex.Lock()
 	s.SubnetState = s.GetSubnetState(subnetId)
 	s.initialised = true

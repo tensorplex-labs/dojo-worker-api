@@ -45,6 +45,25 @@ func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, 
 	return createdUser, nil
 }
 
+func (s *MinerUserORM) SetVerified(isVerified bool, id string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
+	ctx := context.Background()
+	updatedUser, err := s.dbClient.MinerUser.FindUnique(
+		db.MinerUser.ID.Equals(id),
+	).Update(
+		db.MinerUser.IsVerified.Set(isVerified),
+	).Exec(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msgf("Error creating user")
+		return nil, err
+	}
+	log.Info().Msg("User created successfully")
+	return updatedUser, nil
+}
+
 func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string) (*db.MinerUserModel, error) {
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
