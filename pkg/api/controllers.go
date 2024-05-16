@@ -224,12 +224,16 @@ func MinerLoginController(c *gin.Context) {
 	minerUserORM := orm.NewMinerUserORM()
 	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey); 
 	if err == db.ErrNotFound {
-		if apiKey, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); newErr != nil {
+		if newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); newErr != nil {
 			log.Error().Err(newErr).Msg("Failed to create new miner user")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
 			return
 		}else{
-			c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
+			response := map[string]string{
+				"apiKey": minerUser.APIKey,
+				"subscriptionKey": minerUser.SubscriptionKey,
+			}
+			c.JSON(http.StatusOK, defaultSuccessResponse(response))
 			return
 		}
 	}else if err != nil {
@@ -246,11 +250,11 @@ func MinerLoginController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
-func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (string, error) {
+func handleNewMinerUser(hotkey string, emailAddress string, organisation string) error {
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random api key")
-		return "", err
+		return err
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
@@ -258,18 +262,18 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
 	if subscriptionKey == "" {
 		log.Error().Err(err).Msg("Failed to generate subscription key")
-		return "", err
+		return err
 	}
 
 	if organisationExists {
 		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey, organisation); err != nil {
 			log.Error().Err(err).Msg("Failed to save miner user")
-			return "", err
+			return err
 		}
 	} else {
 		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey); err != nil {
 			log.Error().Err(err).Msg("Failed to save miner user")
-			return "", err
+			return err
 		}
 	}
 
@@ -278,10 +282,9 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 	err = email.SendEmail(emailAddress, body)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to send email")
-		return "", err
+		return err
 	}
-
-	return apiKey, nil
+	return nil
 }
 
 func MinerInfoController(c *gin.Context) {
