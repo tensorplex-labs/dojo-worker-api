@@ -128,9 +128,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/miner/miner-application": {
+        "/api/v1/miner/login": {
             "post": {
-                "description": "Submit an application for a miner API key and subscription key by providing the necessary details",
+                "description": "Log in a miner using their hotkey and message",
                 "consumes": [
                     "application/json"
                 ],
@@ -138,23 +138,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Miner"
+                    "Authentication"
                 ],
-                "summary": "Apply for a miner API key and subscription key",
+                "summary": "Miner login",
                 "parameters": [
                     {
-                        "description": "Request body containing the miner application details (organisationName is optional)",
+                        "description": "Request body containing the miner login details",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/miner.MinerApplicationRequest"
+                            "$ref": "#/definitions/auth.MinerLoginRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Application submitted successfully",
+                        "description": "Login successful, returns API key and subscription key",
                         "schema": {
                             "allOf": [
                                 {
@@ -164,7 +164,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "type": "string"
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string"
+                                            }
                                         }
                                     }
                                 }
@@ -172,13 +175,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request body or parameters",
+                        "description": "Failed to parse message",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Failed to get nonce from cache or failed to create/get miner user",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -793,6 +802,26 @@ const docTemplate = `{
                 }
             }
         },
+        "auth.MinerLoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "hotkey": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "organisation": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                }
+            }
+        },
         "db.TaskStatus": {
             "type": "string",
             "enum": [
@@ -818,20 +847,6 @@ const docTemplate = `{
                 "TaskTypeDialogue",
                 "TaskTypeTextToImage"
             ]
-        },
-        "miner.MinerApplicationRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "hotkey": {
-                    "type": "string"
-                },
-                "organisationName": {
-                    "type": "string"
-                }
-            }
         },
         "miner.MinerInfoResponse": {
             "type": "object",

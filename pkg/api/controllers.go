@@ -230,6 +230,19 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
+// MinerLoginController godoc
+//
+//	@Summary		Miner login
+//	@Description	Log in a miner using their hotkey and message
+//	@Tags		 	Authentication
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		auth.MinerLoginRequest				true	"Request body containing the miner login details"
+//	@Success		200		{object}	ApiResponse{body=map[string]string}	"Login successful, returns API key and subscription key"
+//	@Failure		400		{object}	ApiResponse							"Failed to parse message"
+//	@Failure		401		{object}	ApiResponse							"Unauthorized"
+//	@Failure		500		{object}	ApiResponse							"Failed to get nonce from cache or failed to create/get miner user"
+//	@Router			/api/v1/miner/login [post]
 func MinerLoginController(c *gin.Context) {
 	loginInterface, _ := c.Get("loginRequest")
 	loginRequest := loginInterface.(auth.MinerLoginRequest)
@@ -273,9 +286,9 @@ func MinerLoginController(c *gin.Context) {
 		return
 	}
 
-	response := map[string]string{
-		"apiKey":          minerUser.APIKey,
-		"subscriptionKey": minerUser.SubscriptionKey,
+	response := auth.MinerLoginResponse{
+		ApiKey:          minerUser.APIKey,
+		SubscriptionKey: minerUser.SubscriptionKey,
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
