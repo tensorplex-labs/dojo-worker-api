@@ -94,6 +94,7 @@ const (
 	CriteriaTypeRanking     CriteriaType = "ranking"
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
+	CriteriaMultiScore CriteriaType = "multi-score"
 )
 
 type Result struct {
@@ -112,6 +113,7 @@ type SubmitTaskResultResponse struct {
 type (
 	ScoreValue       float64
 	RankingValue     map[string]string
+	MultiScoreValue  map[string]float64
 	MultiSelectValue []string
 )
 
@@ -168,6 +170,22 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(i.Value, &v); err != nil {
 			return err
 		}
+		r.Value = v
+	case CriteriaMultiScore:
+		var intermediate map[string]json.RawMessage
+		if err := json.Unmarshal(i.Value, &intermediate); err != nil {
+			return err
+		}
+		
+		v := make(MultiScoreValue)
+		for k, vRaw := range intermediate {
+			value, err := parseJsonStringOrFloat(vRaw)
+			if err != nil {
+				return err
+			}
+			v[k] = value
+		}
+
 		r.Value = v
 	default:
 		return fmt.Errorf("unknown type: %s", i.Type)

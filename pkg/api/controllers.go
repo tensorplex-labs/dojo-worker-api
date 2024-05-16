@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/auth"
+	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
 	"dojo-api/pkg/miner"
@@ -228,99 +230,92 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
-// func MinerLoginController(c *gin.Context) {
-// 	verified, _ := c.Get("verified")
-// 	hotkey, _ := c.Get("hotkey")
-// 	apiKey, _ := c.Get("apiKey")
-// 	expiry, _ := c.Get("expiry")
-// 	email, _ := c.Get("email")
-// 	organisation, organisationExists := c.Get("organisationName")
+func MinerLoginController(c *gin.Context) {
+	loginInterface, _ := c.Get("loginRequest")
+	loginRequest := loginInterface.(auth.MinerLoginRequest)
 
-// 	minerUserORM := orm.NewMinerUserORM()
-// 	var err error
-// 	if organisationExists {
-// 		_, err = minerUserORM.CreateUserWithOrganisation(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string), organisation.(string))
-// 	} else {
-// 		_, err = minerUserORM.CreateUser(hotkey.(string), apiKey.(string), expiry.(time.Time), verified.(bool), email.(string))
-// 	}
-
-// 	if err != nil {
-// 		log.Error().Err(err).Msg("Failed to save miner user")
-// 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user because miner's hot key may already exists"))
-// 		return
-// 	}
-
-// 	if verified.(bool) {
-// 		c.JSON(http.StatusOK, defaultSuccessResponse(apiKey))
-// 	} else {
-// 		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Miner user not verified"))
-// 	}
-// }
-
-// MinerApplicationController godoc
-//
-//	@Summary		Apply for a miner API key and subscription key
-//	@Description	Submit an application for a miner API key and subscription key by providing the necessary details
-//	@Tags			Miner
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		miner.MinerApplicationRequest	true	"Request body containing the miner application details (organisationName is optional)"
-//	@Success		200		{object}	ApiResponse{body=string}		"Application submitted successfully"
-//	@Failure		400		{object}	ApiResponse						"Invalid request body or parameters"
-//	@Failure		500		{object}	ApiResponse						"Internal server error"
-//	@Router			/api/v1/miner/miner-application [post]
-func MinerApplicationController(c *gin.Context) {
-	requestInterface, exists := c.Get("requestMap")
-	if !exists {
-		log.Error().Msg("Request map not found in context")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Request map not found in context"))
-		c.Abort()
-		return
-	}
-
-	requestMap, ok := requestInterface.(map[string]string)
-	if !ok {
-		log.Error().Msg("Invalid request body")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
-		return
-	}
-
-	apiKey, expiry, err := generateRandomApiKey()
+	parsedMessage, err := siws.ParseMessage(loginRequest.Message)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate API key"))
+		log.Error().Err(err).Msg("Failed to parse message")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
+		return
+	}
+
+	nonce := parsedMessage.Nonce
+	if addressNonce, err := cache.GetCacheInstance().Get(loginRequest.Hotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to get nonce from cache")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get nonce from cache"))
+		return
+	} else if addressNonce != nonce {
+		log.Error().Msg("Nonce does not match")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	organisation, organisationExists := requestMap["organisationName"]
+	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey)
+	if err == db.ErrNotFound {
+		if newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); newErr != nil {
+			log.Error().Err(newErr).Msg("Failed to create new miner user")
+			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
+			return
+		} else {
+			response := map[string]string{
+				"apiKey":          minerUser.APIKey,
+				"subscriptionKey": minerUser.SubscriptionKey,
+			}
+			c.JSON(http.StatusOK, defaultSuccessResponse(response))
+			return
+		}
+	} else if err != nil {
+		log.Error().Err(err).Msg("Failed to get miner user by hotkey")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
+		return
+	}
+
+	response := map[string]string{
+		"apiKey":          minerUser.APIKey,
+		"subscriptionKey": minerUser.SubscriptionKey,
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+}
+
+func handleNewMinerUser(hotkey string, emailAddress string, organisation string) error {
+	apiKey, expiry, err := generateRandomApiKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate random api key")
+		return err
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	organisationExists := organisation == ""
 	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
 	if subscriptionKey == "" {
 		log.Error().Err(err).Msg("Failed to generate subscription key")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscription key"))
-		return
+		return err
 	}
 
 	if organisationExists {
-		if _, err = minerUserORM.CreateUserWithOrganisation(requestMap["hotkey"], apiKey, expiry, true, requestMap["email"], subscriptionKey, organisation); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
-			return
+		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey, organisation); err != nil {
+			log.Error().Err(err).Msg("Failed to save miner user")
+			return err
 		}
 	} else {
-		if _, err = minerUserORM.CreateUser(requestMap["hotkey"], apiKey, expiry, false, requestMap["email"], subscriptionKey); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to save miner user"))
-			return
+		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey); err != nil {
+			log.Error().Err(err).Msg("Failed to save miner user")
+			return err
 		}
 	}
 
-	person := map[bool]string{true: requestMap["organisationName"], false: "User"}[organisationExists]
+	person := map[bool]string{true: organisation, false: "User"}[organisationExists]
 	body := fmt.Sprintf("Hi %s,\nHere are your api key and subscription keys \nAPI Key: %s\nSubscription Key: %s", person, apiKey, subscriptionKey)
-	err = email.SendEmail(requestMap["email"], body)
+	err = email.SendEmail(emailAddress, body)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to send email"))
-		return
+		log.Error().Err(err).Msg("Failed to send email")
+		return err
 	}
-
-	c.JSON(http.StatusOK, defaultSuccessResponse("We are currently reviewing your application. Once approved, we will send you a miner API key and subscription key via the email you provided."))
+	return nil
 }
 
 // MinerInfoController godoc
