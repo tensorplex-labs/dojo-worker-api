@@ -237,8 +237,13 @@ func MinerLoginController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
 		return
 	}
+
+	response := map[string]string{
+		"apiKey": minerUser.APIKey,
+		"subscriptionKey": minerUser.SubscriptionKey,
+	}
 	
-	c.JSON(http.StatusOK, defaultSuccessResponse(minerUser.APIKey))
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
 func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (string, error) {
