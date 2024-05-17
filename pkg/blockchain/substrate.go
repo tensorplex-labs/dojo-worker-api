@@ -49,8 +49,12 @@ type AxonInfo struct {
 
 	// additional fields we need, to store it in a more organized manner
 	IpAddress string `json:"ipAddress"`
-	Hotkey    string `json:"hotkey"`
-	Uid       int    `json:"uid"`
+}
+
+type Participant struct {
+	Axon   AxonInfo `json:"axon"`
+	Hotkey string   `json:"hotkey"`
+	Uid    int      `json:"uid"`
 }
 
 func NewSubstrateService() *SubstrateService {
@@ -161,14 +165,15 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	return &axonInfoValue, nil
 }
 
-func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
+// TODO think about this, this is dependent on axons being served
+func (s *SubstrateService) GetAllParticipants(subnetId int) ([]Participant, error) {
 	maxUid, err := s.GetMaxUID(subnetId)
 	if err != nil {
 		return nil, err
 	}
 
-	var allAxonInfos []AxonInfo = make([]AxonInfo, 0)
-	axonInfoChan := make(chan AxonInfo)
+	var allParticipants []Participant = make([]Participant, 0)
+	participantChan := make(chan Participant)
 	go func() {
 		wg := sync.WaitGroup{}
 		for uid := 0; uid < maxUid; uid++ {
@@ -176,38 +181,41 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 			go func(neuronUid int) {
 				defer wg.Done()
 
-				currAxonInfo := AxonInfo{}
+				currParticipant := Participant{}
 				hotkey, err := s.GetHotkeyByUid(subnetId, neuronUid)
 				if err != nil {
 					log.Error().Err(err).Msgf("Error getting hotkey for uid %d", neuronUid)
 					return
 				}
 				axonInfo, _ := s.GetAxonInfo(subnetId, hotkey)
-				// no axon info so avoid putting it onto the channel
-				if axonInfo == nil {
-					return
+				// if axon is served we will store the data for the participant
+				if axonInfo != nil {
+					currParticipant.Axon = *axonInfo
 				}
-				currAxonInfo = *axonInfo
-				currAxonInfo.Hotkey = hotkey
-				currAxonInfo.Uid = neuronUid
+				currParticipant.Hotkey = hotkey
+				currParticipant.Uid = neuronUid
 
 				// place it in the channel
-				axonInfoChan <- currAxonInfo
+				participantChan <- currParticipant
 			}(uid)
 		}
 		wg.Wait()
-		close(axonInfoChan)
+		close(participantChan)
 	}()
 
-	for axonInfo := range axonInfoChan {
-		ipAddress := utils.IpDecimalToDotted(axonInfo.IpDecimal)
-		if ipAddress != "" {
-			axonInfo.IpAddress = ipAddress
+	for participant := range participantChan {
+		if participant.Axon != (AxonInfo{}) {
+			ipAddress := utils.IpDecimalToDotted(participant.Axon.IpDecimal)
+			if ipAddress != "" {
+				participant.Axon.IpAddress = ipAddress
+			}
+		} else {
+			log.Debug().Msgf("Axon info for uid %d is empty, skipping", participant.Uid)
 		}
-		log.Debug().Msgf("Axon info for uid %d: %+v", axonInfo.Uid, axonInfo)
-		allAxonInfos = append(allAxonInfos, axonInfo)
+		log.Debug().Msgf("Axon info for uid %d: %+v", participant.Uid, participant)
+		allParticipants = append(allParticipants, participant)
 	}
-	return allAxonInfos, nil
+	return allParticipants, nil
 }
 
 func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool, error) {
