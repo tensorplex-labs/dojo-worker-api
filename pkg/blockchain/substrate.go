@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
 
@@ -311,4 +312,126 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 		return nil, err
 	}
 	return &runtimeSpec, nil
+}
+
+type BlockErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Stack   string `json:"stack"`
+	Level   string `json:"level"`
+}
+
+type BlockResponse struct {
+	Number         string `json:"number"`
+	Hash           string `json:"hash"`
+	ParentHash     string `json:"parentHash"`
+	StateRoot      string `json:"stateRoot"`
+	ExtrinsicsRoot string `json:"extrinsicsRoot"`
+	Logs           []struct {
+		Type  string   `json:"type"`
+		Index string   `json:"index"`
+		Value []string `json:"value"`
+	} `json:"logs"`
+	OnFinalize struct {
+		Events []interface{} `json:"events"`
+	} `json:"onFinalize"`
+	Finalized bool `json:"finalized"`
+}
+
+func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
+	log.Info().Msgf("Fetching block with ID: %d", blockId)
+	path := fmt.Sprintf("http://%s/blocks/%d", s.substrateApiUrl, blockId)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to create request for block ID: %d", blockId)
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to fetch block ID: %d", blockId)
+		return nil, err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to read response body for block ID: %d", blockId)
+		return nil, err
+	}
+
+	var block BlockResponse
+	err = json.Unmarshal(body, &block)
+	if err != nil || reflect.DeepEqual(block, BlockResponse{}) {
+		log.Error().Err(err).Msgf("Failed to unmarshal block response for block ID: %d, trying to unmarshal block error response", blockId)
+		var blockError BlockErrorResponse
+		err = json.Unmarshal(body, &blockError)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to unmarshal block error response for block ID: %d", blockId)
+			return nil, err
+		}
+		return nil, fmt.Errorf("block error message: %s, stack: %s", blockError.Message, blockError.Stack)
+	}
+
+	log.Info().Msgf("Successfully fetched block with ID: %d, data: %v", blockId, block)
+	return &block, nil
+}
+
+// Use binary search to get the latest block since substrate API's
+func (s *SubstrateService) GetLatestUnFinalizedBlock(low int) (*BlockResponse, error) {
+	// try to get latest block, assume an initial block that's way too large
+	const blocksPeryear = (24 * 3600 * 360) / 12
+	high := low + blocksPeryear
+	log.Info().Msgf("Searching for the latest block between %d and %d", low, high)
+	var latestBlock *BlockResponse
+	for low <= high {
+		mid := (low + high) / 2
+		block, err := s.getBlockById(mid)
+		if err != nil {
+			log.Warn().Msgf("Block ID: %d not found, adjusting search range", mid)
+			high = mid - 1
+		} else {
+			log.Info().Msgf("Block ID: %d found, updating latest block and adjusting search range", mid)
+			latestBlock = block
+			low = mid + 1
+		}
+	}
+
+	if latestBlock != nil {
+		log.Info().Msgf("Latest block number: %+v", latestBlock.Number)
+		return latestBlock, nil
+	}
+
+	log.Error().Msg("Failed to find the latest block")
+	return nil, fmt.Errorf("failed to find the latest block")
+}
+
+func (s *SubstrateService) GetLatestFinalizedBlock() (*BlockResponse, error) {
+	path := fmt.Sprintf("http://%s/blocks/head", s.substrateApiUrl)
+
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create new HTTP request")
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to execute HTTP request")
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read response body")
+		return nil, err
+	}
+
+	var block BlockResponse
+	err = json.Unmarshal(body, &block)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal response body into BlockResponse")
+		return nil, err
+	}
+
+	log.Info().Msgf("Successfully fetched latest finalized block: %+v", block)
+	return &block, nil
 }
