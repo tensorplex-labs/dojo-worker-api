@@ -227,7 +227,11 @@ func MinerLoginController(c *gin.Context) {
 
 	minerUserORM := orm.NewMinerUserORM()
 	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey)
-	if err == db.ErrNotFound {
+	log.Info().Interface("minerUser", minerUser).Interface("error", err).Msg("Getting miner user by hotkey")
+	if minerUser != nil {
+		newExpireAt := time.Now().Add(time.Hour * 24)
+		minerUserORM.RefreshAPIKey(minerUser.Hotkey, newExpireAt)
+	} else if err == db.ErrNotFound {
 		newUser, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation)
 		if newErr != nil {
 			log.Error().Err(newErr).Msg("Failed to create new miner user")

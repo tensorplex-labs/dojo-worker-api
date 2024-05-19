@@ -136,6 +136,10 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 			log.Error().Err(err).Msg("Error reregistering miner")
 		}
 	}
+
+	// refresh api key
+	newExpireAt := time.Now().Add(time.Hour * 24)
+	orm.NewMinerUserORM().RefreshAPIKey(hotkey, newExpireAt)
 }
 
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
