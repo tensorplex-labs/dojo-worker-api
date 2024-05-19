@@ -14,6 +14,7 @@ import (
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
+	"dojo-api/pkg/metric"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
 	"dojo-api/pkg/worker"
@@ -55,6 +56,14 @@ func WorkerLoginController(c *gin.Context) {
 		}
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
+
+	if !alreadyExists {
+		metricsORM := orm.NewMetricsORM()
+		if err := metricsORM.UpdateDojoWorkerCount(c.Request.Context(), 1); err != nil {
+			log.Error().Err(err).Msg("Failed to update dojo worker count")
+		}
+	}
+
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
 		"token": token,
@@ -154,7 +163,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
 
-	isCompletedTask, err := taskService.ValidateCompletedTask(ctx, taskId, worker.ID)
+	isCompletedTask, err := taskService.ValidateCompletedTaskByWorker(ctx, taskId, worker.ID)
 
 	if err != nil {
 		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task")
@@ -192,6 +201,20 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
+	}
+
+	// Check if the task is completed
+	// taskCompleted, err := taskService.CheckTaskCompletion(ctx, updatedTask)
+
+	// Update the completed task count
+	metricsORM := orm.NewMetricsORM()
+	if err := metricsORM.UpdateCompletedTaskCount(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to update completed task count")
+	}
+
+	// Update the total tasks results count
+	if err := metricsORM.UpdateTotalTaskResultsCount(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to update total tasks results count")
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
@@ -787,4 +810,61 @@ func GenerateNonceController(c *gin.Context) {
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{"nonce": nonce}))
+}
+
+func GetDojoWorkerCountController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumDojoWorkers)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		return
+	}
+
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid metric data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	workerCountData := validatedData.(metric.MetricWorkerCount)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: workerCountData.TotalNumDojoWorkers}))
+}
+
+func GetTotalCompletedTasksController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumCompletedTasks)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		return
+	}
+
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid metric data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	completedTasksData := validatedData.(metric.MetricCompletedTasks)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: completedTasksData.TotalNumCompletedTasks}))
+}
+
+func GetTotalTasksResultsController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumTaskResults)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		return
+	}
+
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid metric data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	totalTasksResults := validatedData.(metric.MetricTaskResults)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: totalTasksResults.TotalNumTasksResults}))
 }

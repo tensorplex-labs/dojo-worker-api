@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"time"
 	"slices"
+	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
@@ -187,12 +187,12 @@ func IsValidTaskType(taskType interface{}) (bool, error) {
 }
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
-    switch criteriaType {
-    case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
-        return true
-    default:
-        return false
-    }
+	switch criteriaType {
+	case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
+		return true
+	default:
+		return false
+	}
 }
 
 // create task
@@ -365,7 +365,7 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 						return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
 					}
 
-					if !slices.Contains(criteria.Options, option){
+					if !slices.Contains(criteria.Options, option) {
 						return nil, fmt.Errorf("option %v not found in criteria options", option)
 					}
 				}
@@ -562,7 +562,7 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 	return taskData, nil
 }
 
-func (t *TaskService) ValidateCompletedTask(ctx context.Context, taskId string, workerId string) (bool, error) {
+func (t *TaskService) ValidateCompletedTaskByWorker(ctx context.Context, taskId string, workerId string) (bool, error) {
 	taskResult, err := t.taskResultORM.GetCompletedTResultByTaskAndWorker(ctx, taskId, workerId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
