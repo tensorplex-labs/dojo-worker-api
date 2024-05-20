@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dojo-api/db"
 )
@@ -88,6 +89,7 @@ func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskR
 
 	updateTaskParams := []db.TaskSetParam{
 		db.Task.NumResults.Increment(1),
+		db.Task.UpdatedAt.Set(time.Now()),
 	}
 	// Check if num_results equals max_results before updating the task status
 	if task.NumResults+1 == task.MaxResults && task.Status != db.TaskStatusCompleted {
