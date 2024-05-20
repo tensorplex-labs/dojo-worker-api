@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"fmt"
 
 	"dojo-api/db"
 )
@@ -21,27 +22,14 @@ func NewTaskResultORM() *TaskResultORM {
 
 // In a transaction creates the TaskResult and updates the Task.NumResults
 func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
-	t.clientWrapper.BeforeQuery()
-	defer t.clientWrapper.AfterQuery()
-
-	// TODO add web3 integration fields when the time comes
-	updateTaskTx := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Update(db.Task.NumResults.Increment(1)).Tx()
-	createResultTx := t.client.TaskResult.CreateOne(
-		db.TaskResult.Status.Set(taskResult.Status),
-		db.TaskResult.ResultData.Set(taskResult.ResultData),
-		db.TaskResult.Task.Link(
-			db.Task.ID.Equals(taskResult.TaskID),
-		),
-		db.TaskResult.DojoWorker.Link(
-			db.DojoWorker.ID.Equals(taskResult.WorkerID),
-		),
-	).With(
-		db.TaskResult.Task.Fetch(),
-	).Tx()
-	if err := t.client.Prisma.Transaction(updateTaskTx, createResultTx).Exec(ctx); err != nil {
-		return nil, err
+	switch taskResult.Status {
+	case db.TaskResultStatusInvalid:
+		return t.CreateTaskResultWithInvalid(ctx, taskResult)
+	case db.TaskResultStatusCompleted:
+		return t.CreateTaskResultWithCompleted(ctx, taskResult)
+	default:
+		return nil, fmt.Errorf("unsupported status: %v", taskResult.Status)
 	}
-	return createResultTx.Result(), nil
 }
 
 func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId string) ([]db.TaskResultModel, error) {
@@ -63,4 +51,66 @@ func (orm *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, worke
 		db.TaskResult.WorkerID.Equals(workerId),
 		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
 	).Exec(ctx)
+}
+
+func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	createdTaskResult, err := t.client.TaskResult.CreateOne(
+		db.TaskResult.Status.Set(db.TaskResultStatusInvalid),
+		db.TaskResult.ResultData.Set(taskResult.ResultData),
+		db.TaskResult.Task.Link(
+			db.Task.ID.Equals(taskResult.TaskID),
+		),
+		db.TaskResult.DojoWorker.Link(
+			db.DojoWorker.ID.Equals(taskResult.WorkerID),
+		),
+	).With(
+		db.TaskResult.Task.Fetch(),
+	).Exec(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	return createdTaskResult, nil
+}
+
+func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	// Retrieve the task object from the appropriate source
+	task, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	updateTaskParams := []db.TaskSetParam{
+		db.Task.NumResults.Increment(1),
+	}
+	// Check if num_results equals max_results before updating the task status
+	if task.NumResults+1 == task.MaxResults && task.Status != db.TaskStatusCompleted {
+		updateTaskParams = append(updateTaskParams, db.Task.Status.Set(db.TaskStatusCompleted))
+	}
+
+	// TODO add web3 integration fields when the time comes
+	updateTaskTx := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Update(updateTaskParams...).Tx()
+
+	createResultTx := t.client.TaskResult.CreateOne(
+		db.TaskResult.Status.Set(db.TaskResultStatusCompleted),
+		db.TaskResult.ResultData.Set(taskResult.ResultData),
+		db.TaskResult.Task.Link(
+			db.Task.ID.Equals(taskResult.TaskID),
+		),
+		db.TaskResult.DojoWorker.Link(
+			db.DojoWorker.ID.Equals(taskResult.WorkerID),
+		),
+	).With(
+		db.TaskResult.Task.Fetch(),
+	).Tx()
+	if err := t.client.Prisma.Transaction(updateTaskTx, createResultTx).Exec(ctx); err != nil {
+		return nil, err
+	}
+	return createResultTx.Result(), nil
 }
