@@ -2,6 +2,8 @@ package orm
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"dojo-api/db"
 
@@ -166,14 +168,66 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, 0, err
 	}
 
-	totalTasks, err := o.dbClient.Task.FindMany(
-		filterParams...,
-	).Exec(ctx)
+	// TODO commented out for now, testing raw query speed
+	// totalTasks, err := o.dbClient.Task.FindMany(
+	// 	filterParams...,
+	// ).Exec(ctx)
 
+	// preparing the raw query params
+	var queryBuilder strings.Builder
+	var taskTypeParams []string
+	for _, taskType := range taskTypes {
+		taskTypeParams = append(taskTypeParams, string(taskType))
+	}
+
+	queryBuilder.WriteString("select count(*) as total_tasks")
+	queryBuilder.WriteString(" from \"Task\"")
+	// start miner user id clause
+	queryBuilder.WriteString(" where miner_user_id in (")
+	queryBuilder.WriteString(" select id")
+	queryBuilder.WriteString(" from \"MinerUser\"")
+	queryBuilder.WriteString(" where subscription_key in (")
+	queryBuilder.WriteString(" '" + strings.Join(subscriptionKeys, "', '") + "'")
+	queryBuilder.WriteString(" )")
+	queryBuilder.WriteString(" )")
+	// end miner user id clause
+
+	if len(taskTypes) > 0 {
+		// start task type where clause
+		queryBuilder.WriteString(" and type in (")
+		queryBuilder.WriteString(" '" + strings.Join(taskTypeParams, "', '") + "'")
+		queryBuilder.WriteString(" )")
+		// end task type where clause
+	}
+	queryBuilder.WriteString(" ;")
+
+	log.Debug().Msgf("Query Builder built raw SQL query: %s", queryBuilder.String())
+
+	var res []struct {
+		TotalTasks db.RawString `json:"total_tasks"`
+	}
+
+	err = o.clientWrapper.Client.Prisma.QueryRaw(queryBuilder.String()).Exec(ctx, &res)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching total Tasks")
+		log.Error().Err(err).Msg("Error executing raw query for total tasks")
 		return nil, 0, err
 	}
 
-	return tasks, len(totalTasks), nil
+	if len(res) == 0 {
+		// probably didn't name the right fields in the raw query,
+		// "total_tasks" need to match in res and named alias from count(*)
+		log.Error().Msg("No tasks found")
+		return nil, 0, err
+	}
+
+	totalTasksStr := string(res[0].TotalTasks)
+	log.Info().Interface("totalTasks", totalTasksStr).Msg("Total tasks fetched")
+
+	totalTasks, err := strconv.Atoi(totalTasksStr)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting total tasks to integer")
+		return nil, 0, err
+	}
+	log.Info().Int("totalTasks", totalTasks).Msg("Total tasks fetched, converted to int")
+	return tasks, totalTasks, nil
 }
