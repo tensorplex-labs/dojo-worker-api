@@ -30,6 +30,7 @@ enum TaskStatus {
 enum TaskResultStatus {
     IN_PROGRESS
     COMPLETED
+    INVALID
 }
 
 enum TaskType {

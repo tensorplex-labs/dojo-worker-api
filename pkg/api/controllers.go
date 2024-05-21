@@ -177,22 +177,6 @@ func SubmitTaskResultController(c *gin.Context) {
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
 
-	isCompletedTask, err := taskService.ValidateCompletedTask(ctx, taskId, worker.ID)
-
-	if err != nil {
-		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
-		c.Abort()
-		return
-	}
-
-	if isCompletedTask {
-		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task is already completed by worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task is already completed by worker"))
-		c.Abort()
-		return
-	}
-
 	task, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -206,6 +190,29 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.Abort()
 		return
 	}
+	// Check if the task is expired
+	if task.ExpireAt.Before(time.Now()) {
+		log.Info().Str("taskId", taskId).Msg("Task is expired")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task is expired"))
+		c.Abort()
+		return
+	}
+
+	isCompletedTResult, err := taskService.ValidateCompletedTResultByWorker(ctx, taskId, worker.ID)
+	if err != nil {
+		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task result")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
+		return
+	}
+
+	if isCompletedTResult {
+		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task Result is already completed by worker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task Result is already completed by worker"))
+		c.Abort()
+		return
+	}
+
 	log.Info().Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Dojo Worker and Task ID pulled")
 
 	// Update the task with the result data
