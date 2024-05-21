@@ -33,11 +33,11 @@ func init() {
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
-		LoadDotEnv("AWS_ACCESS_KEY_ID")
-		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
+		LoadDotEnv("AWS_ACCESS_KEY_ID")
+		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
