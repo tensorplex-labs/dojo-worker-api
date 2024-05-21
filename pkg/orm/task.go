@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"dojo-api/db"
 
@@ -248,4 +249,44 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	}
 
 	return totalTasks, nil
+}
+
+// check every three mins for expired tasks
+func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
+	for range time.Tick(3 * time.Minute) {
+		o.clientWrapper.BeforeQuery()
+		// Fetch all expired tasks
+		tasks, err := o.dbClient.Task.FindMany(
+			db.Task.ExpireAt.Lte(time.Now()),
+		).Exec(ctx)
+
+		if err != nil {
+			log.Error().Err(err).Msg("Error in fetching expired tasks")
+		}
+		
+		var txns []db.PrismaTransaction
+		for i, taskModel := range tasks {
+			if taskModel.Status != db.TaskStatusExpired{
+				transaction := o.dbClient.Task.FindUnique(
+					db.Task.ID.Equals(taskModel.ID),
+				).Update(
+					db.Task.Status.Set(db.TaskStatusExpired),
+				).Tx()
+
+				txns = append(txns, transaction)
+
+				if err != nil {
+					log.Error().Err(err).Msg("Error in updating task status to expired")
+				}
+			}
+			if len(txns) == 100 ||( i == len(tasks)-1 && len(txns) > 0){
+				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
+					log.Error().Err(err).Msg("Error in fetching expired tasks")
+				}
+				txns = []db.PrismaTransaction{}
+			}
+		}
+
+		o.clientWrapper.AfterQuery()
+	}
 }

@@ -122,7 +122,7 @@ func CreateTasksController(c *gin.Context) {
 	taskService := task.NewTaskService()
 	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
 
-	log.Info().Interface("tasks", tasks).Msg("Tasks created successfully")
+	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return

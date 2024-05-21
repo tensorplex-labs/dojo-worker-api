@@ -33,11 +33,11 @@ func init() {
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
-		// } else {
-		// 	LoadDotEnv("DATABASE_URL")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
+		LoadDotEnv("AWS_ACCESS_KEY_ID")
+		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
@@ -46,10 +46,7 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
-	// TODO - maybe move under aws runtime env
 	LoadDotEnv("AWS_S3_BUCKET_NAME")
-	LoadDotEnv("AWS_ACCESS_KEY_ID")
-	LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
