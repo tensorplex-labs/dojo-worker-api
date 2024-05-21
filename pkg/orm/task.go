@@ -2,10 +2,13 @@ package orm
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"dojo-api/db"
+
+	sq "github.com/Masterminds/squirrel"
 
 	"github.com/rs/zerolog/log"
 )
@@ -173,41 +176,42 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	// 	filterParams...,
 	// ).Exec(ctx)
 
-	// preparing the raw query params
-	var queryBuilder strings.Builder
 	var taskTypeParams []string
 	for _, taskType := range taskTypes {
 		taskTypeParams = append(taskTypeParams, string(taskType))
 	}
 
-	queryBuilder.WriteString("select count(*) as total_tasks")
-	queryBuilder.WriteString(" from \"Task\"")
-	// start miner user id clause
-	queryBuilder.WriteString(" where miner_user_id in (")
-	queryBuilder.WriteString(" select id")
-	queryBuilder.WriteString(" from \"MinerUser\"")
-	queryBuilder.WriteString(" where subscription_key in (")
-	queryBuilder.WriteString(" '" + strings.Join(subscriptionKeys, "', '") + "'")
-	queryBuilder.WriteString(" )")
-	queryBuilder.WriteString(" )")
-	// end miner user id clause
+	// need to set subquery to use "$?" and let the main query use dollar to resolve placeholders
+	subQuery, subQueryArgs, err := sq.Select("id").
+		From("\"MinerUser\"").
+		Where(sq.Eq{"subscription_key": subscriptionKeys}).
+		PlaceholderFormat(sq.Question).
+		ToSql()
 
-	if len(taskTypes) > 0 {
-		// start task type where clause
-		queryBuilder.WriteString(" and type in (")
-		queryBuilder.WriteString(" '" + strings.Join(taskTypeParams, "', '") + "'")
-		queryBuilder.WriteString(" )")
-		// end task type where clause
+	if err != nil {
+		log.Error().Err(err).Msg("Error building subquery")
+		return nil, 0, err
 	}
-	queryBuilder.WriteString(" ;")
 
-	log.Debug().Msgf("Query Builder built raw SQL query: %s", queryBuilder.String())
+	mainQuery := sq.Select("count(*) as total_tasks").
+		From("\"Task\"").
+		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
+		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
+		PlaceholderFormat(sq.Dollar)
 
+	sql, args, err := mainQuery.ToSql()
+	if err != nil {
+		log.Error().Err(err).Msg("Error building full SQL query")
+		return nil, 0, err
+	}
+
+	log.Debug().Interface("args", args).Msgf("Query Builder built raw SQL query: %s", sql)
+
+	// unsure why it's a raw string, when the examples say it's a raw int
 	var res []struct {
 		TotalTasks db.RawString `json:"total_tasks"`
 	}
-
-	err = o.clientWrapper.Client.Prisma.QueryRaw(queryBuilder.String()).Exec(ctx, &res)
+	err = o.clientWrapper.Client.Prisma.QueryRaw(sql, args...).Exec(ctx, &res)
 	if err != nil {
 		log.Error().Err(err).Msg("Error executing raw query for total tasks")
 		return nil, 0, err
