@@ -280,11 +280,18 @@ func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel,
 		log.Error().Err(err).Msg("Error marshaling result items")
 		return nil, err
 	}
+
 	newTaskResultData := db.InnerTaskResult{
 		Status:     db.TaskResultStatusCompleted,
 		ResultData: jsonResults,
 		TaskID:     task.ID,
 		WorkerID:   dojoWorkerId,
+	}
+
+	// Check if the task has reached the max results, no way we can have greater than max results, or something's wrong
+	if task.NumResults >= task.MaxResults {
+		log.Info().Msg("Task has reached max results")
+		newTaskResultData.Status = db.TaskResultStatusInvalid
 	}
 
 	// Insert the task result data
@@ -565,7 +572,7 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 	return taskData, nil
 }
 
-func (t *TaskService) ValidateCompletedTask(ctx context.Context, taskId string, workerId string) (bool, error) {
+func (t *TaskService) ValidateCompletedTResultByWorker(ctx context.Context, taskId string, workerId string) (bool, error) {
 	taskResult, err := t.taskResultORM.GetCompletedTResultByTaskAndWorker(ctx, taskId, workerId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -594,7 +601,6 @@ func (t *TaskService) GetCompletedTaskMap(ctx context.Context, workerId string) 
 			completedTaskMap[ts.TaskID] = true
 		}
 	}
-
 	return completedTaskMap, nil // Task result exists
 }
 

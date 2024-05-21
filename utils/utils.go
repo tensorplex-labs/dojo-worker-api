@@ -123,6 +123,7 @@ func getS3Client() (*s3.Client, error) {
 		return nil, err
 	}
 	// Create an S3 client using the loaded configuration
+	log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
 	client := s3.NewFromConfig(cfg)
 	return client, nil
 }
