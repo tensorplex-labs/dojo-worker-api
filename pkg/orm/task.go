@@ -265,7 +265,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 		}
 		
 		var txns []db.PrismaTransaction
-		for _, taskModel := range tasks {
+		for i, taskModel := range tasks {
 			if taskModel.Status != db.TaskStatusExpired{
 				transaction := o.dbClient.Task.FindUnique(
 					db.Task.ID.Equals(taskModel.ID),
@@ -279,7 +279,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 					log.Error().Err(err).Msg("Error in updating task status to expired")
 				}
 			}
-			if len(txns) == 100 {
+			if i % 100 == 0 || i == len(tasks) - 1 {
 				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
 					log.Error().Err(err).Msg("Error in fetching expired tasks")
 				}
