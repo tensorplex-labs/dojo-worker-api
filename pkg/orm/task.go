@@ -176,6 +176,19 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	// 	filterParams...,
 	// ).Exec(ctx)
 
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
+	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
+		return nil, 0, err
+	}
+
+	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
+	return tasks, totalTasks, nil
+}
+
+// This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
+// and using findMany with the filter params and then len(tasks) is facing performance issues
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
 	var taskTypeParams []string
 	for _, taskType := range taskTypes {
 		taskTypeParams = append(taskTypeParams, string(taskType))
@@ -190,19 +203,20 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	if err != nil {
 		log.Error().Err(err).Msg("Error building subquery")
-		return nil, 0, err
+		return 0, err
 	}
 
 	mainQuery := sq.Select("count(*) as total_tasks").
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
+		// need to do this since TaskType is a custom prisma enum type
 		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()
 	if err != nil {
 		log.Error().Err(err).Msg("Error building full SQL query")
-		return nil, 0, err
+		return 0, err
 	}
 
 	log.Debug().Interface("args", args).Msgf("Query Builder built raw SQL query: %s", sql)
@@ -214,24 +228,24 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	err = o.clientWrapper.Client.Prisma.QueryRaw(sql, args...).Exec(ctx, &res)
 	if err != nil {
 		log.Error().Err(err).Msg("Error executing raw query for total tasks")
-		return nil, 0, err
+		return 0, err
 	}
 
 	if len(res) == 0 {
 		// probably didn't name the right fields in the raw query,
 		// "total_tasks" need to match in res and named alias from count(*)
 		log.Error().Msg("No tasks found")
-		return nil, 0, err
+		return 0, err
 	}
 
 	totalTasksStr := string(res[0].TotalTasks)
-	log.Info().Interface("totalTasks", totalTasksStr).Msg("Total tasks fetched")
+	log.Info().Interface("totalTasks", totalTasksStr).Msg("Total tasks fetched using raw query")
 
 	totalTasks, err := strconv.Atoi(totalTasksStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting total tasks to integer")
-		return nil, 0, err
+		return 0, err
 	}
-	log.Info().Int("totalTasks", totalTasks).Msg("Total tasks fetched, converted to int")
-	return tasks, totalTasks, nil
+
+	return totalTasks, nil
 }
