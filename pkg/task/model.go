@@ -94,7 +94,7 @@ const (
 	CriteriaTypeRanking     CriteriaType = "ranking"
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
-	CriteriaMultiScore CriteriaType = "multi-score"
+	CriteriaMultiScore      CriteriaType = "multi-score"
 )
 
 type Result struct {
@@ -172,7 +172,7 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(i.Value, &intermediate); err != nil {
 			return err
 		}
-		
+
 		v := make(MultiScoreValue)
 		for k, vRaw := range intermediate {
 			value, err := parseJsonStringOrFloat(vRaw)
