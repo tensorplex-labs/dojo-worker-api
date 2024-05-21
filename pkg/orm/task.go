@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"time"
 
 	"dojo-api/db"
 
@@ -176,4 +177,34 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	}
 
 	return tasks, len(totalTasks), nil
+}
+
+// check every three mins for expired tasks
+func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
+	for {
+		o.clientWrapper.BeforeQuery()
+		// Fetch all expired tasks
+		tasks, err := o.dbClient.Task.FindMany(
+			db.Task.ExpireAt.Lte(time.Now()),
+		).Exec(ctx)
+
+		for _, taskModel := range tasks {
+			_, err := o.dbClient.Task.FindUnique(
+				db.Task.ID.Equals(taskModel.ID),
+			).Update(
+				db.Task.Status.Set(db.TaskStatusExpired),
+			).Exec(ctx)
+
+			if err != nil {
+				log.Error().Err(err).Msg("Error in updating task status to expired")
+			}
+		}
+
+		if err != nil {
+			log.Error().Err(err).Msg("Error in fetching expired tasks")
+		}
+		o.clientWrapper.AfterQuery()
+
+		time.Sleep(3 * time.Minute)
+	}
 }
