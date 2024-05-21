@@ -38,6 +38,7 @@ func LoginRoutes(router *gin.Engine) {
 			metrics.GET("/dojo-worker-count", GetDojoWorkerCountController)
 			metrics.GET("/completed-tasks-count", GetTotalCompletedTasksController)
 			metrics.GET("/task-result-count", GetTaskResultsController)
+			metrics.GET("/average-task-completion-time", GetAvgTaskCompletionTimeController)
 		}
 	}
 }

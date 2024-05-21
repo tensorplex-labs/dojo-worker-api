@@ -111,6 +111,7 @@ func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskR
 	).With(
 		db.TaskResult.Task.Fetch(),
 	).Tx()
+
 	if err := t.client.Prisma.Transaction(updateTaskTx, createResultTx).Exec(ctx); err != nil {
 		return nil, err
 	}

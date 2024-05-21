@@ -203,3 +203,76 @@ func (o *MetricsORM) CreateTaskCompletionEvent(ctx context.Context, task db.Task
 
 	return err
 }
+
+func (o *MetricsORM) UpdateAvgTaskCompletionTime(ctx context.Context) error {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	events, err := o.dbClient.Events.FindMany(db.Events.Type.Equals(db.EventsTypeTaskCompletionTime)).Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	totalCompletionTime, err := CalculateTotalTaskCompletionTime(events)
+	if err != nil {
+		return err
+	}
+
+	avgCompletionTime := *totalCompletionTime / len(events)
+
+	_, err = o.dbClient.Metrics.FindUnique(
+		db.Metrics.Type.Equals(db.MetricsTypeAverageTaskCompletionTime),
+	).Exec(ctx)
+
+	if err != nil {
+		if db.IsErrNotFound(err) {
+			// Create new metric data if it doesn't exist
+			newMetricData := metric.MetricAvgTaskCompletionTime{AverageTaskCompletionTime: avgCompletionTime}
+			data, err := json.Marshal(newMetricData)
+			if err != nil {
+				return err
+			}
+			_, err = o.dbClient.Metrics.CreateOne(
+				db.Metrics.Type.Set(db.MetricsTypeAverageTaskCompletionTime),
+				db.Metrics.MetricsData.Set(data),
+			).Exec(ctx)
+			return err
+		}
+		return err
+	}
+
+	var avgTaskCompletionData metric.MetricAvgTaskCompletionTime
+
+	avgTaskCompletionData.AverageTaskCompletionTime = avgCompletionTime
+	updatedData, err := json.Marshal(avgCompletionTime)
+	if err != nil {
+		return err
+	}
+
+	_, err = o.dbClient.Metrics.FindUnique(
+		db.Metrics.Type.Equals(db.MetricsTypeAverageTaskCompletionTime),
+	).Update(
+		db.Metrics.MetricsData.Set(updatedData),
+		db.Metrics.UpdatedAt.Set(time.Now()),
+	).Exec(ctx)
+	return err
+}
+
+func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {
+	var totalCompletionTime int
+	for _, event := range events {
+
+		if event.Type != db.EventsTypeTaskCompletionTime {
+			continue
+		}
+
+		eventData := metric.TaskCompletionEventData{}
+		err := json.Unmarshal(event.EventsData, &eventData)
+		if err != nil {
+			return nil, err
+		}
+
+		totalCompletionTime += eventData.TaskCompletionTime
+	}
+	return &totalCompletionTime, nil
+}

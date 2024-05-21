@@ -233,18 +233,28 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
-	// Check if the task is completed
-	// taskCompleted, err := taskService.CheckTaskCompletion(ctx, updatedTask)
-
-	// Update the completed task count
+	// Update the metric data
 	metricsORM := orm.NewMetricsORM()
-	if err := metricsORM.UpdateCompletedTaskCount(ctx, 1); err != nil {
-		log.Error().Err(err).Msg("Failed to update completed task count")
-	}
-
 	// Update the total tasks results count
 	if err := metricsORM.UpdateTotalTaskResultsCount(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to update total tasks results count")
+	}
+
+	// We want to make sure task status just changed to completion
+	if (task.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
+		// Update the completed task count
+		if err := metricsORM.UpdateCompletedTaskCount(ctx, 1); err != nil {
+			log.Error().Err(err).Msg("Failed to update completed task count")
+		}
+		// Update the task completion event
+		if err := metricsORM.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+			log.Error().Err(err).Msg("Failed to create task completion event")
+		}
+
+		// Update the avg task completion
+		if err := metricsORM.UpdateAvgTaskCompletionTime(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to update average task completion time")
+		}
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
@@ -869,7 +879,7 @@ func GetTotalCompletedTasksController(c *gin.Context) {
 		return
 	}
 
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumCompletedTasks, metricData.MetricsData)
 	if err != nil {
 		log.Error().Err(err).Msg("Invalid metric data")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -877,7 +887,7 @@ func GetTotalCompletedTasksController(c *gin.Context) {
 	}
 
 	completedTasksData := validatedData.(metric.MetricCompletedTasks)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: completedTasksData.TotalNumCompletedTasks}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetCompletedTaskResp{NumCompletedTasks: completedTasksData.TotalNumCompletedTasks}))
 }
 
 func GetTotalTasksResultsController(c *gin.Context) {
@@ -888,7 +898,7 @@ func GetTotalTasksResultsController(c *gin.Context) {
 		return
 	}
 
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumTaskResults, metricData.MetricsData)
 	if err != nil {
 		log.Error().Err(err).Msg("Invalid metric data")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
@@ -896,5 +906,24 @@ func GetTotalTasksResultsController(c *gin.Context) {
 	}
 
 	totalTasksResults := validatedData.(metric.MetricTaskResults)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: totalTasksResults.TotalNumTasksResults}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetTaskResultResp{NumTaskResults: totalTasksResults.TotalNumTasksResults}))
+}
+
+func GetAvgTaskCompletionTimeController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeAverageTaskCompletionTime)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get avg task completion time")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	validatedData, err := metric.ValidateMetricData(db.MetricsTypeAverageTaskCompletionTime, metricData.MetricsData)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid metric data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		return
+	}
+
+	avgCompletionTime := validatedData.(metric.MetricAvgTaskCompletionTime)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetAvgTaskCompletionResp{AvgTaskCompletionTime: avgCompletionTime.AverageTaskCompletionTime}))
 }

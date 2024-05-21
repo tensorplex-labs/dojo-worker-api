@@ -4,6 +4,18 @@ type GetDojoWorkerCountResp struct {
 	NumDojoWorkers int `json:"numDojoWorkers"`
 }
 
+type GetCompletedTaskResp struct {
+	NumCompletedTasks int `json:"numCompletedTasks"`
+}
+
+type GetTaskResultResp struct {
+	NumTaskResults int `json:"numTaskResults"`
+}
+
+type GetAvgTaskCompletionResp struct {
+	AvgTaskCompletionTime int `json:"averageTaskCompletionTime"`
+}
+
 type MetricWorkerCount struct {
 	TotalNumDojoWorkers int `json:"total_num_dojo_workers"`
 }
