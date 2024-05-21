@@ -23,6 +23,7 @@ import (
 func main() {
 	loadEnvVars()
 	go continuouslyReadEnv()
+	go orm.NewTaskORM().UpdateExpiredTasks(context.Background())
 	port := utils.LoadDotEnv("SERVER_PORT")
 
 	router := gin.Default()

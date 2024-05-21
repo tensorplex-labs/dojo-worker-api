@@ -6,14 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"time"
+	"mime/multipart"
 	"slices"
+	"strconv"
+	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/sandbox"
 	"dojo-api/utils"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
@@ -187,12 +190,12 @@ func IsValidTaskType(taskType interface{}) (bool, error) {
 }
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
-    switch criteriaType {
-    case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
-        return true
-    default:
-        return false
-    }
+	switch criteriaType {
+	case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
+		return true
+	default:
+		return false
+	}
 }
 
 // create task
@@ -277,11 +280,18 @@ func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel,
 		log.Error().Err(err).Msg("Error marshaling result items")
 		return nil, err
 	}
+
 	newTaskResultData := db.InnerTaskResult{
 		Status:     db.TaskResultStatusCompleted,
 		ResultData: jsonResults,
 		TaskID:     task.ID,
 		WorkerID:   dojoWorkerId,
+	}
+
+	// Check if the task has reached the max results, no way we can have greater than max results, or something's wrong
+	if task.NumResults >= task.MaxResults {
+		log.Info().Msg("Task has reached max results")
+		newTaskResultData.Status = db.TaskResultStatusInvalid
 	}
 
 	// Insert the task result data
@@ -365,7 +375,7 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 						return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
 					}
 
-					if !slices.Contains(criteria.Options, option){
+					if !slices.Contains(criteria.Options, option) {
 						return nil, fmt.Errorf("option %v not found in criteria options", option)
 					}
 				}
@@ -562,7 +572,7 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 	return taskData, nil
 }
 
-func (t *TaskService) ValidateCompletedTask(ctx context.Context, taskId string, workerId string) (bool, error) {
+func (t *TaskService) ValidateCompletedTResultByWorker(ctx context.Context, taskId string, workerId string) (bool, error) {
 	taskResult, err := t.taskResultORM.GetCompletedTResultByTaskAndWorker(ctx, taskId, workerId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -591,6 +601,65 @@ func (t *TaskService) GetCompletedTaskMap(ctx context.Context, workerId string) 
 			completedTaskMap[ts.TaskID] = true
 		}
 	}
-
 	return completedTaskMap, nil // Task result exists
+}
+
+func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
+	var reqbody CreateTaskRequest
+	title := c.PostForm("title")
+	body := c.PostForm("body")
+	expireAt := c.PostForm("expireAt")
+	maxResults, _ := strconv.Atoi(c.PostForm("maxResults"))
+	totalRewards, _ := strconv.ParseFloat(c.PostForm("totalRewards"), 64)
+
+	var taskData []TaskData
+	if err := json.Unmarshal([]byte(c.PostForm("taskData")), &taskData); err != nil {
+		log.Error().Err(err).Msg("Invalid taskData")
+		return reqbody, err
+	}
+
+	reqbody = CreateTaskRequest{
+		Title:        title,
+		Body:         body,
+		ExpireAt:     expireAt,
+		TaskData:     taskData,
+		MaxResults:   maxResults,
+		TotalRewards: totalRewards,
+	}
+
+	return reqbody, nil
+}
+
+func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
+	for i, t := range requestBody.TaskData {
+		if t.Task == db.TaskTypeTextToImage {
+			for j, response := range t.Responses {
+				var fileHeader *multipart.FileHeader
+				// Find the file with the matching completion filename
+				for _, file := range files {
+					if file.Filename == response.Completion {
+						fileHeader = file
+						break
+					}
+				}
+
+				if fileHeader == nil {
+					log.Error().Interface("response", response.Completion).Msg("Failed to find file header for response")
+					return CreateTaskRequest{}, errors.New("failed to find file header for response")
+				}
+
+				// Upload the file to S3
+				fileObj, err := utils.UploadFileToS3(fileHeader)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to upload file to S3")
+					return CreateTaskRequest{}, err
+				}
+
+				log.Info().Interface("fileObj", fileObj).Msg("File uploaded successfully")
+				// Update the response completion with the S3 URL
+				requestBody.TaskData[i].Responses[j].Completion = fileObj.Location
+			}
+		}
+	}
+	return requestBody, nil
 }

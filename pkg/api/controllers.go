@@ -72,10 +72,11 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	var requestBody task.CreateTaskRequest
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Error().Err(err).Msg("Invalid request body")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+	requestBody, err := task.ProcessRequestBody(c)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to process request body")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
 	}
@@ -87,7 +88,8 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := task.ProcessTaskRequest(requestBody)
+	requestBody, err = task.ProcessTaskRequest(requestBody)
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
@@ -97,10 +99,30 @@ func CreateTasksController(c *gin.Context) {
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 
+	// Here we will handle file upload
+	// Parse files from the form
+	form, err := c.MultipartForm()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to parse multipart form")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid form data"))
+		c.Abort()
+		return
+	}
+
+	files := form.File["file"]
+	// Upload files to S3 and update responses with URLs
+	requestBody, err = task.ProcessFileUpload(requestBody, files)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to upload files")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to upload files"))
+		c.Abort()
+		return
+	}
+
 	taskService := task.NewTaskService()
 	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
 
-	log.Info().Interface("tasks", tasks).Msg("Tasks created successfully")
+	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return
@@ -117,6 +139,7 @@ func CreateTasksController(c *gin.Context) {
 		Error:   errors,
 	})
 }
+
 func SubmitTaskResultController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -154,22 +177,6 @@ func SubmitTaskResultController(c *gin.Context) {
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
 
-	isCompletedTask, err := taskService.ValidateCompletedTask(ctx, taskId, worker.ID)
-
-	if err != nil {
-		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
-		c.Abort()
-		return
-	}
-
-	if isCompletedTask {
-		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task is already completed by worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task is already completed by worker"))
-		c.Abort()
-		return
-	}
-
 	task, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -183,6 +190,29 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.Abort()
 		return
 	}
+	// Check if the task is expired
+	if task.ExpireAt.Before(time.Now()) {
+		log.Info().Str("taskId", taskId).Msg("Task is expired")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task is expired"))
+		c.Abort()
+		return
+	}
+
+	isCompletedTResult, err := taskService.ValidateCompletedTResultByWorker(ctx, taskId, worker.ID)
+	if err != nil {
+		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task result")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
+		return
+	}
+
+	if isCompletedTResult {
+		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task Result is already completed by worker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task Result is already completed by worker"))
+		c.Abort()
+		return
+	}
+
 	log.Info().Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Dojo Worker and Task ID pulled")
 
 	// Update the task with the result data

@@ -1,14 +1,20 @@
 package utils
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"mime/multipart"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,11 +33,11 @@ func init() {
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
-		// } else {
-		// 	LoadDotEnv("DATABASE_URL")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
+		LoadDotEnv("AWS_ACCESS_KEY_ID")
+		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
@@ -40,6 +46,7 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
+	LoadDotEnv("AWS_S3_BUCKET_NAME")
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -106,4 +113,57 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 	key := hex.EncodeToString(b)
 	key = "sk-" + key
 	return key, nil
+}
+
+// Initialize the S3 client
+func getS3Client() (*s3.Client, error) {
+	// Load the default AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	// Create an S3 client using the loaded configuration
+	log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
+	client := s3.NewFromConfig(cfg)
+	return client, nil
+}
+
+// Get the S3 uploader
+func getS3Uploader(client *s3.Client) *manager.Uploader {
+	return manager.NewUploader(client)
+}
+
+func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
+	// Open the file
+	bucketName := LoadDotEnv("AWS_S3_BUCKET_NAME")
+	src, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer src.Close()
+	// Generate a unique file name for the S3 object
+	// fileName := fmt.Sprintf("uploads/%d_%s", time.Now().Unix(), file.Filename)
+
+	// Create an S3 client
+	log.Info().Interface("file", file).Msg("Uploading file")
+	s3Client, err := getS3Client()
+	if err != nil {
+		log.Error().Err(err).Msg("Error creating S3 client")
+		return nil, err
+	}
+	uploader := getS3Uploader(s3Client)
+
+	// Upload the file to S3
+	result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(file.Filename),
+		Body:   src,
+		// ContentType: aws.String(file.Header.Get("Content-Type")),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Error uploading file")
+		return result, err
+	}
+
+	return result, nil
 }
