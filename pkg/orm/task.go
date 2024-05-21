@@ -279,7 +279,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 					log.Error().Err(err).Msg("Error in updating task status to expired")
 				}
 			}
-			if i % 100 == 0 || i == len(tasks) - 1 {
+			if len(txns) == 100 || i == len(tasks)-1 {
 				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
 					log.Error().Err(err).Msg("Error in fetching expired tasks")
 				}
