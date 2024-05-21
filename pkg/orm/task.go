@@ -254,34 +254,41 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 // check every three mins for expired tasks
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	for range time.Tick(3 * time.Minute) {
+		log.Info().Msg("Checking for expired tasks")
 		o.clientWrapper.BeforeQuery()
 		// Fetch all expired tasks
-		tasks, err := o.dbClient.Task.FindMany(
-			db.Task.ExpireAt.Lte(time.Now()),
-		).Exec(ctx)
+		tasks, err := o.dbClient.Task.
+			FindMany(
+				db.Task.ExpireAt.Lte(time.Now()),
+				db.Task.Status.Not(db.TaskStatusExpired),
+			).
+			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
+			Exec(ctx)
 
 		if err != nil {
 			log.Error().Err(err).Msg("Error in fetching expired tasks")
 		}
-		
+
+		if len(tasks) == 0 {
+			log.Info().Msg("No newly expired tasks to update skipping...")
+			continue
+		} else {
+			log.Info().Msgf("Fetched %v newly expired tasks", len(tasks))
+		}
+
 		var txns []db.PrismaTransaction
 		for i, taskModel := range tasks {
-			if taskModel.Status != db.TaskStatusExpired{
-				transaction := o.dbClient.Task.FindUnique(
-					db.Task.ID.Equals(taskModel.ID),
-				).Update(
-					db.Task.Status.Set(db.TaskStatusExpired),
-				).Tx()
+			transaction := o.dbClient.Task.FindUnique(
+				db.Task.ID.Equals(taskModel.ID),
+			).Update(
+				db.Task.Status.Set(db.TaskStatusExpired),
+			).Tx()
 
-				txns = append(txns, transaction)
+			txns = append(txns, transaction)
 
-				if err != nil {
-					log.Error().Err(err).Msg("Error in updating task status to expired")
-				}
-			}
-			if len(txns) == 100 ||( i == len(tasks)-1 && len(txns) > 0){
+			if len(txns) == 100 || (i == len(tasks)-1 && len(txns) > 0) {
 				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
-					log.Error().Err(err).Msg("Error in fetching expired tasks")
+					log.Error().Err(err).Msg("Error in updating batch of task status to expired")
 				}
 				txns = []db.PrismaTransaction{}
 			}
