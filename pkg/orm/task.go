@@ -253,7 +253,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 
 // check every three mins for expired tasks
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
-	for {
+	for range time.Tick(3 * time.Minute) {
 		o.clientWrapper.BeforeQuery()
 		// Fetch all expired tasks
 		tasks, err := o.dbClient.Task.FindMany(
@@ -288,7 +288,5 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 		}
 
 		o.clientWrapper.AfterQuery()
-
-		time.Sleep(3 * time.Minute)
 	}
 }
