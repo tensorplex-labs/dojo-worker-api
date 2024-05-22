@@ -117,3 +117,14 @@ func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskR
 	}
 	return createResultTx.Result(), nil
 }
+
+func (t *TaskResultORM) GetCompletedTResultCount(ctx context.Context) (int, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	taskResult, err := t.client.TaskResult.FindMany(db.TaskResult.Status.Equals(db.TaskResultStatusCompleted)).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return len(taskResult), nil
+}

@@ -177,3 +177,16 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	return tasks, len(totalTasks), nil
 }
+
+func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	completedTasks, err := o.dbClient.Task.FindMany(
+		db.Task.Status.Equals(db.TaskStatusCompleted),
+	).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return len(completedTasks), nil
+}

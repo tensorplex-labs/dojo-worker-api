@@ -14,6 +14,7 @@ import (
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
+	"dojo-api/pkg/event"
 	"dojo-api/pkg/metric"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
@@ -57,11 +58,14 @@ func WorkerLoginController(c *gin.Context) {
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
 
+	metricService := metric.NewMetricService()
+
 	if !alreadyExists {
-		metricsORM := orm.NewMetricsORM()
-		if err := metricsORM.UpdateDojoWorkerCount(c.Request.Context(), 1); err != nil {
-			log.Error().Err(err).Msg("Failed to update dojo worker count")
-		}
+		go func() {
+			if err := metricService.UpdateDojoWorkerCount(c.Request.Context()); err != nil {
+				log.Error().Err(err).Msg("Failed to update dojo worker count")
+			}
+		}()
 	}
 
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
@@ -234,25 +238,26 @@ func SubmitTaskResultController(c *gin.Context) {
 	}
 
 	// Update the metric data
-	metricsORM := orm.NewMetricsORM()
+	metricsService := metric.NewMetricService()
+	eventsService := event.NewEventService()
 	// Update the total tasks results count
-	if err := metricsORM.UpdateTotalTaskResultsCount(ctx, 1); err != nil {
+	if err := metricsService.UpdateTotalTaskResultsCount(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to update total tasks results count")
 	}
 
 	// We want to make sure task status just changed to completion
 	if (task.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
 		// Update the completed task count
-		if err := metricsORM.UpdateCompletedTaskCount(ctx, 1); err != nil {
+		if err := metricsService.UpdateCompletedTaskCount(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to update completed task count")
 		}
 		// Update the task completion event
-		if err := metricsORM.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+		if err := eventsService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
 			log.Error().Err(err).Msg("Failed to create task completion event")
 		}
 
 		// Update the avg task completion
-		if err := metricsORM.UpdateAvgTaskCompletionTime(ctx); err != nil {
+		if err := metricsService.UpdateAvgTaskCompletionTime(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to update average task completion time")
 		}
 	}
@@ -868,7 +873,7 @@ func GetDojoWorkerCountController(c *gin.Context) {
 	}
 
 	workerCountData := validatedData.(metric.MetricWorkerCount)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetDojoWorkerCountResp{NumDojoWorkers: workerCountData.TotalNumDojoWorkers}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.DojoWorkerCountResponse{NumDojoWorkers: workerCountData.TotalNumDojoWorkers}))
 }
 
 func GetTotalCompletedTasksController(c *gin.Context) {
@@ -886,8 +891,8 @@ func GetTotalCompletedTasksController(c *gin.Context) {
 		return
 	}
 
-	completedTasksData := validatedData.(metric.MetricCompletedTasks)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetCompletedTaskResp{NumCompletedTasks: completedTasksData.TotalNumCompletedTasks}))
+	completedTasksData := validatedData.(metric.MetricCompletedTasksCount)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.CompletedTaskCountResponse{NumCompletedTasks: completedTasksData.TotalNumCompletedTasks}))
 }
 
 func GetTotalTasksResultsController(c *gin.Context) {
@@ -905,8 +910,8 @@ func GetTotalTasksResultsController(c *gin.Context) {
 		return
 	}
 
-	totalTasksResults := validatedData.(metric.MetricTaskResults)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetTaskResultResp{NumTaskResults: totalTasksResults.TotalNumTasksResults}))
+	totalTasksResults := validatedData.(metric.MetricTaskResultsCount)
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.TaskResultCountResponse{NumTaskResults: totalTasksResults.TotalNumTasksResults}))
 }
 
 func GetAvgTaskCompletionTimeController(c *gin.Context) {
@@ -925,5 +930,5 @@ func GetAvgTaskCompletionTimeController(c *gin.Context) {
 	}
 
 	avgCompletionTime := validatedData.(metric.MetricAvgTaskCompletionTime)
-	c.JSON(http.StatusOK, defaultSuccessResponse(metric.GetAvgTaskCompletionResp{AvgTaskCompletionTime: avgCompletionTime.AverageTaskCompletionTime}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.AvgTaskCompletionTimeResponse{AvgTaskCompletionTime: avgCompletionTime.AverageTaskCompletionTime}))
 }

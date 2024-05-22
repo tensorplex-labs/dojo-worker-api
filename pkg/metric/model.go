@@ -1,18 +1,18 @@
 package metric
 
-type GetDojoWorkerCountResp struct {
+type DojoWorkerCountResponse struct {
 	NumDojoWorkers int `json:"numDojoWorkers"`
 }
 
-type GetCompletedTaskResp struct {
+type CompletedTaskCountResponse struct {
 	NumCompletedTasks int `json:"numCompletedTasks"`
 }
 
-type GetTaskResultResp struct {
+type TaskResultCountResponse struct {
 	NumTaskResults int `json:"numTaskResults"`
 }
 
-type GetAvgTaskCompletionResp struct {
+type AvgTaskCompletionTimeResponse struct {
 	AvgTaskCompletionTime int `json:"averageTaskCompletionTime"`
 }
 
@@ -20,19 +20,14 @@ type MetricWorkerCount struct {
 	TotalNumDojoWorkers int `json:"total_num_dojo_workers"`
 }
 
-type MetricCompletedTasks struct {
+type MetricCompletedTasksCount struct {
 	TotalNumCompletedTasks int `json:"total_num_completed_tasks"`
 }
 
-type MetricTaskResults struct {
+type MetricTaskResultsCount struct {
 	TotalNumTasksResults int `json:"total_num_tasks_results"`
 }
 
 type MetricAvgTaskCompletionTime struct {
 	AverageTaskCompletionTime int `json:"average_task_completion_time"`
-}
-
-type TaskCompletionEventData struct {
-	TaskId             string `json:"task_id"`
-	TaskCompletionTime int    `json:"task_completion_time"`
 }

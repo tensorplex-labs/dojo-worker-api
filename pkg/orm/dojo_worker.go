@@ -65,3 +65,15 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 	}
 	return worker, nil
 }
+
+func (s *DojoWorkerORM) GetDojoWorkers() ([]db.DojoWorkerModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
+	ctx := context.Background()
+	workers, err := s.dbClient.DojoWorker.FindMany().Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return workers, nil
+}
