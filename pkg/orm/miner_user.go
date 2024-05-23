@@ -135,6 +135,35 @@ func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.Min
 	return user, nil
 }
 
+func (s *MinerUserORM) RefreshAPIKey(hotkey string, newExpireAt time.Time) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
+	if hotkey == "" {
+		return nil, fmt.Errorf("hotkey cannot be nil")
+	}
+
+	ctx := context.Background()
+	foundMiner, err := s.GetUserByHotkey(hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Error refreshing API key for user that doesn't exist")
+		return nil, err
+	}
+
+	updatedMiner, err := s.dbClient.MinerUser.FindUnique(
+		db.MinerUser.ID.Equals(foundMiner.ID),
+	).Update(
+		db.MinerUser.APIKeyExpireAt.Set(newExpireAt),
+	).Exec(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error updating API key expiration")
+		return nil, err
+	}
+	log.Info().Msg("API key expiration updated successfully")
+	return updatedMiner, nil
+}
+
 func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
@@ -165,7 +194,7 @@ func (s *MinerUserORM) ReregisterMiner(hotkey string) error {
 		db.MinerUser.Hotkey.Equals(hotkey),
 	).Update(
 		db.MinerUser.IsVerified.Set(true),
-		db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour * 24)),
+		db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour*24)),
 	).Exec(ctx)
 
 	if err != nil {

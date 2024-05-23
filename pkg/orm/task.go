@@ -2,8 +2,14 @@ package orm
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	"dojo-api/db"
+
+	sq "github.com/Masterminds/squirrel"
 
 	"github.com/rs/zerolog/log"
 )
@@ -166,14 +172,128 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, 0, err
 	}
 
-	totalTasks, err := o.dbClient.Task.FindMany(
-		filterParams...,
-	).Exec(ctx)
+	// TODO commented out for now, testing raw query speed
+	// totalTasks, err := o.dbClient.Task.FindMany(
+	// 	filterParams...,
+	// ).Exec(ctx)
 
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching total Tasks")
+		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
 		return nil, 0, err
 	}
 
-	return tasks, len(totalTasks), nil
+	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
+	return tasks, totalTasks, nil
+}
+
+// This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
+// and using findMany with the filter params and then len(tasks) is facing performance issues
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
+	var taskTypeParams []string
+	for _, taskType := range taskTypes {
+		taskTypeParams = append(taskTypeParams, string(taskType))
+	}
+
+	// need to set subquery to use "$?" and let the main query use dollar to resolve placeholders
+	subQuery, subQueryArgs, err := sq.Select("id").
+		From("\"MinerUser\"").
+		Where(sq.Eq{"subscription_key": subscriptionKeys}).
+		PlaceholderFormat(sq.Question).
+		ToSql()
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error building subquery")
+		return 0, err
+	}
+
+	mainQuery := sq.Select("count(*) as total_tasks").
+		From("\"Task\"").
+		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
+		// need to do this since TaskType is a custom prisma enum type
+		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
+		PlaceholderFormat(sq.Dollar)
+
+	sql, args, err := mainQuery.ToSql()
+	if err != nil {
+		log.Error().Err(err).Msg("Error building full SQL query")
+		return 0, err
+	}
+
+	log.Debug().Interface("args", args).Msgf("Query Builder built raw SQL query: %s", sql)
+
+	// unsure why it's a raw string, when the examples say it's a raw int
+	var res []struct {
+		TotalTasks db.RawString `json:"total_tasks"`
+	}
+	err = o.clientWrapper.Client.Prisma.QueryRaw(sql, args...).Exec(ctx, &res)
+	if err != nil {
+		log.Error().Err(err).Msg("Error executing raw query for total tasks")
+		return 0, err
+	}
+
+	if len(res) == 0 {
+		// probably didn't name the right fields in the raw query,
+		// "total_tasks" need to match in res and named alias from count(*)
+		log.Error().Msg("No tasks found")
+		return 0, err
+	}
+
+	totalTasksStr := string(res[0].TotalTasks)
+	log.Info().Interface("totalTasks", totalTasksStr).Msg("Total tasks fetched using raw query")
+
+	totalTasks, err := strconv.Atoi(totalTasksStr)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting total tasks to integer")
+		return 0, err
+	}
+
+	return totalTasks, nil
+}
+
+// check every three mins for expired tasks
+func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
+	for range time.Tick(3 * time.Minute) {
+		log.Info().Msg("Checking for expired tasks")
+		o.clientWrapper.BeforeQuery()
+		// Fetch all expired tasks
+		tasks, err := o.dbClient.Task.
+			FindMany(
+				db.Task.ExpireAt.Lte(time.Now()),
+				db.Task.Status.Not(db.TaskStatusExpired),
+			).
+			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
+			Exec(ctx)
+
+		if err != nil {
+			log.Error().Err(err).Msg("Error in fetching expired tasks")
+		}
+
+		if len(tasks) == 0 {
+			log.Info().Msg("No newly expired tasks to update skipping...")
+			continue
+		} else {
+			log.Info().Msgf("Fetched %v newly expired tasks", len(tasks))
+		}
+
+		var txns []db.PrismaTransaction
+		for i, taskModel := range tasks {
+			transaction := o.dbClient.Task.FindUnique(
+				db.Task.ID.Equals(taskModel.ID),
+			).Update(
+				db.Task.Status.Set(db.TaskStatusExpired),
+			).Tx()
+
+			txns = append(txns, transaction)
+
+			if len(txns) == 100 || (i == len(tasks)-1 && len(txns) > 0) {
+				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
+					log.Error().Err(err).Msg("Error in updating batch of task status to expired")
+				}
+				txns = []db.PrismaTransaction{}
+			}
+		}
+
+		o.clientWrapper.AfterQuery()
+	}
 }

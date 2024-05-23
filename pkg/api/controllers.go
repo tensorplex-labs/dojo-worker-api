@@ -86,10 +86,11 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	var requestBody task.CreateTaskRequest
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Error().Err(err).Msg("Invalid request body")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+	requestBody, err := task.ProcessRequestBody(c)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to process request body")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
 	}
@@ -101,7 +102,8 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := task.ProcessTaskRequest(requestBody)
+	requestBody, err = task.ProcessTaskRequest(requestBody)
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
@@ -111,10 +113,30 @@ func CreateTasksController(c *gin.Context) {
 
 	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 
+	// Here we will handle file upload
+	// Parse files from the form
+	form, err := c.MultipartForm()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to parse multipart form")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid form data"))
+		c.Abort()
+		return
+	}
+
+	files := form.File["file"]
+	// Upload files to S3 and update responses with URLs
+	requestBody, err = task.ProcessFileUpload(requestBody, files)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to upload files")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to upload files"))
+		c.Abort()
+		return
+	}
+
 	taskService := task.NewTaskService()
 	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
 
-	log.Info().Interface("tasks", tasks).Msg("Tasks created successfully")
+	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return
@@ -185,23 +207,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
 
-	isCompletedTask, err := taskService.ValidateCompletedTask(ctx, taskId, worker.ID)
-
-	if err != nil {
-		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
-		c.Abort()
-		return
-	}
-
-	if isCompletedTask {
-		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task is already completed by worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task is already completed by worker"))
-		c.Abort()
-		return
-	}
-
-	taskData, err := taskService.GetTaskById(ctx, taskId)
+	task, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			log.Error().Err(err).Str("taskId", taskId).Msg("Task not found")
@@ -214,6 +220,29 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.Abort()
 		return
 	}
+	// Check if the task is expired
+	if task.ExpireAt.Before(time.Now()) {
+		log.Info().Str("taskId", taskId).Msg("Task is expired")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task is expired"))
+		c.Abort()
+		return
+	}
+
+	isCompletedTResult, err := taskService.ValidateCompletedTResultByWorker(ctx, taskId, worker.ID)
+	if err != nil {
+		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task result")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		c.Abort()
+		return
+	}
+
+	if isCompletedTResult {
+		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task Result is already completed by worker")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task Result is already completed by worker"))
+		c.Abort()
+		return
+	}
+
 	log.Info().Str("Dojo Worker ID", worker.ID).Str("Task ID", taskId).Msg("Dojo Worker and Task ID pulled")
 
 	// Update the task with the result data
@@ -250,7 +279,11 @@ func MinerLoginController(c *gin.Context) {
 	parsedMessage, err := siws.ParseMessage(loginRequest.Message)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to parse message")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
+		if strings.Contains(err.Error(), "expired") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Message expired"))
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
+		}
 		return
 	}
 
@@ -267,15 +300,20 @@ func MinerLoginController(c *gin.Context) {
 
 	minerUserORM := orm.NewMinerUserORM()
 	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey)
-	if err == db.ErrNotFound {
-		if newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation); newErr != nil {
+	log.Info().Interface("minerUser", minerUser).Interface("error", err).Msg("Getting miner user by hotkey")
+	if minerUser != nil {
+		newExpireAt := time.Now().Add(time.Hour * 24)
+		minerUserORM.RefreshAPIKey(minerUser.Hotkey, newExpireAt)
+	} else if err == db.ErrNotFound {
+		newUser, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation)
+		if newErr != nil {
 			log.Error().Err(newErr).Msg("Failed to create new miner user")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
 			return
 		} else {
 			response := map[string]string{
-				"apiKey":          minerUser.APIKey,
-				"subscriptionKey": minerUser.SubscriptionKey,
+				"apiKey":          newUser.APIKey,
+				"subscriptionKey": newUser.SubscriptionKey,
 			}
 			c.JSON(http.StatusOK, defaultSuccessResponse(response))
 			return
@@ -294,31 +332,36 @@ func MinerLoginController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
-func handleNewMinerUser(hotkey string, emailAddress string, organisation string) error {
+func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (*db.MinerUserModel, error) {
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random api key")
-		return err
+		return nil, err
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
 	organisationExists := organisation == ""
 	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
+	var newMinerUser *db.MinerUserModel
 	if subscriptionKey == "" {
 		log.Error().Err(err).Msg("Failed to generate subscription key")
-		return err
+		return nil, err
 	}
 
 	if organisationExists {
-		if _, err = minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey, organisation); err != nil {
-			log.Error().Err(err).Msg("Failed to save miner user")
-			return err
+		minerUser, err := minerUserORM.CreateUserWithOrganisation(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey, organisation)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create miner user with organisation")
+			return nil, err
 		}
+		newMinerUser = minerUser
 	} else {
-		if _, err = minerUserORM.CreateUser(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey); err != nil {
-			log.Error().Err(err).Msg("Failed to save miner user")
-			return err
+		minerUser, err := minerUserORM.CreateUser(hotkey, apiKey, expiry, false, emailAddress, subscriptionKey)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create miner user")
+			return nil, err
 		}
+		newMinerUser = minerUser
 	}
 
 	person := map[bool]string{true: organisation, false: "User"}[organisationExists]
@@ -326,9 +369,9 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 	err = email.SendEmail(emailAddress, body)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to send email")
-		return err
+		return newMinerUser, err
 	}
-	return nil
+	return newMinerUser, nil
 }
 
 // MinerInfoController godoc

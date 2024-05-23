@@ -12,6 +12,11 @@ import (
 )
 
 func main() {
+	substrateService := blockchain.NewSubstrateService()
+	substrateService.GetLatestFinalizedBlock()
+	// a bit lower than last finalized block on testnet
+	const initialBlockId = 1_923_000
+	substrateService.GetLatestUnFinalizedBlock(initialBlockId)
 
 	// TODO write unit tests??
 	// service := blockchain.NewSubstrateService()
