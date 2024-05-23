@@ -261,6 +261,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 			FindMany(
 				db.Task.ExpireAt.Lte(time.Now()),
 				db.Task.Status.Not(db.TaskStatusExpired),
+				db.Task.Status.Not(db.TaskStatusCompleted),
 			).
 			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
 			Exec(ctx)
