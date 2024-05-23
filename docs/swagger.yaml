@@ -19,6 +19,13 @@ definitions:
       signature:
         type: string
     type: object
+  auth.MinerLoginResponse:
+    properties:
+      apiKey:
+        type: string
+      subscriptionKey:
+        type: string
+    type: object
   db.TaskStatus:
     enum:
     - IN_PROGRESS
@@ -137,7 +144,7 @@ definitions:
       toDisable:
         type: boolean
     type: object
-  worker.DisableSucessResponse:
+  worker.DisableSuccessResponse:
     properties:
       message:
         type: string
@@ -153,13 +160,6 @@ definitions:
     properties:
       nonce:
         type: string
-    type: object
-  worker.ListWorkerPartnersResponse:
-    properties:
-      partners:
-        items:
-          $ref: '#/definitions/worker.WorkerPartner'
-        type: array
     type: object
   worker.UpdateWorkerPartnerRequest:
     properties:
@@ -282,12 +282,18 @@ paths:
       summary: Get miner information
       tags:
       - Miner
-  /api/v1/miner/login:
+  /api/v1/miner/login/auth:
     post:
       consumes:
       - application/json
-      description: Log in a miner using their hotkey and message
+      description: Log in a miner by providing their wallet address, chain ID, message,
+        signature, and timestamp
       parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
       - description: Request body containing the miner login details
         in: body
         name: body
@@ -298,27 +304,30 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful, returns API key and subscription key
+          description: Miner logged in successfully
           schema:
             allOf:
             - $ref: '#/definitions/api.ApiResponse'
             - properties:
                 body:
-                  additionalProperties:
-                    type: string
-                  type: object
+                  $ref: '#/definitions/auth.MinerLoginResponse'
               type: object
         "400":
-          description: Failed to parse message
+          description: Invalid request body or failed to parse message
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "401":
-          description: Unauthorized
+          description: Unauthorized, invalid signature, message expired, or hotkey
+            not registered
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Miner user not found
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
-          description: Failed to get nonce from cache or failed to create/get miner
-            user
+          description: Failed to get nonce from cache, internal server error, or failed
+            to create new miner user
           schema:
             $ref: '#/definitions/api.ApiResponse'
       summary: Miner login
@@ -351,8 +360,16 @@ paths:
             - $ref: '#/definitions/api.ApiResponse'
             - properties:
                 body:
-                  $ref: '#/definitions/worker.DisableSucessResponse'
+                  $ref: '#/definitions/worker.DisableSuccessResponse'
               type: object
+        "400":
+          description: Invalid request body or parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Failed to disable worker partner, no records updated
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
         "500":
           description: Internal server error - failed to disable worker partner
           schema:
@@ -389,6 +406,14 @@ paths:
                 body:
                   $ref: '#/definitions/worker.UpdateWorkerPartnerResponse'
               type: object
+        "400":
+          description: Invalid request body or missing required parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
         "500":
           description: Internal server error - failed to update worker partner
           schema:
@@ -437,9 +462,20 @@ paths:
                 body:
                   $ref: '#/definitions/task.TaskPagination'
               type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: No tasks found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
         "500":
-          description: "Internal server error - success is always false\"\t{ \"success\":
-            false, \"error\": \"Internal server error\", \"body\": null }"
+          description: Internal server error
           schema:
             $ref: '#/definitions/api.ApiResponse'
       summary: Retrieve tasks by pagination
@@ -469,7 +505,7 @@ paths:
                   $ref: '#/definitions/task.TaskResponse'
               type: object
         "404":
-          description: Task not found, error message wrapped in ApiResponse structure
+          description: Task not found
           schema:
             allOf:
             - $ref: '#/definitions/api.ApiResponse'
@@ -478,8 +514,7 @@ paths:
                   type: string
               type: object
         "500":
-          description: Internal server error, error message wrapped in ApiResponse
-            structure
+          description: Internal server error
           schema:
             allOf:
             - $ref: '#/definitions/api.ApiResponse'
@@ -488,6 +523,91 @@ paths:
                   type: string
               type: object
       summary: Retrieve task by ID
+      tags:
+      - Tasks
+  /api/v1/tasks/create:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create tasks by providing the necessary task details along with
+        files to upload. This endpoint accepts multipart/form-data, and multiple files
+        can be uploaded.
+      parameters:
+      - description: API Key for Miner Authentication
+        in: header
+        name: x-api-key
+        required: true
+        type: string
+      - description: 'Content-Type: multipart/form-data'
+        in: header
+        name: Content-Type
+        required: true
+        type: string
+      - description: Title of the task
+        in: formData
+        name: Title
+        required: true
+        type: string
+      - description: Body of the task
+        in: formData
+        name: Body
+        required: true
+        type: string
+      - description: Expiration date of the task
+        in: formData
+        name: ExpireAt
+        required: true
+        type: string
+      - description: Task data in JSON format
+        in: formData
+        name: TaskData
+        required: true
+        type: string
+      - description: Maximum results
+        in: formData
+        name: MaxResults
+        required: true
+        type: integer
+      - description: Total rewards
+        in: formData
+        name: TotalRewards
+        required: true
+        type: number
+      - collectionFormat: csv
+        description: Files to upload (can upload multiple files)
+        in: formData
+        items:
+          type: file
+        name: files
+        required: true
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tasks created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  items:
+                    type: string
+                  type: array
+              type: object
+        "400":
+          description: Bad request, invalid form data, or failed to process request
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error, failed to upload files
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Create Tasks
       tags:
       - Tasks
   /api/v1/tasks/submit-result/{task-id}:
@@ -525,7 +645,7 @@ paths:
                   $ref: '#/definitions/task.SubmitTaskResultResponse'
               type: object
         "400":
-          description: Invalid request body
+          description: Invalid request body or task is expired
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "401":
@@ -534,6 +654,10 @@ paths:
             $ref: '#/definitions/api.ApiResponse'
         "404":
           description: Task not found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "409":
+          description: Task result already completed by worker
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
@@ -572,6 +696,18 @@ paths:
           description: Invalid wallet address or chain ID
           schema:
             $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "403":
+          description: Forbidden access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "409":
+          description: Worker already exists
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
         "500":
           description: Failed to create worker
           schema:
@@ -608,6 +744,18 @@ paths:
                 body:
                   type: string
               type: object
+        "400":
+          description: Invalid request body or missing required fields
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Miner subscription key is invalid
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
         "500":
           description: Internal server error
           schema:
@@ -644,51 +792,25 @@ paths:
             - $ref: '#/definitions/api.ApiResponse'
             - properties:
                 body:
-                  $ref: '#/definitions/worker.DisableSucessResponse'
+                  $ref: '#/definitions/worker.DisableSuccessResponse'
               type: object
-        "500":
-          description: Internal server error - failed to disable worker partner
+        "400":
+          description: Invalid request body or parameters
           schema:
             $ref: '#/definitions/api.ApiResponse'
-      summary: Disable miner by worker
-      tags:
-      - Worker Partner
-  /api/v1/worker/partner/list:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve a list of partners for the authenticated worker
-      parameters:
-      - description: Bearer token
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Successfully retrieved worker partners
-          schema:
-            allOf:
-            - $ref: '#/definitions/api.ApiResponse'
-            - properties:
-                body:
-                  $ref: '#/definitions/worker.ListWorkerPartnersResponse'
-              type: object
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "404":
-          description: Worker not found
+          description: Failed to disable worker partner, no records updated
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
-          description: Internal server error
+          description: Internal server error - failed to disable worker partner
           schema:
             $ref: '#/definitions/api.ApiResponse'
-      summary: Get worker partner list
+      summary: Disable miner by worker
       tags:
       - Worker Partner
 swagger: "2.0"

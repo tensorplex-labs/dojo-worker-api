@@ -30,7 +30,7 @@ type DisableMinerRequest struct {
 	ToDisable            bool   `json:"toDisable"`
 }
 
-type DisableSucessResponse struct {
+type DisableSuccessResponse struct {
 	Message string `json:"message"`
 }
 

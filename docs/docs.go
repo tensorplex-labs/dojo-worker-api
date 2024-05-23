@@ -128,9 +128,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/miner/login": {
+        "/api/v1/miner/login/auth": {
             "post": {
-                "description": "Log in a miner using their hotkey and message",
+                "description": "Log in a miner by providing their wallet address, chain ID, message, signature, and timestamp",
                 "consumes": [
                     "application/json"
                 ],
@@ -143,6 +143,13 @@ const docTemplate = `{
                 "summary": "Miner login",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
                         "description": "Request body containing the miner login details",
                         "name": "body",
                         "in": "body",
@@ -154,7 +161,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful, returns API key and subscription key",
+                        "description": "Miner logged in successfully",
                         "schema": {
                             "allOf": [
                                 {
@@ -164,10 +171,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
+                                            "$ref": "#/definitions/auth.MinerLoginResponse"
                                         }
                                     }
                                 }
@@ -175,19 +179,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Failed to parse message",
+                        "description": "Invalid request body or failed to parse message",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Unauthorized, invalid signature, message expired, or hotkey not registered",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Miner user not found",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
-                        "description": "Failed to get nonce from cache or failed to create/get miner user",
+                        "description": "Failed to get nonce from cache, internal server error, or failed to create new miner user",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -238,11 +248,23 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/worker.DisableSucessResponse"
+                                            "$ref": "#/definitions/worker.DisableSuccessResponse"
                                         }
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or parameters",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Failed to disable worker partner, no records updated",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
@@ -302,6 +324,18 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or missing required parameters",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
@@ -379,8 +413,151 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "No tasks found",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
                     "500": {
-                        "description": "Internal server error - success is always false\"\t{ \"success\": false, \"error\": \"Internal server error\", \"body\": null }",
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/create": {
+            "post": {
+                "description": "Create tasks by providing the necessary task details along with files to upload. This endpoint accepts multipart/form-data, and multiple files can be uploaded.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Create Tasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API Key for Miner Authentication",
+                        "name": "x-api-key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Content-Type: multipart/form-data",
+                        "name": "Content-Type",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Title of the task",
+                        "name": "Title",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Body of the task",
+                        "name": "Body",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Expiration date of the task",
+                        "name": "ExpireAt",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Task data in JSON format",
+                        "name": "TaskData",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum results",
+                        "name": "MaxResults",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "number",
+                        "description": "Total rewards",
+                        "name": "TotalRewards",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "file"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Files to upload (can upload multiple files)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tasks created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request, invalid form data, or failed to process request",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized access",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error, failed to upload files",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -446,7 +623,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request body",
+                        "description": "Invalid request body or task is expired",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -459,6 +636,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Task result already completed by worker",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -514,7 +697,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Task not found, error message wrapped in ApiResponse structure",
+                        "description": "Task not found",
                         "schema": {
                             "allOf": [
                                 {
@@ -532,7 +715,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal server error, error message wrapped in ApiResponse structure",
+                        "description": "Internal server error",
                         "schema": {
                             "allOf": [
                                 {
@@ -601,6 +784,24 @@ const docTemplate = `{
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized access",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden access",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Worker already exists",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
                     "500": {
                         "description": "Failed to create worker",
                         "schema": {
@@ -660,6 +861,24 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "400": {
+                        "description": "Invalid request body or missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Miner subscription key is invalid",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
@@ -712,61 +931,17 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/worker.DisableSucessResponse"
+                                            "$ref": "#/definitions/worker.DisableSuccessResponse"
                                         }
                                     }
                                 }
                             ]
                         }
                     },
-                    "500": {
-                        "description": "Internal server error - failed to disable worker partner",
+                    "400": {
+                        "description": "Invalid request body or parameters",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/worker/partner/list": {
-            "get": {
-                "description": "Retrieve a list of partners for the authenticated worker",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Worker Partner"
-                ],
-                "summary": "Get worker partner list",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successfully retrieved worker partners",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "body": {
-                                            "$ref": "#/definitions/worker.ListWorkerPartnersResponse"
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     },
                     "401": {
@@ -776,13 +951,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Worker not found",
+                        "description": "Failed to disable worker partner, no records updated",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal server error - failed to disable worker partner",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -818,6 +993,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "signature": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.MinerLoginResponse": {
+            "type": "object",
+            "properties": {
+                "apiKey": {
+                    "type": "string"
+                },
+                "subscriptionKey": {
                     "type": "string"
                 }
             }
@@ -998,7 +1184,7 @@ const docTemplate = `{
                 }
             }
         },
-        "worker.DisableSucessResponse": {
+        "worker.DisableSuccessResponse": {
             "type": "object",
             "properties": {
                 "message": {
@@ -1022,17 +1208,6 @@ const docTemplate = `{
             "properties": {
                 "nonce": {
                     "type": "string"
-                }
-            }
-        },
-        "worker.ListWorkerPartnersResponse": {
-            "type": "object",
-            "properties": {
-                "partners": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/worker.WorkerPartner"
-                    }
                 }
             }
         },
