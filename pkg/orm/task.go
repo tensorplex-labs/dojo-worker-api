@@ -260,8 +260,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 		tasks, err := o.dbClient.Task.
 			FindMany(
 				db.Task.ExpireAt.Lte(time.Now()),
-				db.Task.Status.Not(db.TaskStatusExpired),
-				db.Task.Status.Not(db.TaskStatusCompleted),
+				db.Task.Status.Equals(db.TaskStatusInProgress),
 			).
 			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
 			Exec(ctx)
@@ -283,6 +282,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 				db.Task.ID.Equals(taskModel.ID),
 			).Update(
 				db.Task.Status.Set(db.TaskStatusExpired),
+				db.Task.UpdatedAt.Set(time.Now()),
 			).Tx()
 
 			txns = append(txns, transaction)
