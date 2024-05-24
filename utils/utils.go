@@ -141,7 +141,7 @@ func getS3Client() (*s3.Client, error) {
 		}
 
 		// Create new configuration with assumed role credentials
-		assumedCfg, err := config.LoadDefaultConfig(ctx,
+		_, err = config.LoadDefaultConfig(ctx,
 			config.WithRegion(AWS_REGION),
 			config.WithCredentialsProvider(
 				credentials.NewStaticCredentialsProvider(
@@ -157,7 +157,10 @@ func getS3Client() (*s3.Client, error) {
 		}
 
 		log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
-		s3Client = s3.NewFromConfig(assumedCfg)
+		// TODO try without assume role first
+		// s3Client = s3.NewFromConfig(assumedCfg)
+		s3Client = s3.NewFromConfig(cfg)
+
 	} else {
 		s3Client = s3.NewFromConfig(cfg)
 	}
