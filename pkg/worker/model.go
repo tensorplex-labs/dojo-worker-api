@@ -47,7 +47,7 @@ type WorkerLoginRequest struct {
 	Timestamp     string `json:"timestamp"`
 }
 
-type WorkerLoginSuccessResp struct {
+type WorkerLoginSuccessResponse struct {
 	Token any `json:"token"`
 }
 

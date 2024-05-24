@@ -771,7 +771,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/worker.WorkerLoginSuccessResp"
+                                            "$ref": "#/definitions/worker.WorkerLoginSuccessResponse"
                                         }
                                     }
                                 }
@@ -804,83 +804,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Failed to create worker",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/worker/partner": {
-            "post": {
-                "description": "Create a partnership between a worker and a miner",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Worker Partner"
-                ],
-                "summary": "Create worker-miner partnership",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Request body containing the name and miner subscription key",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/worker.WorkerPartnerCreateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successfully created worker-miner partnership",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "body": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or missing required fields",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Miner subscription key is invalid",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -958,6 +881,149 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error - failed to disable worker partner",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/worker/partner/list": {
+            "get": {
+                "description": "Retrieve a list of partnerships between a worker and miners",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Worker Partner"
+                ],
+                "summary": "Get worker-miner partnership list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved worker-miner partnership list",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/worker.ListWorkerPartnersResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Worker not found",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a partnership between a worker and a miner",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Worker Partner"
+                ],
+                "summary": "Create worker-miner partnership",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Request body containing the name and miner subscription key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/worker.WorkerPartnerCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully created worker-miner partnership",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Miner subscription key is invalid",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -1211,6 +1277,17 @@ const docTemplate = `{
                 }
             }
         },
+        "worker.ListWorkerPartnersResponse": {
+            "type": "object",
+            "properties": {
+                "partners": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/worker.WorkerPartner"
+                    }
+                }
+            }
+        },
         "worker.UpdateWorkerPartnerRequest": {
             "type": "object",
             "properties": {
@@ -1253,7 +1330,7 @@ const docTemplate = `{
                 }
             }
         },
-        "worker.WorkerLoginSuccessResp": {
+        "worker.WorkerLoginSuccessResponse": {
             "type": "object",
             "properties": {
                 "token": {}
@@ -1292,12 +1369,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "1.0",
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "Dojo Worker API",
+	Description:      "This is the worker API for the Dojo project.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -49,7 +49,9 @@ func main() {
 	router.Use(cors.New(config))
 	api.LoginRoutes(router)
 
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	if os.Getenv("RUNTIME_ENV") == "local" {
+		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	}
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{

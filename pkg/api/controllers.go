@@ -33,13 +33,13 @@ import (
 //	@Tags			Authentication
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		worker.WorkerLoginRequest						true	"Request body containing the worker login details"
-//	@Success		200		{object}	ApiResponse{body=worker.WorkerLoginSuccessResp}	"Worker logged in successfully"
-//	@Failure		400		{object}	ApiResponse										"Invalid wallet address or chain ID"
-//	@Failure		401		{object}	ApiResponse										"Unauthorized access"
-//	@Failure		403		{object}	ApiResponse										"Forbidden access"
-//	@Failure		409		{object}	ApiResponse										"Worker already exists"
-//	@Failure		500		{object}	ApiResponse										"Failed to create worker"
+//	@Param			body	body		worker.WorkerLoginRequest							true	"Request body containing the worker login details"
+//	@Success		200		{object}	ApiResponse{body=worker.WorkerLoginSuccessResponse}	"Worker logged in successfully"
+//	@Failure		400		{object}	ApiResponse											"Invalid wallet address or chain ID"
+//	@Failure		401		{object}	ApiResponse											"Unauthorized access"
+//	@Failure		403		{object}	ApiResponse											"Forbidden access"
+//	@Failure		409		{object}	ApiResponse											"Worker already exists"
+//	@Failure		500		{object}	ApiResponse											"Failed to create worker"
 //	@Router			/api/v1/worker/login/auth [post]
 func WorkerLoginController(c *gin.Context) {
 	walletAddressInterface, _ := c.Get("WalletAddress")
@@ -72,7 +72,7 @@ func WorkerLoginController(c *gin.Context) {
 	}
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(worker.WorkerLoginSuccessResp{
+	c.JSON(http.StatusOK, defaultSuccessResponse(worker.WorkerLoginSuccessResponse{
 		Token: token,
 	}))
 }
@@ -432,8 +432,11 @@ func MinerInfoController(c *gin.Context) {
 //	@Param			Authorization	header		string								true	"Bearer token"
 //	@Param			body			body		worker.WorkerPartnerCreateRequest	true	"Request body containing the name and miner subscription key"
 //	@Success		200				{object}	ApiResponse{body=string}			"Successfully created worker-miner partnership"
+//	@Failure		400				{object}	ApiResponse							"Invalid request body or missing required fields"
+//	@Failure		401				{object}	ApiResponse							"Unauthorized"
+//	@Failure		404				{object}	ApiResponse							"Miner subscription key is invalid"
 //	@Failure		500				{object}	ApiResponse							"Internal server error"
-//	@Router			/api/v1/worker/partner [post]
+//	@Router			/api/v1/worker/partner/list [post]
 func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	var walletAddress string
@@ -510,21 +513,20 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse("Successfully created worker-miner partnership"))
 }
 
-// WorkerPartnerCreateController godoc
+// GetWorkerPartnerListController godoc
 //
-//	@Summary		Create worker-miner partnership
-//	@Description	Create a partnership between a worker and a miner
+//	@Summary		Get worker-miner partnership list
+//	@Description	Retrieve a list of partnerships between a worker and miners
 //	@Tags			Worker Partner
 //	@Accept			json
 //	@Produce		json
 //	@Param			Authorization	header		string								true	"Bearer token"
-//	@Param			body			body		worker.WorkerPartnerCreateRequest	true	"Request body containing the name and miner subscription key"
-//	@Success		200				{object}	ApiResponse{body=string}			"Successfully created worker-miner partnership"
-//	@Failure		400				{object}	ApiResponse							"Invalid request body or missing required fields"
+//	@Success		200				{object}	ApiResponse{body=worker.ListWorkerPartnersResponse}	"Successfully retrieved worker-miner partnership list"
+//	@Failure		400				{object}	ApiResponse							"Invalid request or missing required fields"
 //	@Failure		401				{object}	ApiResponse							"Unauthorized"
-//	@Failure		404				{object}	ApiResponse							"Miner subscription key is invalid"
+//	@Failure		404				{object}	ApiResponse							"Worker not found"
 //	@Failure		500				{object}	ApiResponse							"Internal server error"
-//	@Router			/api/v1/worker/partner [post]
+//	@Router			/api/v1/worker/partner/list [get]
 func GetWorkerPartnerListController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
