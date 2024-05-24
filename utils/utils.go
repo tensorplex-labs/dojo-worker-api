@@ -36,6 +36,7 @@ func init() {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
 		LoadDotEnv("AWS_ROLE_ARN")
+		LoadDotEnv("AWS_ROLE_ARN")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
@@ -120,12 +121,13 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	// Load the default AWS configuration
+	var s3Client *s3.Client
 	AWS_REGION := LoadDotEnv("AWS_REGION")
+	AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
 	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
 	if err != nil {
-		log.Error().Err(err).Msg("Error loading AWS config")
+		log.Error().Err(err).Str("aws region", AWS_REGION).Msg("Error loading default AWS config")
 	}
 
 	var s3Client *s3.Client
