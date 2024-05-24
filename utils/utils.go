@@ -35,6 +35,7 @@ func init() {
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
+		LoadDotEnv("AWS_ROLE_ARN")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
@@ -119,21 +120,22 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	// Load the default AWS configuration
+	var s3Client *s3.Client
 	AWS_REGION := LoadDotEnv("AWS_REGION")
-	AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
 	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
 	if err != nil {
-		log.Error().Err(err).Msg("Error loading AWS config")
+		log.Error().Err(err).Str("aws region", AWS_REGION).Msg("Error loading default AWS config")
 	}
 
-	stsClient := sts.NewFromConfig(cfg)
-	provider := stscreds.NewAssumeRoleProvider(stsClient, AWS_ROLE_ARN)
-	cfg.Credentials = aws.NewCredentialsCache(provider)
+	if runtimeEnv := LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
+		AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
+		stsClient := sts.NewFromConfig(cfg)
+		provider := stscreds.NewAssumeRoleProvider(stsClient, AWS_ROLE_ARN)
+		cfg.Credentials = aws.NewCredentialsCache(provider)
+	}
 
-	log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
-	s3Client := s3.NewFromConfig(cfg)
+	s3Client = s3.NewFromConfig(cfg)
 	return s3Client, nil
 }
 
