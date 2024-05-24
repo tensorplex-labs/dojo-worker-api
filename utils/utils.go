@@ -13,7 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -120,7 +120,6 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	var s3Client *s3.Client
 	AWS_REGION := LoadDotEnv("AWS_REGION")
 	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
@@ -128,14 +127,40 @@ func getS3Client() (*s3.Client, error) {
 		log.Error().Err(err).Str("aws region", AWS_REGION).Msg("Error loading default AWS config")
 	}
 
+	var s3Client *s3.Client
 	if runtimeEnv := LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
 		AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
 		stsClient := sts.NewFromConfig(cfg)
-		provider := stscreds.NewAssumeRoleProvider(stsClient, AWS_ROLE_ARN)
-		cfg.Credentials = aws.NewCredentialsCache(provider)
-	}
+		assumeRoleOutput, err := stsClient.AssumeRole(ctx, &sts.AssumeRoleInput{
+			RoleArn:         aws.String(AWS_ROLE_ARN),
+			RoleSessionName: aws.String("dojo-go-api-session"),
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("Error assuming role")
+			return nil, err
+		}
 
-	s3Client = s3.NewFromConfig(cfg)
+		// Create new configuration with assumed role credentials
+		assumedCfg, err := config.LoadDefaultConfig(ctx,
+			config.WithRegion(AWS_REGION),
+			config.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(
+					*assumeRoleOutput.Credentials.AccessKeyId,
+					*assumeRoleOutput.Credentials.SecretAccessKey,
+					*assumeRoleOutput.Credentials.SessionToken,
+				),
+			),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Error loading assumed role config")
+			return nil, err
+		}
+
+		log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
+		s3Client = s3.NewFromConfig(assumedCfg)
+	} else {
+		s3Client = s3.NewFromConfig(cfg)
+	}
 	return s3Client, nil
 }
 
