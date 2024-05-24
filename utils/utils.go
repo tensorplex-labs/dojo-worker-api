@@ -13,8 +13,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -118,14 +120,21 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
 	// Load the default AWS configuration
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	AWS_REGION := LoadDotEnv("AWS_REGION")
+	AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
+	ctx := context.TODO()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Error loading AWS config")
 	}
-	// Create an S3 client using the loaded configuration
+
+	stsClient := sts.NewFromConfig(cfg)
+	provider := stscreds.NewAssumeRoleProvider(stsClient, AWS_ROLE_ARN)
+	cfg.Credentials = aws.NewCredentialsCache(provider)
+
 	log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
-	client := s3.NewFromConfig(cfg)
-	return client, nil
+	s3Client := s3.NewFromConfig(cfg)
+	return s3Client, nil
 }
 
 // Get the S3 uploader
