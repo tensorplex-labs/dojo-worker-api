@@ -72,7 +72,7 @@ func GetConnHandler() *ConnHandler {
 	return connHandler
 }
 
-func getAwsSecret(secretId string, region string) (AwsSecret, error) {
+func GetAwsSecret(secretId string, region string) (AwsSecret, error) {
 	var awsSecret AwsSecret
 
 	maxRetries := 10
@@ -187,7 +187,7 @@ func getPostgresCredentials() *DbSecrets {
 	if utils.LoadDotEnv("RUNTIME_ENV") == "aws" {
 		secretId := utils.LoadDotEnv("AWS_SECRET_ID")
 		region := utils.LoadDotEnv("AWS_REGION")
-		awsSecret, err := getAwsSecret(secretId, region)
+		awsSecret, err := GetAwsSecret(secretId, region)
 		log.Debug().Msg("Got AWS secrets")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error getting secrets")

@@ -77,6 +77,8 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
+	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
+
 	minerUserInterface, exists := c.Get("minerUser")
 	minerUser, _ := minerUserInterface.(*db.MinerUserModel)
 	if !exists {
@@ -86,6 +88,7 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	requestBody, err := task.ProcessRequestBody(c)
+	log.Debug().Interface("request body", requestBody).Msg("Request body processed")
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process request body")
@@ -135,7 +138,7 @@ func CreateTasksController(c *gin.Context) {
 	taskService := task.NewTaskService()
 	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
 
-	log.Info().Interface("tasks", tasks).Msg("Tasks created successfully")
+	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return

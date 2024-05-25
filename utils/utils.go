@@ -33,11 +33,12 @@ func init() {
 	if LoadDotEnv("RUNTIME_ENV") == "aws" {
 		LoadDotEnv("AWS_SECRET_ID")
 		LoadDotEnv("AWS_REGION")
-		// } else {
-		// 	LoadDotEnv("DATABASE_URL")
+		LoadDotEnv("AWS_ROLE_ARN")
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
+		LoadDotEnv("AWS_ACCESS_KEY_ID")
+		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
@@ -46,10 +47,7 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
-	// TODO - maybe move under aws runtime env
 	LoadDotEnv("AWS_S3_BUCKET_NAME")
-	LoadDotEnv("AWS_ACCESS_KEY_ID")
-	LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -120,15 +118,54 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	// Load the default AWS configuration
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	AWS_REGION := LoadDotEnv("AWS_REGION")
+	ctx := context.TODO()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Str("aws region", AWS_REGION).Msg("Error loading default AWS config")
 	}
-	// Create an S3 client using the loaded configuration
+
+	var s3Client *s3.Client
+	if runtimeEnv := LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
+		// AWS_ROLE_ARN := LoadDotEnv("AWS_ROLE_ARN")
+		// stsClient := sts.NewFromConfig(cfg)
+		// assumeRoleOutput, err := stsClient.AssumeRole(ctx, &sts.AssumeRoleInput{
+		// 	RoleArn:         aws.String(AWS_ROLE_ARN),
+		// 	RoleSessionName: aws.String("dojo-go-api-session"),
+		// })
+		// if err != nil {
+		// 	log.Error().Err(err).Msg("Error assuming role")
+		// 	return nil, err
+		// }
+
+		// // Create new configuration with assumed role credentials
+		// _, err = config.LoadDefaultConfig(ctx,
+		// 	config.WithRegion(AWS_REGION),
+		// 	config.WithCredentialsProvider(
+		// 		credentials.NewStaticCredentialsProvider(
+		// 			*assumeRoleOutput.Credentials.AccessKeyId,
+		// 			*assumeRoleOutput.Credentials.SecretAccessKey,
+		// 			*assumeRoleOutput.Credentials.SessionToken,
+		// 		),
+		// 	),
+		// )
+		// if err != nil {
+		// 	log.Error().Err(err).Msg("Error loading assumed role config")
+		// 	return nil, err
+		// }
+
+		// log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
+		// // TODO try without assume role first
+		// s3Client = s3.NewFromConfig(assumedCfg)
+		s3Client = s3.NewFromConfig(cfg)
+
+	} else {
+		s3Client = s3.NewFromConfig(cfg)
+	}
+
 	log.Info().Interface("cfg", cfg).Msg("Creating S3 client")
-	client := s3.NewFromConfig(cfg)
-	return client, nil
+
+	return s3Client, nil
 }
 
 // Get the S3 uploader
