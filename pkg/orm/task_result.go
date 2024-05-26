@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"dojo-api/db"
@@ -122,9 +123,27 @@ func (t *TaskResultORM) GetCompletedTResultCount(ctx context.Context) (int, erro
 	t.clientWrapper.BeforeQuery()
 	defer t.clientWrapper.AfterQuery()
 
-	taskResult, err := t.client.TaskResult.FindMany(db.TaskResult.Status.Equals(db.TaskResultStatusCompleted)).Exec(ctx)
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	query := "SELECT COUNT(*) as count FROM \"TaskResult\" WHERE status = 'COMPLETED';"
+	err := t.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
+
 	if err != nil {
 		return 0, err
 	}
-	return len(taskResult), nil
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found for completed tasks count query")
+	}
+
+	taskResultCountStr := string(result[0].Count)
+	taskResultCountInt, err := strconv.Atoi(taskResultCountStr)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return taskResultCountInt, nil
 }

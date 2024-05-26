@@ -5,6 +5,8 @@ import (
 	"dojo-api/db"
 	"encoding/json"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type MetricsORM struct {
@@ -35,7 +37,7 @@ func (orm *MetricsORM) GetMetricsDataByMetricType(ctx context.Context, metricTyp
 	return metrics, nil
 }
 
-func (orm *MetricsORM) CreateNewMetric(ctx context.Context, metricType db.MetricsType, data db.JSON) error {
+func (orm *MetricsORM) CreateNewMetric(ctx context.Context, metricType db.MetricsType, data interface{}) error {
 	orm.clientWrapper.BeforeQuery()
 	defer orm.clientWrapper.AfterQuery()
 
@@ -58,6 +60,8 @@ func (orm *MetricsORM) createMetric(ctx context.Context, metricType db.MetricsTy
 	if err != nil {
 		return err
 	}
+
+	log.Info().Interface("MetricData", data).Msg("Creating new metric")
 
 	_, err = orm.dbClient.Metrics.CreateOne(
 		db.Metrics.Type.Set(metricType),

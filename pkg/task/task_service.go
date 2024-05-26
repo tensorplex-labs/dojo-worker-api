@@ -27,8 +27,8 @@ type TaskService struct {
 
 func NewTaskService() *TaskService {
 	return &TaskService{
-		// taskORM: orm.NewTaskORM(),
-		// taskResultORM: orm.NewTaskResultORM(),
+		taskORM:       orm.NewTaskORM(),
+		taskResultORM: orm.NewTaskResultORM(),
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"dojo-api/pkg/event"
 	"dojo-api/pkg/orm"
 	"encoding/json"
-	"fmt"
 
 	"github.com/rs/zerolog/log"
 )
@@ -32,12 +31,9 @@ func (metricService *MetricService) UpdateDojoWorkerCount(ctx context.Context) e
 
 	metricORM := orm.NewMetricsORM()
 	newMetricData := MetricWorkerCount{TotalNumDojoWorkers: len(workers)}
-	dataJSON, err := json.Marshal(newMetricData)
-	if err != nil {
-		return err
-	}
+	log.Info().Interface("DojoWorkerCount", newMetricData).Msg("Updating dojo worker count metric")
 
-	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumDojoWorkers, dataJSON)
+	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumDojoWorkers, newMetricData)
 	return err
 }
 
@@ -52,12 +48,9 @@ func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context
 		return err
 	}
 	newMetricData := MetricCompletedTasksCount{TotalNumCompletedTasks: completedTasksCount}
-	dataJSON, err := json.Marshal(newMetricData)
-	if err != nil {
-		return err
-	}
+	log.Info().Interface("CompletedTaskCount", newMetricData).Msg("Updating completed task count metric")
 
-	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumDojoWorkers, dataJSON)
+	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumCompletedTasks, newMetricData)
 	return err
 }
 
@@ -72,12 +65,9 @@ func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Cont
 		return err
 	}
 	newMetricData := MetricTaskResultsCount{TotalNumTasksResults: completedTResultCount}
-	dataJSON, err := json.Marshal(newMetricData)
-	if err != nil {
-		return err
-	}
+	log.Info().Interface("TotalTaskResultsCount", newMetricData).Msg("Updating total task results count metric")
 
-	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumDojoWorkers, dataJSON)
+	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumTaskResults, newMetricData)
 	return err
 }
 
@@ -100,45 +90,10 @@ func (metricService *MetricService) UpdateAvgTaskCompletionTime(ctx context.Cont
 
 	avgCompletionTime := *totalCompletionTime / len(events)
 	newMetricData := MetricAvgTaskCompletionTime{AverageTaskCompletionTime: avgCompletionTime}
-	dataJSON, err := json.Marshal(newMetricData)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal average task completion time data")
-		return err
-	}
+	log.Info().Interface("AvgTaskCompletionTime", newMetricData).Msg("Updating average task completion time metric")
 
-	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeAverageTaskCompletionTime, dataJSON)
+	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeAverageTaskCompletionTime, newMetricData)
 	return err
-}
-
-func ValidateMetricData(metricType db.MetricsType, data db.JSON) (interface{}, error) {
-	switch metricType {
-	case db.MetricsTypeTotalNumDojoWorkers:
-		var workerCountData MetricWorkerCount
-		if err := json.Unmarshal(data, &workerCountData); err != nil {
-			return nil, fmt.Errorf("invalid worker count data format: %v", err)
-		}
-		return workerCountData, nil
-	case db.MetricsTypeTotalNumCompletedTasks:
-		var completedTasksData MetricCompletedTasksCount
-		if err := json.Unmarshal(data, &completedTasksData); err != nil {
-			return nil, fmt.Errorf("invalid completed tasks data format: %v", err)
-		}
-		return completedTasksData, nil
-	case db.MetricsTypeTotalNumTaskResults:
-		var tasksResultsData MetricTaskResultsCount
-		if err := json.Unmarshal(data, &tasksResultsData); err != nil {
-			return nil, fmt.Errorf("invalid tasks results data format: %v", err)
-		}
-		return tasksResultsData, nil
-	case db.MetricsTypeAverageTaskCompletionTime:
-		var avgTaskCompletionData MetricAvgTaskCompletionTime
-		if err := json.Unmarshal(data, &avgTaskCompletionData); err != nil {
-			return nil, fmt.Errorf("invalid avg tasks completion time data format: %v", err)
-		}
-		return avgTaskCompletionData, nil
-	default:
-		return nil, fmt.Errorf("unsupported metric type: %v", metricType)
-	}
 }
 
 func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {

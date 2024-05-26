@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,14 +60,13 @@ func WorkerLoginController(c *gin.Context) {
 	}
 
 	metricService := metric.NewMetricService()
-
-	if !alreadyExists {
-		go func() {
-			if err := metricService.UpdateDojoWorkerCount(c.Request.Context()); err != nil {
-				log.Error().Err(err).Msg("Failed to update dojo worker count")
-			}
-		}()
-	}
+	go func() {
+		if err := metricService.UpdateDojoWorkerCount(c); err != nil {
+			log.Error().Err(err).Msg("Failed to update dojo worker count")
+		} else {
+			log.Info().Msg("Successfully updated dojo worker count")
+		}
+	}()
 
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
@@ -240,30 +240,8 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
-	// Update the metric data
-	metricsService := metric.NewMetricService()
-	eventsService := event.NewEventService()
-	// Update the total tasks results count
-	if err := metricsService.UpdateTotalTaskResultsCount(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to update total tasks results count")
-	}
-
-	// We want to make sure task status just changed to completion
-	if (task.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
-		// Update the completed task count
-		if err := metricsService.UpdateCompletedTaskCount(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to update completed task count")
-		}
-		// Update the task completion event
-		if err := eventsService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
-			log.Error().Err(err).Msg("Failed to create task completion event")
-		}
-
-		// Update the avg task completion
-		if err := metricsService.UpdateAvgTaskCompletionTime(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to update average task completion time")
-		}
-	}
+	// Update the metric data with goroutine
+	handleMetricData(task, updatedTask)
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(map[string]interface{}{
 		"numResults": updatedTask.NumResults,
@@ -867,71 +845,109 @@ func GetDojoWorkerCountController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
 		return
 	}
-
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumDojoWorkers, metricData.MetricsData)
-	if err != nil {
-		log.Error().Err(err).Msg("Invalid metric data")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
-		return
+	var workerCountData metric.MetricWorkerCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &workerCountData); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal worker count data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal worker count data"))
 	}
 
-	workerCountData := validatedData.(metric.MetricWorkerCount)
 	c.JSON(http.StatusOK, defaultSuccessResponse(metric.DojoWorkerCountResponse{NumDojoWorkers: workerCountData.TotalNumDojoWorkers}))
 }
 
 func GetTotalCompletedTasksController(c *gin.Context) {
 	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumCompletedTasks)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get worker count")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		log.Error().Err(err).Msg("Failed to get completed tasks count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count"))
 		return
 	}
 
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumCompletedTasks, metricData.MetricsData)
-	if err != nil {
-		log.Error().Err(err).Msg("Invalid metric data")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+	var completedTasksData metric.MetricCompletedTasksCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &completedTasksData); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal completed tasks data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal completed tasks data"))
 		return
 	}
 
-	completedTasksData := validatedData.(metric.MetricCompletedTasksCount)
 	c.JSON(http.StatusOK, defaultSuccessResponse(metric.CompletedTaskCountResponse{NumCompletedTasks: completedTasksData.TotalNumCompletedTasks}))
 }
 
 func GetTotalTasksResultsController(c *gin.Context) {
 	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumTaskResults)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get worker count")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		log.Error().Err(err).Msg("Failed to get task results count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get task results count"))
 		return
 	}
 
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeTotalNumTaskResults, metricData.MetricsData)
-	if err != nil {
-		log.Error().Err(err).Msg("Invalid metric data")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+	var totalTasksResults metric.MetricTaskResultsCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &totalTasksResults); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal task results data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal task results data"))
 		return
 	}
 
-	totalTasksResults := validatedData.(metric.MetricTaskResultsCount)
 	c.JSON(http.StatusOK, defaultSuccessResponse(metric.TaskResultCountResponse{NumTaskResults: totalTasksResults.TotalNumTasksResults}))
 }
 
 func GetAvgTaskCompletionTimeController(c *gin.Context) {
 	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeAverageTaskCompletionTime)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get avg task completion time")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+		log.Error().Err(err).Msg("Failed to get average task completion time")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get average task completion time"))
 		return
 	}
 
-	validatedData, err := metric.ValidateMetricData(db.MetricsTypeAverageTaskCompletionTime, metricData.MetricsData)
-	if err != nil {
-		log.Error().Err(err).Msg("Invalid metric data")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+	var avgCompletionTime metric.MetricAvgTaskCompletionTime
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &avgCompletionTime); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal average task completion time data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal average task completion time data"))
 		return
 	}
 
-	avgCompletionTime := validatedData.(metric.MetricAvgTaskCompletionTime)
 	c.JSON(http.StatusOK, defaultSuccessResponse(metric.AvgTaskCompletionTimeResponse{AvgTaskCompletionTime: avgCompletionTime.AverageTaskCompletionTime}))
+}
+
+func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
+	// We want to make sure task status just changed to completion
+	metricService := metric.NewMetricService()
+	eventService := event.NewEventService()
+	ctx := context.Background()
+
+	go func() {
+		if err := metricService.UpdateTotalTaskResultsCount(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to update total tasks results count")
+		} else {
+			log.Info().Msg("Updated total task results count")
+		}
+	}()
+
+	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
+		go func() {
+			// Update the completed task count
+			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to update completed task count")
+			} else {
+				log.Info().Msg("Updated completed task count")
+			}
+		}()
+
+		go func() {
+			// Update the task completion event
+			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+				log.Error().Err(err).Msg("Failed to create task completion event")
+			} else {
+				log.Info().Msg("Created task completion event")
+			}
+		}()
+
+		go func() {
+			// Update the avg task completion
+			if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to update average task completion time")
+			} else {
+				log.Info().Msg("Updated average task completion time")
+			}
+		}()
+	}
 }

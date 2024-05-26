@@ -16,6 +16,8 @@ type AvgTaskCompletionTimeResponse struct {
 	AvgTaskCompletionTime int `json:"averageTaskCompletionTime"`
 }
 
+type MetricData interface{}
+
 type MetricWorkerCount struct {
 	TotalNumDojoWorkers int `json:"total_num_dojo_workers"`
 }
