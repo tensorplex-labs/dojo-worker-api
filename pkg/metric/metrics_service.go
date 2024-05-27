@@ -23,14 +23,14 @@ func NewMetricService() *MetricService {
 func (metricService *MetricService) UpdateDojoWorkerCount(ctx context.Context) error {
 
 	workerORM := orm.NewDojoWorkerORM()
-	workers, err := workerORM.GetDojoWorkers()
+	workerCounts, err := workerORM.GetDojoWorkers()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get dojo workers")
 		return err
 	}
 
 	metricORM := orm.NewMetricsORM()
-	newMetricData := MetricWorkerCount{TotalNumDojoWorkers: len(workers)}
+	newMetricData := MetricWorkerCount{TotalNumDojoWorkers: workerCounts}
 	log.Info().Interface("DojoWorkerCount", newMetricData).Msg("Updating dojo worker count metric")
 
 	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumDojoWorkers, newMetricData)
