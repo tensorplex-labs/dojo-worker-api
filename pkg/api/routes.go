@@ -1,11 +1,14 @@
 package api
 
 import (
+	"dojo-api/docs"
+
 	"github.com/gin-gonic/gin"
 )
 
 // GET /api/v1/metrics/dojo-worker-count
 func LoginRoutes(router *gin.Engine) {
+	docs.SwaggerInfo.BasePath = "/api/v1"
 	apiV1 := router.Group("/api/v1")
 	{
 		worker := apiV1.Group("/worker")
