@@ -34,6 +34,13 @@ func LoginRoutes(router *gin.Engine) {
 			miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
 			// miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
 			miner.PUT("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
+			miner.POST("/session/auth", GenerateCookieAuth)
+
+			apiKeyGroup := miner.Group("/api-key")
+			{
+				// TODO
+				apiKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerApiKeyListController)
+			}
 		}
 	}
 }

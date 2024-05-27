@@ -21,7 +21,7 @@ type RedisConfig struct {
 }
 
 type Cache struct {
-	redis rueidis.Client
+	Redis rueidis.Client
 }
 
 var (
@@ -56,7 +56,7 @@ func GetCacheInstance() *Cache {
 			log.Panic().Err(err).Msg("Failed to initialise Redis connection!")
 		}
 		log.Info().Msgf("Successfully connected to Redis")
-		instance = &Cache{redis: redisClient}
+		instance = &Cache{Redis: redisClient}
 	})
 	return instance
 }
@@ -72,9 +72,9 @@ func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Dur
 	}
 
 	ctx := context.Background()
-	err := c.redis.Do(
+	err := c.Redis.Do(
 		ctx,
-		c.redis.B().Set().Key(key).Value(value.(string)).Ex(expiration).Build(),
+		c.Redis.B().Set().Key(key).Value(value.(string)).Ex(expiration).Build(),
 	).Error()
 	if err != nil {
 		log.Error().Err(err).Str("key", key).Interface("value", value).Msg("Failed to write to Redis ...")
@@ -85,7 +85,7 @@ func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Dur
 
 func (rc *Cache) Get(key string) (string, error) {
 	ctx := context.Background()
-	val, err := rc.redis.Do(ctx, rc.redis.B().Get().Key(key).Build()).AsBytes()
+	val, err := rc.Redis.Do(ctx, rc.Redis.B().Get().Key(key).Build()).AsBytes()
 	if err == rueidis.Nil {
 		return "", err
 	} else if err != nil {
@@ -95,6 +95,6 @@ func (rc *Cache) Get(key string) (string, error) {
 }
 
 func (c *Cache) Shutdown() {
-	c.redis.Close()
+	c.Redis.Close()
 	log.Info().Msg("Successfully closed Redis connection")
 }

@@ -2,22 +2,25 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"crypto/rand"
-	"encoding/hex"
 
+	"github.com/gorilla/securecookie"
+	"github.com/redis/rueidis"
 	"github.com/spruceid/siwe-go"
 
+	"dojo-api/pkg/auth"
 	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
-	"dojo-api/pkg/auth"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -393,4 +396,67 @@ func isTimestampValid(requestTimestamp int64) bool {
 	const tolerance = 15 * 60 // 15 minutes in seconds
 	currentTime := time.Now().Unix()
 	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
+}
+
+func MinerCookieAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cookie, err := c.Cookie(auth.CookieName)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to retrieve named cookie %v", auth.CookieName)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		cache := cache.GetCacheInstance()
+		result := cache.Redis.Do(
+			c.Request.Context(),
+			cache.Redis.B().JsonGet().Key(cookie).Build(),
+		)
+		if result.Error() != nil {
+			if rueidis.IsRedisNil(result.Error()) {
+				log.Error().Err(result.Error()).Msg("Cookie not found in cache")
+				c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+				return
+			}
+			log.Error().Err(result.Error()).Msg("Failed to retrieve cookie from cache")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		redisBytes, err := result.AsBytes()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to convert result to bytes")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		var session auth.SecureCookieSession
+		if err := json.Unmarshal(redisBytes, &session); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal redis data from JSON")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		blockKey := session.BlockKey
+		hashKey := session.HashKey
+		// reconstruct secure cookie
+		s := securecookie.New(hashKey, blockKey)
+		var cookieData auth.CookieData
+		if err = s.Decode(auth.CookieName, cookie, &cookieData); err != nil {
+			log.Error().Err(err).Msg("Failed to decode cookie")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		if session.CookieData.Hotkey != cookieData.Hotkey || session.CookieData.SessionId != cookieData.SessionId {
+			log.Error().Str("expectedHotkey", session.CookieData.Hotkey).Str("actualHotkey", cookieData.Hotkey).
+				Str("expectedSessionId", session.CookieData.SessionId).Str("actualSessionId", cookieData.SessionId).
+				Msg("Cookie data mismatch")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		log.Info().Msgf("Cookie validated successfully for hotkey %v, session id %v", session.Hotkey, session.SessionId)
+		c.Next()
+	}
 }

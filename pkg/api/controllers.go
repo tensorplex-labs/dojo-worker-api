@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,8 +23,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/redis/rueidis"
 	"github.com/rs/zerolog/log"
 	"github.com/spruceid/siwe-go"
+
+	"github.com/gorilla/securecookie"
 )
 
 // WorkerLoginController godoc
@@ -1012,4 +1017,100 @@ func GenerateNonceController(c *gin.Context) {
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(worker.GenerateNonceResponse{Nonce: nonce}))
+}
+
+// Generates a new session, and returns it as a cookie
+func GenerateCookieAuth(c *gin.Context) {
+	var requestBody auth.GenerateCookieAuthRequest
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		var missingFields []string
+		if requestBody.Hotkey == "" {
+			missingFields = append(missingFields, "hotkey")
+		}
+		if requestBody.Signature == "" {
+			missingFields = append(missingFields, "signature")
+		}
+		if requestBody.Message == "" {
+			missingFields = append(missingFields, "message")
+		}
+		errorMessage := "Invalid request body"
+		if len(missingFields) > 0 {
+			errorMessage += ": missing or invalid fields - " + strings.Join(missingFields, ", ")
+		}
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errorMessage))
+		return
+	}
+
+	isVerified, err := siws.SS58VerifySignature(requestBody.Message, requestBody.Hotkey, requestBody.Signature)
+	if err != nil {
+		log.Error().Err(err).Msg("Error verifying signature")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Error verifying signature"))
+		return
+	}
+
+	if !isVerified {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	// successfully authorized, now generate a session for them to use
+	cache := cache.GetCacheInstance()
+	hashKey := securecookie.GenerateRandomKey(64)
+	blockKey := securecookie.GenerateRandomKey(32)
+	s := securecookie.New(hashKey, blockKey)
+	sessionID := uuid.New().String()
+	cookieData := auth.CookieData{SessionId: sessionID, Hotkey: requestBody.Hotkey}
+
+	if encoded, err := s.Encode(auth.CookieName, cookieData); err == nil {
+		redisData := auth.SecureCookieSession{
+			HashKey:  hashKey,
+			BlockKey: blockKey,
+			CookieData: auth.CookieData{
+				SessionId: sessionID,
+				Hotkey:    requestBody.Hotkey,
+			},
+		}
+
+		expirationTime := 5 * time.Minute
+		if err := cache.Redis.Do(
+			context.Background(),
+			cache.Redis.B().JsonSet().Key(encoded).Path("$").Value(rueidis.JSON(redisData)).Build(),
+		).Error(); err != nil {
+			log.Error().Err(err).Msg("Failed to store session in redis")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+
+		if err := cache.Redis.Do(
+			context.Background(),
+			cache.Redis.B().Expire().Key(encoded).Seconds(int64(expirationTime.Seconds())).Build(),
+		).Error(); err != nil {
+			log.Error().Err(err).Msg("Failed to set expiration time for session")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+
+		cookie := &http.Cookie{
+			Name:     auth.CookieName,
+			Value:    encoded,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			Expires:  time.Now().Add(expirationTime),
+		}
+		http.SetCookie(c.Writer, cookie)
+		log.Info().Msgf("Session generated successfully for hotkey %v", requestBody.Hotkey)
+		c.JSON(http.StatusOK, defaultSuccessResponse("Session generated successfully"))
+		return
+	} else {
+		log.Error().Err(err).Msg("Failed to encode cookie")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+		return
+	}
+}
+
+// TODO
+func MinerApiKeyListController(c *gin.Context) {
+	c.JSON(http.StatusOK, defaultSuccessResponse("Miner API Key List"))
+	return
 }
