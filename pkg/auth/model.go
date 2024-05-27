@@ -7,3 +7,8 @@ type MinerLoginRequest struct {
 	Email        string `json:"email"`
 	Organisation string `json:"organisation,omitempty"`
 }
+
+type MinerLoginResponse struct {
+	ApiKey          string `json:"apiKey"`
+	SubscriptionKey string `json:"subscriptionKey"`
+}

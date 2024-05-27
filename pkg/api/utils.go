@@ -2,7 +2,7 @@ package api
 
 // Define a common response structure
 type ApiResponse struct {
-	Success bool        `json:"success"`
+	Success bool        `json:"success" swaggertype:"boolean"`
 	Body    interface{} `json:"body"`
 	Error   interface{} `json:"error"`
 }
