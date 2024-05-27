@@ -39,18 +39,37 @@ enum TaskType {
     TEXT_TO_IMAGE
 }
 
+model ApiKey {
+    id            String    @id @default(uuid())
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
+    key           String    @unique
+    is_delete     Boolean   @default(false)
+    miner_user_id String
+    MinerUser     MinerUser @relation(fields: [miner_user_id], references: [id])
+}
+
+model SubscriptionKey {
+    id            String    @id @default(uuid())
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
+    key           String    @unique
+    is_delete     Boolean   @default(false)
+    miner_user_id String
+    MinerUser     MinerUser @relation(fields: [miner_user_id], references: [id])
+}
+
 model MinerUser {
-    id                String          @id @default(uuid())
-    created_at        DateTime        @default(now())
-    updated_at        DateTime        @updatedAt
-    hotkey            String          @unique
-    api_key           String          @unique
-    api_key_expire_at DateTime
-    is_verified       Boolean         @default(false)
+    id                String            @id @default(uuid())
+    created_at        DateTime          @default(now())
+    updated_at        DateTime          @updatedAt
+    api_keys          ApiKey[]
+    // api_key_expire_at DateTime
+    // is_verified       Boolean         @default(false)
     tasks             Task[]
     worker_partners   WorkerPartner[]
-    subscription_key  String          @unique
-    email             String
+    subscription_keys SubscriptionKey[]
+    email             String?
     organizationName  String?
 }
 
