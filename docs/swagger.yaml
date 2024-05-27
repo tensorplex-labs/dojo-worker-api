@@ -725,6 +725,54 @@ paths:
       summary: Worker login
       tags:
       - Authentication
+  /api/v1/worker/partner:
+    post:
+      consumes:
+      - application/json
+      description: Create a partnership between a worker and a miner
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Request body containing the name and miner subscription key
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/worker.WorkerPartnerCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully created worker-miner partnership
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  type: string
+              type: object
+        "400":
+          description: Invalid request body or missing required fields
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Miner subscription key is invalid
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Create worker-miner partnership
+      tags:
+      - Worker Partner
   /api/v1/worker/partner/disable:
     put:
       consumes:
@@ -815,53 +863,6 @@ paths:
           schema:
             $ref: '#/definitions/api.ApiResponse'
       summary: Get worker-miner partnership list
-      tags:
-      - Worker Partner
-    post:
-      consumes:
-      - application/json
-      description: Create a partnership between a worker and a miner
-      parameters:
-      - description: Bearer token
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: Request body containing the name and miner subscription key
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/worker.WorkerPartnerCreateRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Successfully created worker-miner partnership
-          schema:
-            allOf:
-            - $ref: '#/definitions/api.ApiResponse'
-            - properties:
-                body:
-                  type: string
-              type: object
-        "400":
-          description: Invalid request body or missing required fields
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "404":
-          description: Miner subscription key is invalid
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-      summary: Create worker-miner partnership
       tags:
       - Worker Partner
 swagger: "2.0"

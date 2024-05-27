@@ -60,7 +60,7 @@ func GenerateNonceController(c *gin.Context) {
 Run the swag command to generate the Swagger documentation. This command will scan your Go files for Swagger annotations and generate the required files for gin-swagger. Make sure to specify the main Go file.
 
 ```bash
-swag init -g pkg/api/controllers.go
+swag init -g cmd/server/main.go
 ```
 Format the Swagger annotation by using this commend (Optional)
 ```bash

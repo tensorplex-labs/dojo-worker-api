@@ -436,7 +436,7 @@ func MinerInfoController(c *gin.Context) {
 //	@Failure		401				{object}	ApiResponse							"Unauthorized"
 //	@Failure		404				{object}	ApiResponse							"Miner subscription key is invalid"
 //	@Failure		500				{object}	ApiResponse							"Internal server error"
-//	@Router			/api/v1/worker/partner/list [post]
+//	@Router			/api/v1/worker/partner [post]
 func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	var walletAddress string

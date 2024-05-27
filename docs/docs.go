@@ -811,6 +811,83 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/worker/partner": {
+            "post": {
+                "description": "Create a partnership between a worker and a miner",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Worker Partner"
+                ],
+                "summary": "Create worker-miner partnership",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Request body containing the name and miner subscription key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/worker.WorkerPartnerCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully created worker-miner partnership",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Miner subscription key is invalid",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/worker/partner/disable": {
             "put": {
                 "description": "Disable a miner by providing the worker's subscription key and a disable flag",
@@ -943,81 +1020,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Worker not found",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Create a partnership between a worker and a miner",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Worker Partner"
-                ],
-                "summary": "Create worker-miner partnership",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Request body containing the name and miner subscription key",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/worker.WorkerPartnerCreateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successfully created worker-miner partnership",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "body": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or missing required fields",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Miner subscription key is invalid",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
