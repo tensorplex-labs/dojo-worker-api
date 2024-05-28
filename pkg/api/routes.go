@@ -38,8 +38,9 @@ func LoginRoutes(router *gin.Engine) {
 
 			apiKeyGroup := miner.Group("/api-key")
 			{
-				// TODO
 				apiKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerApiKeyListController)
+				apiKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerApiKeyGenerateController)
+				apiKeyGroup.PUT("/disable", MinerCookieAuthMiddleware(), MinerApiKeyDisableController)
 			}
 		}
 	}

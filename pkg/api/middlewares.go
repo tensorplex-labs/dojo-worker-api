@@ -457,6 +457,7 @@ func MinerCookieAuthMiddleware() gin.HandlerFunc {
 		}
 
 		log.Info().Msgf("Cookie validated successfully for hotkey %v, session id %v", session.Hotkey, session.SessionId)
+		c.Set("session", session)
 		c.Next()
 	}
 }

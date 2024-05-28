@@ -10,3 +10,11 @@ type MinerInfoResponse struct {
 	MinerId         string `json:"minerId"`
 	SubscriptionKey string `json:"subscriptionKey"`
 }
+
+type MinerApiKeysResponse struct {
+	ApiKeys []string `json:"apiKeys"`
+}
+
+type MinerApiKeyDisableRequest struct {
+	ApiKey string `json:"apiKey"`
+}
