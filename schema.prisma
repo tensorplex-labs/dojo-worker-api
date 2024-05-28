@@ -50,24 +50,25 @@ model ApiKey {
 }
 
 model SubscriptionKey {
-    id            String    @id @default(uuid())
-    created_at    DateTime  @default(now())
-    updated_at    DateTime  @updatedAt
-    key           String    @unique
-    is_delete     Boolean   @default(false)
+    id            String          @id @default(uuid())
+    created_at    DateTime        @default(now())
+    updated_at    DateTime        @updatedAt
+    key           String          @unique
+    is_delete     Boolean         @default(false)
     miner_user_id String
-    MinerUser     MinerUser @relation(fields: [miner_user_id], references: [id])
+    MinerUser     MinerUser       @relation(fields: [miner_user_id], references: [id])
+    WorkerPartner WorkerPartner[]
 }
 
 model MinerUser {
     id                String            @id @default(uuid())
     created_at        DateTime          @default(now())
     updated_at        DateTime          @updatedAt
+    hotkey            String            @unique
     api_keys          ApiKey[]
     // api_key_expire_at DateTime
     // is_verified       Boolean         @default(false)
     tasks             Task[]
-    worker_partners   WorkerPartner[]
     subscription_keys SubscriptionKey[]
     email             String?
     organizationName  String?
@@ -124,15 +125,15 @@ model DojoWorker {
 }
 
 model WorkerPartner {
-    id                     String     @id @default(uuid())
-    created_at             DateTime   @default(now())
-    updated_at             DateTime   @updatedAt
-    MinerUser              MinerUser  @relation(fields: [miner_subscription_key], references: [subscription_key])
+    id                     String          @id @default(uuid())
+    created_at             DateTime        @default(now())
+    updated_at             DateTime        @updatedAt
+    SubscriptionKey        SubscriptionKey @relation(fields: [miner_subscription_key], references: [key])
     miner_subscription_key String
-    DojoWorker             DojoWorker @relation(fields: [worker_id], references: [id])
+    DojoWorker             DojoWorker      @relation(fields: [worker_id], references: [id])
     worker_id              String
-    is_delete_by_miner     Boolean    @default(false)
-    is_delete_by_worker    Boolean    @default(false)
+    is_delete_by_miner     Boolean         @default(false)
+    is_delete_by_worker    Boolean         @default(false)
     name                   String?
 
     @@unique([miner_subscription_key, worker_id])
