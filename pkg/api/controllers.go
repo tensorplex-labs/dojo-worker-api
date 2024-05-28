@@ -528,12 +528,12 @@ func WorkerPartnerCreateController(c *gin.Context) {
 //	@Tags			Worker Partner
 //	@Accept			json
 //	@Produce		json
-//	@Param			Authorization	header		string								true	"Bearer token"
+//	@Param			Authorization	header		string												true	"Bearer token"
 //	@Success		200				{object}	ApiResponse{body=worker.ListWorkerPartnersResponse}	"Successfully retrieved worker-miner partnership list"
-//	@Failure		400				{object}	ApiResponse							"Invalid request or missing required fields"
-//	@Failure		401				{object}	ApiResponse							"Unauthorized"
-//	@Failure		404				{object}	ApiResponse							"Worker not found"
-//	@Failure		500				{object}	ApiResponse							"Internal server error"
+//	@Failure		400				{object}	ApiResponse											"Invalid request or missing required fields"
+//	@Failure		401				{object}	ApiResponse											"Unauthorized"
+//	@Failure		404				{object}	ApiResponse											"Worker not found"
+//	@Failure		500				{object}	ApiResponse											"Internal server error"
 //	@Router			/api/v1/worker/partner/list [get]
 func GetWorkerPartnerListController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
@@ -1019,7 +1019,25 @@ func GenerateNonceController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(worker.GenerateNonceResponse{Nonce: nonce}))
 }
 
-// Generates a new session, and returns it as a cookie
+// GenerateCookieAuth godoc
+//
+//	@Summary		Generates a session given valid proof of ownership
+//
+//	@Description	Generates cookies that can be used to authenticate a user, given a valid signature, message for a specific hotkey
+//	@Tags			Authentication
+//	@Accept			json
+//	@Produce		json
+//
+//	@Param			body	body		auth.GenerateCookieAuthRequest					true	"Request body containing the hotkey, signature, and message"
+//	@Success		200		{object}	ApiResponse{body=task.SubmitTaskResultResponse}	"Task result submitted successfully"
+//
+//	@Param			address	path		string											true	"Wallet address"
+//	@Success		200		{object}	ApiResponse{body=worker.GenerateNonceResponse}	"Nonce generated successfully"
+//	@Failure		400		{object}	ApiResponse										"Invalid request body"
+//	@Failure		401		{object}	ApiResponse										"Unauthorized"
+//	@Failure		500		{object}	ApiResponse										"Error verifying signature"
+//	@Failure		500		{object}	ApiResponse										"Failed to generate session"
+//	@Router			/api/v1/auth/{address} [get]
 func GenerateCookieAuth(c *gin.Context) {
 	var requestBody auth.GenerateCookieAuthRequest
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
