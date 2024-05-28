@@ -46,6 +46,26 @@ definitions:
     - TaskTypeCodeGeneration
     - TaskTypeDialogue
     - TaskTypeTextToImage
+  metric.AvgTaskCompletionTimeResponse:
+    properties:
+      averageTaskCompletionTime:
+        type: integer
+    type: object
+  metric.CompletedTaskCountResponse:
+    properties:
+      numCompletedTasks:
+        type: integer
+    type: object
+  metric.DojoWorkerCountResponse:
+    properties:
+      numDojoWorkers:
+        type: integer
+    type: object
+  metric.TaskResultCountResponse:
+    properties:
+      numTaskResults:
+        type: integer
+    type: object
   miner.MinerInfoResponse:
     properties:
       minerId:
@@ -223,7 +243,7 @@ info:
   title: Dojo Worker API
   version: "1.0"
 paths:
-  /api/v1/auth/{address}:
+  /auth/{address}:
     get:
       consumes:
       - application/json
@@ -257,7 +277,96 @@ paths:
       summary: Generate nonce
       tags:
       - Authentication
-  /api/v1/miner/info/{hotkey}:
+  /metrics/average-task-completion-time:
+    get:
+      description: Retrieves the average task completion time from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Average task completion time retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.AvgTaskCompletionTimeResponse'
+              type: object
+        "500":
+          description: Failed to get average task completion time or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the average task completion time
+      tags:
+      - Metrics
+  /metrics/completed-tasks-count:
+    get:
+      description: Retrieves the total number of completed tasks from the metrics
+        data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of completed tasks retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.CompletedTaskCountResponse'
+              type: object
+        "500":
+          description: Failed to get completed tasks count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of completed tasks
+      tags:
+      - Metrics
+  /metrics/dojo-worker-count:
+    get:
+      description: Retrieves the total number of Dojo workers from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of Dojo workers retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.DojoWorkerCountResponse'
+              type: object
+        "500":
+          description: Failed to get worker count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of Dojo workers
+      tags:
+      - Metrics
+  /metrics/task-result-count:
+    get:
+      description: Retrieves the total number of task results from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of task results retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.TaskResultCountResponse'
+              type: object
+        "500":
+          description: Failed to get task results count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of task results
+      tags:
+      - Metrics
+  /miner/info/{hotkey}:
     get:
       consumes:
       - application/json
@@ -292,7 +401,7 @@ paths:
       summary: Get miner information
       tags:
       - Miner
-  /api/v1/miner/login/auth:
+  /miner/login/auth:
     post:
       consumes:
       - application/json
@@ -343,7 +452,7 @@ paths:
       summary: Miner login
       tags:
       - Authentication
-  /api/v1/miner/partner/disable:
+  /miner/partner/disable:
     put:
       consumes:
       - application/json
@@ -387,7 +496,7 @@ paths:
       summary: Disable worker by miner
       tags:
       - Worker Partner
-  /api/v1/partner/edit:
+  /partner/edit:
     put:
       consumes:
       - application/json
@@ -431,7 +540,7 @@ paths:
       summary: Update worker partner details
       tags:
       - Worker Partner
-  /api/v1/tasks:
+  /tasks:
     get:
       consumes:
       - application/json
@@ -491,7 +600,7 @@ paths:
       summary: Retrieve tasks by pagination
       tags:
       - Tasks
-  /api/v1/tasks/{task-id}:
+  /tasks/{task-id}:
     get:
       consumes:
       - application/json
@@ -535,7 +644,7 @@ paths:
       summary: Retrieve task by ID
       tags:
       - Tasks
-  /api/v1/tasks/create:
+  /tasks/create:
     post:
       consumes:
       - multipart/form-data
@@ -620,7 +729,7 @@ paths:
       summary: Create Tasks
       tags:
       - Tasks
-  /api/v1/tasks/submit-result/{task-id}:
+  /tasks/submit-result/{task-id}:
     put:
       consumes:
       - application/json
@@ -677,7 +786,7 @@ paths:
       summary: Submit task result
       tags:
       - Tasks
-  /api/v1/worker/login/auth:
+  /worker/login/auth:
     post:
       consumes:
       - application/json
@@ -725,7 +834,7 @@ paths:
       summary: Worker login
       tags:
       - Authentication
-  /api/v1/worker/partner:
+  /worker/partner:
     post:
       consumes:
       - application/json
@@ -773,7 +882,7 @@ paths:
       summary: Create worker-miner partnership
       tags:
       - Worker Partner
-  /api/v1/worker/partner/disable:
+  /worker/partner/disable:
     put:
       consumes:
       - application/json
@@ -823,7 +932,7 @@ paths:
       summary: Disable miner by worker
       tags:
       - Worker Partner
-  /api/v1/worker/partner/list:
+  /worker/partner/list:
     get:
       consumes:
       - application/json

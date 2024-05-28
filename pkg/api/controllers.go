@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
+	"dojo-api/pkg/event"
+	"dojo-api/pkg/metric"
 	"dojo-api/pkg/miner"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/task"
@@ -40,7 +43,7 @@ import (
 //	@Failure		403		{object}	ApiResponse											"Forbidden access"
 //	@Failure		409		{object}	ApiResponse											"Worker already exists"
 //	@Failure		500		{object}	ApiResponse											"Failed to create worker"
-//	@Router			/api/v1/worker/login/auth [post]
+//	@Router			/worker/login/auth [post]
 func WorkerLoginController(c *gin.Context) {
 	walletAddressInterface, _ := c.Get("WalletAddress")
 	chainIdInterface, _ := c.Get("ChainId")
@@ -70,6 +73,16 @@ func WorkerLoginController(c *gin.Context) {
 		}
 		log.Warn().Err(err).Msg("Worker already exists")
 	}
+
+	metricService := metric.NewMetricService()
+	go func() {
+		if err := metricService.UpdateDojoWorkerCount(c); err != nil {
+			log.Error().Err(err).Msg("Failed to update dojo worker count")
+		} else {
+			log.Info().Msg("Successfully updated dojo worker count")
+		}
+	}()
+
 	log.Info().Str("walletAddress", walletAddress).Str("alreadyExists", fmt.Sprintf("%+v", alreadyExists)).Msg("Worker created successfully or already exists")
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(worker.WorkerLoginSuccessResponse{
@@ -97,7 +110,7 @@ func WorkerLoginController(c *gin.Context) {
 //	@Failure		400				{object}	ApiResponse					"Bad request, invalid form data, or failed to process request"
 //	@Failure		401				{object}	ApiResponse					"Unauthorized access"
 //	@Failure		500				{object}	ApiResponse					"Internal server error, failed to upload files"
-//	@Router			/api/v1/tasks/create [post]
+//	@Router			/tasks/create [post]
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
@@ -192,7 +205,7 @@ func CreateTasksController(c *gin.Context) {
 //	@Failure		404				{object}	ApiResponse										"Task not found"
 //	@Failure		409				{object}	ApiResponse										"Task result already completed by worker"
 //	@Failure		500				{object}	ApiResponse										"Internal server error"
-//	@Router			/api/v1/tasks/submit-result/{task-id} [put]
+//	@Router			/tasks/submit-result/{task-id} [put]
 func SubmitTaskResultController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -277,6 +290,9 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
+	// Update the metric data with goroutine
+	handleMetricData(taskData, updatedTask)
+
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.SubmitTaskResultResponse{
 		NumResults: updatedTask.NumResults,
 	}))
@@ -296,7 +312,7 @@ func SubmitTaskResultController(c *gin.Context) {
 //	@Failure		401				{object}	ApiResponse									"Unauthorized, invalid signature, message expired, or hotkey not registered"
 //	@Failure		404				{object}	ApiResponse									"Miner user not found"
 //	@Failure		500				{object}	ApiResponse									"Failed to get nonce from cache, internal server error, or failed to create new miner user"
-//	@Router			/api/v1/miner/login/auth [post]
+//	@Router			/miner/login/auth [post]
 func MinerLoginController(c *gin.Context) {
 	loginInterface, _ := c.Get("loginRequest")
 	loginRequest := loginInterface.(auth.MinerLoginRequest)
@@ -410,7 +426,7 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 //	@Param			x-api-key	header		string										true	"API Key"
 //	@Success		200			{object}	ApiResponse{body=miner.MinerInfoResponse}	"Miner information retrieved successfully"
 //	@Failure		401			{object}	ApiResponse									"Unauthorized"
-//	@Router			/api/v1/miner/info/{hotkey} [get]
+//	@Router			/miner/info/{hotkey} [get]
 func MinerInfoController(c *gin.Context) {
 	minerUserInterface, ok := c.Get("minerUser")
 	if !ok {
@@ -439,7 +455,7 @@ func MinerInfoController(c *gin.Context) {
 //	@Failure		401				{object}	ApiResponse							"Unauthorized"
 //	@Failure		404				{object}	ApiResponse							"Miner subscription key is invalid"
 //	@Failure		500				{object}	ApiResponse							"Internal server error"
-//	@Router			/api/v1/worker/partner [post]
+//	@Router			/worker/partner [post]
 func WorkerPartnerCreateController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	var walletAddress string
@@ -523,13 +539,13 @@ func WorkerPartnerCreateController(c *gin.Context) {
 //	@Tags			Worker Partner
 //	@Accept			json
 //	@Produce		json
-//	@Param			Authorization	header		string								true	"Bearer token"
+//	@Param			Authorization	header		string												true	"Bearer token"
 //	@Success		200				{object}	ApiResponse{body=worker.ListWorkerPartnersResponse}	"Successfully retrieved worker-miner partnership list"
-//	@Failure		400				{object}	ApiResponse							"Invalid request or missing required fields"
-//	@Failure		401				{object}	ApiResponse							"Unauthorized"
-//	@Failure		404				{object}	ApiResponse							"Worker not found"
-//	@Failure		500				{object}	ApiResponse							"Internal server error"
-//	@Router			/api/v1/worker/partner/list [get]
+//	@Failure		400				{object}	ApiResponse											"Invalid request or missing required fields"
+//	@Failure		401				{object}	ApiResponse											"Unauthorized"
+//	@Failure		404				{object}	ApiResponse											"Worker not found"
+//	@Failure		500				{object}	ApiResponse											"Internal server error"
+//	@Router			/worker/partner/list [get]
 func GetWorkerPartnerListController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -593,7 +609,7 @@ func GetWorkerPartnerListController(c *gin.Context) {
 //	@Success		200		{object}	ApiResponse{body=task.TaskResponse}	"Successfully retrieved task response"
 //	@Failure		404		{object}	ApiResponse{error=string}			"Task not found"
 //	@Failure		500		{object}	ApiResponse{error=string}			"Internal server error"
-//	@Router			/api/v1/tasks/{task-id} [get]
+//	@Router			/tasks/{task-id} [get]
 func GetTaskByIdController(c *gin.Context) {
 
 	taskID := c.Param("task-id")
@@ -632,7 +648,7 @@ func GetTaskByIdController(c *gin.Context) {
 //	@Failure		401				{object}	ApiResponse								"Unauthorized"
 //	@Failure		404				{object}	ApiResponse								"No tasks found"
 //	@Failure		500				{object}	ApiResponse								"Internal server error"
-//	@Router			/api/v1/tasks [get]
+//	@Router			/tasks [get]
 func GetTasksByPageController(c *gin.Context) {
 	jwtClaims, ok := c.Get("userInfo")
 	if !ok {
@@ -775,7 +791,7 @@ func GetTaskResultsController(c *gin.Context) {
 //	@Failure		400				{object}	ApiResponse												"Invalid request body or missing required parameters"
 //	@Failure		401				{object}	ApiResponse												"Unauthorized"
 //	@Failure		500				{object}	ApiResponse												"Internal server error - failed to update worker partner"
-//	@Router			/api/v1/partner/edit [put]
+//	@Router			/partner/edit [put]
 func UpdateWorkerPartnerController(c *gin.Context) {
 	jwtClaims, _ := c.Get("userInfo")
 
@@ -838,7 +854,7 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 //	@Failure		401				{object}	ApiResponse										"Unauthorized"
 //	@Failure		404				{object}	ApiResponse										"Failed to disable worker partner, no records updated"
 //	@Failure		500				{object}	ApiResponse										"Internal server error - failed to disable worker partner"
-//	@Router			/api/v1/worker/partner/disable [put]
+//	@Router			/worker/partner/disable [put]
 func DisableMinerByWorkerController(c *gin.Context) {
 	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
@@ -928,7 +944,7 @@ func parseBool(value interface{}) (*bool, error) {
 //	@Failure		400			{object}	ApiResponse										"Invalid request body or parameters"
 //	@Failure		404			{object}	ApiResponse										"Failed to disable worker partner, no records updated"
 //	@Failure		500			{object}	ApiResponse										"Internal server error - failed to disable worker partner"
-//	@Router			/api/v1/miner/partner/disable [put]
+//	@Router			/miner/partner/disable [put]
 func DisableWorkerByMinerController(c *gin.Context) {
 	var requestMap map[string]interface{}
 	if err := c.BindJSON(&requestMap); err != nil {
@@ -991,7 +1007,7 @@ func DisableWorkerByMinerController(c *gin.Context) {
 //	@Success		200		{object}	ApiResponse{body=worker.GenerateNonceResponse}	"Nonce generated successfully"
 //	@Failure		400		{object}	ApiResponse										"Address parameter is required"
 //	@Failure		500		{object}	ApiResponse										"Failed to store nonce"
-//	@Router			/api/v1/auth/{address} [get]
+//	@Router			/auth/{address} [get]
 func GenerateNonceController(c *gin.Context) {
 	address := c.Param("address")
 	log.Info().Str("address", address).Msg("Getting address from param")
@@ -1012,4 +1028,154 @@ func GenerateNonceController(c *gin.Context) {
 
 	log.Info().Str("address", address).Str("nonce", nonce).Msg("Nonce generated successfully")
 	c.JSON(http.StatusOK, defaultSuccessResponse(worker.GenerateNonceResponse{Nonce: nonce}))
+}
+
+// GetDojoWorkerCountController godoc
+//
+//	@Summary		Get the total number of Dojo workers
+//	@Description	Retrieves the total number of Dojo workers from the metrics data
+//	@Tags			Metrics
+//	@Produce		json
+//	@Success		200	{object}	ApiResponse{body=metric.DojoWorkerCountResponse}	"Total number of Dojo workers retrieved successfully"
+//	@Failure		500	{object}	ApiResponse											"Failed to get worker count or unmarshal data"
+//	@Router			/metrics/dojo-worker-count [get]
+func GetDojoWorkerCountController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumDojoWorkers)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get worker count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker count"))
+		return
+	}
+	var workerCountData metric.MetricWorkerCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &workerCountData); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal worker count data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal worker count data"))
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.DojoWorkerCountResponse{NumDojoWorkers: workerCountData.TotalNumDojoWorkers}))
+}
+
+// GetTotalCompletedTasksController godoc
+//
+//	@Summary		Get the total number of completed tasks
+//	@Description	Retrieves the total number of completed tasks from the metrics data
+//	@Tags			Metrics
+//	@Produce		json
+//	@Success		200	{object}	ApiResponse{body=metric.CompletedTaskCountResponse}	"Total number of completed tasks retrieved successfully"
+//	@Failure		500	{object}	ApiResponse											"Failed to get completed tasks count or unmarshal data"
+//	@Router			/metrics/completed-tasks-count [get]
+func GetTotalCompletedTasksController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumCompletedTasks)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get completed tasks count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count"))
+		return
+	}
+
+	var completedTasksData metric.MetricCompletedTasksCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &completedTasksData); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal completed tasks data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal completed tasks data"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.CompletedTaskCountResponse{NumCompletedTasks: completedTasksData.TotalNumCompletedTasks}))
+}
+
+// GetTotalTasksResultsController godoc
+//
+//	@Summary		Get the total number of task results
+//	@Description	Retrieves the total number of task results from the metrics data
+//	@Tags			Metrics
+//	@Produce		json
+//	@Success		200	{object}	ApiResponse{body=metric.TaskResultCountResponse}	"Total number of task results retrieved successfully"
+//	@Failure		500	{object}	ApiResponse											"Failed to get task results count or unmarshal data"
+//	@Router			/metrics/task-result-count [get]
+func GetTotalTasksResultsController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeTotalNumTaskResults)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get task results count")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get task results count"))
+		return
+	}
+
+	var totalTasksResults metric.MetricTaskResultsCount
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &totalTasksResults); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal task results data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal task results data"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.TaskResultCountResponse{NumTaskResults: totalTasksResults.TotalNumTasksResults}))
+}
+
+// GetAvgTaskCompletionTimeController godoc
+//
+//	@Summary		Get the average task completion time
+//	@Description	Retrieves the average task completion time from the metrics data
+//	@Tags 			Metrics
+//	@Produce		json
+//	@Success		200	{object}	ApiResponse{body=metric.AvgTaskCompletionTimeResponse}	"Average task completion time retrieved successfully"
+//	@Failure		500	{object}	ApiResponse												"Failed to get average task completion time or unmarshal data"
+//	@Router			/metrics/average-task-completion-time [get]
+func GetAvgTaskCompletionTimeController(c *gin.Context) {
+	metricData, err := orm.NewMetricsORM().GetMetricsDataByMetricType(c, db.MetricsTypeAverageTaskCompletionTime)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get average task completion time")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get average task completion time"))
+		return
+	}
+
+	var avgCompletionTime metric.MetricAvgTaskCompletionTime
+	if err = json.Unmarshal([]byte(metricData.MetricsData), &avgCompletionTime); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal average task completion time data")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to unmarshal average task completion time data"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(metric.AvgTaskCompletionTimeResponse{AvgTaskCompletionTime: avgCompletionTime.AverageTaskCompletionTime}))
+}
+
+func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
+	// We want to make sure task status just changed to completion
+	metricService := metric.NewMetricService()
+	eventService := event.NewEventService()
+	ctx := context.Background()
+
+	go func() {
+		if err := metricService.UpdateTotalTaskResultsCount(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to update total tasks results count")
+		} else {
+			log.Info().Msg("Updated total task results count")
+		}
+	}()
+
+	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
+		go func() {
+			// Update the completed task count
+			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to update completed task count")
+			} else {
+				log.Info().Msg("Updated completed task count")
+			}
+		}()
+
+		go func() {
+			// Update the task completion event
+			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+				log.Error().Err(err).Msg("Failed to create task completion event")
+			} else {
+				log.Info().Msg("Created task completion event")
+			}
+		}()
+
+		go func() {
+			// Update the avg task completion
+			if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to update average task completion time")
+			} else {
+				log.Info().Msg("Updated average task completion time")
+			}
+		}()
+	}
 }

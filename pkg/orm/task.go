@@ -298,3 +298,32 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 		o.clientWrapper.AfterQuery()
 	}
 }
+
+func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	query := "SELECT COUNT(*) as count FROM \"TaskResult\" WHERE status = 'COMPLETED';"
+	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found for completed tasks count query")
+	}
+
+	taskCountStr := string(result[0].Count)
+	taskCountInt, err := strconv.Atoi(taskCountStr)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return taskCountInt, nil
+}
