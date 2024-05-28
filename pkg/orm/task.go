@@ -50,7 +50,6 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 }
 
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
-
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	task, err := o.dbClient.Task.FindUnique(
@@ -60,7 +59,6 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
-
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	tasks, err := o.dbClient.Task.FindMany(
@@ -74,7 +72,6 @@ func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db
 
 // TODO: Optimization
 func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
-
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	// Fetch the task along with its associated MinerUser
@@ -85,7 +82,6 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 			db.MinerUser.SubscriptionKeys.Fetch(), // Fetch the SubscriptionKeys related to MinerUser
 		),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching task by taskId")
 		return nil, err
@@ -110,29 +106,27 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 		return nil, err
 	}
 
-	var validSubscriptionKey *db.SubscriptionKeyModel
+	validSubscriptionKeys := make([]string, 0)
 
 	// Iterate through the subscription keys to find the valid one
 	for _, subscriptionKey := range subscriptionKeys {
 		if !subscriptionKey.IsDelete {
-			validSubscriptionKey = &subscriptionKey
-			break
+			validSubscriptionKeys = append(validSubscriptionKeys, subscriptionKey.Key)
 		}
 	}
 
-	if validSubscriptionKey == nil {
+	if len(validSubscriptionKeys) == 0 {
 		log.Error().Msg("No valid SubscriptionKey found for the given MinerUser")
 		return nil, errors.New("no valid SubscriptionKey found")
 	}
 
 	// Check if there's a WorkerPartner link for the given MinerUser and DojoWorker
 	exists, err := o.dbClient.WorkerPartner.FindFirst(
-		db.WorkerPartner.MinerSubscriptionKey.Equals(validSubscriptionKey.Key),
+		db.WorkerPartner.MinerSubscriptionKey.In(validSubscriptionKeys),
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
 		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching WorkerPartner by MinerSubscriptionKey and WorkerID")
 		return nil, err
@@ -193,7 +187,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
 		return nil, 0, err
@@ -228,7 +221,6 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		Where(sq.Eq{"subscription_key": subscriptionKeys}).
 		PlaceholderFormat(sq.Question).
 		ToSql()
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error building subquery")
 		return 0, err
@@ -291,7 +283,6 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 			).
 			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
 			Exec(ctx)
-
 		if err != nil {
 			log.Error().Err(err).Msg("Error in fetching expired tasks")
 		}
@@ -336,7 +327,6 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 
 	query := "SELECT COUNT(*) as count FROM \"TaskResult\" WHERE status = 'COMPLETED';"
 	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
-
 	if err != nil {
 		return 0, err
 	}
@@ -347,7 +337,6 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 
 	taskCountStr := string(result[0].Count)
 	taskCountInt, err := strconv.Atoi(taskCountStr)
-
 	if err != nil {
 		return 0, err
 	}
