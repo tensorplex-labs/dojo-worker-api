@@ -495,9 +495,9 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	// Continue with your function if there was no error or if the "not found" condition was handled
-	foundMinerUser, _ := orm.NewMinerUserORM().GetUserBySubscriptionKey(minerSubscriptionKey)
-	if foundMinerUser == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Miner subscription key is invalid"))
+	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(c, minerSubscriptionKey)
+	if foundSubscription == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Subscription key is invalid"))
 		return
 	}
 
@@ -515,7 +515,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, foundMinerUser.ID, name)
+	_, err = orm.NewWorkerPartnerORM().CreateWorkerPartner(worker.ID, minerSubscriptionKey, name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker-miner partnership"))
 		return

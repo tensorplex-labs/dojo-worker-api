@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -80,7 +81,9 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).With(
-		db.Task.MinerUser.Fetch(),
+		db.Task.MinerUser.Fetch().With(
+			db.MinerUser.SubscriptionKeys.Fetch(), // Fetch the SubscriptionKeys related to MinerUser
+		),
 	).Exec(ctx)
 
 	if err != nil {
@@ -100,9 +103,31 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 		return nil, err
 	}
 
+	// Retrieve the SubscriptionKeys from the fetched MinerUser
+	subscriptionKeys := minerUser.SubscriptionKeys()
+	if subscriptionKeys == nil || len(subscriptionKeys) == 0 {
+		log.Error().Err(err).Msg("Error in fetching SubscriptionKeys by MinerUser")
+		return nil, err
+	}
+
+	var validSubscriptionKey *db.SubscriptionKeyModel
+
+	// Iterate through the subscription keys to find the valid one
+	for _, subscriptionKey := range subscriptionKeys {
+		if !subscriptionKey.IsDelete {
+			validSubscriptionKey = &subscriptionKey
+			break
+		}
+	}
+
+	if validSubscriptionKey == nil {
+		log.Error().Msg("No valid SubscriptionKey found for the given MinerUser")
+		return nil, errors.New("no valid SubscriptionKey found")
+	}
+
 	// Check if there's a WorkerPartner link for the given MinerUser and DojoWorker
 	exists, err := o.dbClient.WorkerPartner.FindFirst(
-		db.WorkerPartner.MinerSubscriptionKey.Equals(minerUser.SubscriptionKey),
+		db.WorkerPartner.MinerSubscriptionKey.Equals(validSubscriptionKey.Key),
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
 		db.WorkerPartner.IsDeleteByWorker.Equals(false),
@@ -149,7 +174,9 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	filterParams := []db.TaskWhereParam{
 		db.Task.MinerUser.Where(
-			db.MinerUser.SubscriptionKey.In(subscriptionKeys),
+			db.MinerUser.SubscriptionKeys.Some(
+				db.SubscriptionKey.Key.In(subscriptionKeys), // SubscriptionKey should be one of the keys in the subscriptionKeys slice.
+			),
 		),
 	}
 

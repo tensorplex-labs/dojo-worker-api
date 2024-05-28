@@ -121,7 +121,7 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 	}
 
 	minerUserORM := orm.NewMinerUserORM()
-	minerUser, err := minerUserORM.GetUserByHotkey(hotkey)
+	_, err := minerUserORM.GetUserByHotkey(hotkey)
 	if err != nil {
 		if err == db.ErrNotFound {
 			log.Info().Msg("User not found, continuing...")
@@ -131,15 +131,15 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 		return
 	}
 
-	if !minerUser.IsVerified {
-		if err := minerUserORM.ReregisterMiner(hotkey); err != nil {
-			log.Error().Err(err).Msg("Error reregistering miner")
-		}
-	}
+	// if !minerUser.IsVerified {
+	// 	if err := minerUserORM.ReregisterMiner(hotkey); err != nil {
+	// 		log.Error().Err(err).Msg("Error reregistering miner")
+	// 	}
+	// }
 
 	// refresh api key
-	newExpireAt := time.Now().Add(time.Hour * 24)
-	orm.NewMinerUserORM().RefreshAPIKey(hotkey, newExpireAt)
+	// newExpireAt := time.Now().Add(time.Hour * 24)
+	// orm.NewMinerUserORM().RefreshAPIKey(hotkey, newExpireAt)
 }
 
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {

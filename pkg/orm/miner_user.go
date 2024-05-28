@@ -30,12 +30,8 @@ func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, 
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
-		db.MinerUser.APIKey.Set(apiKey),
-		db.MinerUser.APIKeyExpireAt.Set(expiry),
-		db.MinerUser.SubscriptionKey.Set(subscriptionKey),
 		db.MinerUser.Email.Set(email),
 		db.MinerUser.OrganizationName.Set(organisation),
-		db.MinerUser.IsVerified.Set(isVerified),
 	).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error creating user")
@@ -45,24 +41,24 @@ func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, 
 	return createdUser, nil
 }
 
-func (s *MinerUserORM) SetVerified(isVerified bool, id string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
+// func (s *MinerUserORM) SetVerified(isVerified bool, id string) (*db.MinerUserModel, error) {
+// 	s.clientWrapper.BeforeQuery()
+// 	defer s.clientWrapper.AfterQuery()
 
-	ctx := context.Background()
-	updatedUser, err := s.dbClient.MinerUser.FindUnique(
-		db.MinerUser.ID.Equals(id),
-	).Update(
-		db.MinerUser.IsVerified.Set(isVerified),
-	).Exec(ctx)
+// 	ctx := context.Background()
+// 	updatedUser, err := s.dbClient.MinerUser.FindUnique(
+// 		db.MinerUser.ID.Equals(id),
+// 	).Update(
+// 		db.MinerUser.IsVerified.Set(isVerified),
+// 	).Exec(ctx)
 
-	if err != nil {
-		log.Error().Err(err).Msgf("Error creating user")
-		return nil, err
-	}
-	log.Info().Msg("User created successfully")
-	return updatedUser, nil
-}
+// 	if err != nil {
+// 		log.Error().Err(err).Msgf("Error creating user")
+// 		return nil, err
+// 	}
+// 	log.Info().Msg("User created successfully")
+// 	return updatedUser, nil
+// }
 
 func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string) (*db.MinerUserModel, error) {
 	s.clientWrapper.BeforeQuery()
@@ -71,11 +67,7 @@ func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
-		db.MinerUser.APIKey.Set(apiKey),
-		db.MinerUser.APIKeyExpireAt.Set(expiry),
-		db.MinerUser.SubscriptionKey.Set(subscriptionKey),
 		db.MinerUser.Email.Set(email),
-		db.MinerUser.IsVerified.Set(isVerified),
 	).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error creating user")
@@ -85,23 +77,23 @@ func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time
 	return createdUser, nil
 }
 
-func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
+// func (s *MinerUserORM) GetUserByAPIKey(apiKey string) (*db.MinerUserModel, error) {
+// 	s.clientWrapper.BeforeQuery()
+// 	defer s.clientWrapper.AfterQuery()
 
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key cannot be an empty string")
-	}
-	ctx := context.Background()
-	user, err := s.dbClient.MinerUser.FindFirst(
-		db.MinerUser.APIKey.Equals(apiKey),
-	).Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Error retrieving user by API key")
-		return nil, err
-	}
-	return user, nil
-}
+// 	if apiKey == "" {
+// 		return nil, fmt.Errorf("API key cannot be an empty string")
+// 	}
+// 	ctx := context.Background()
+// 	user, err := s.dbClient.MinerUser.FindFirst(
+// 		db.MinerUser.APIKey.Equals(apiKey),
+// 	).Exec(ctx)
+// 	if err != nil {
+// 		log.Error().Err(err).Msg("Error retrieving user by API key")
+// 		return nil, err
+// 	}
+// 	return user, nil
+// }
 
 func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error) {
 	s.clientWrapper.BeforeQuery()
@@ -126,7 +118,7 @@ func (s *MinerUserORM) GetUserBySubscriptionKey(subscriptionKey string) (*db.Min
 
 	ctx := context.Background()
 	user, err := s.dbClient.MinerUser.FindFirst(
-		db.MinerUser.SubscriptionKey.Equals(subscriptionKey),
+		db.MinerUser.SubscriptionKeys.Some(db.SubscriptionKey.Key.Equals(subscriptionKey)),
 	).Exec(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error retrieving user by subscription key")
@@ -153,7 +145,7 @@ func (s *MinerUserORM) RefreshAPIKey(hotkey string, newExpireAt time.Time) (*db.
 	updatedMiner, err := s.dbClient.MinerUser.FindUnique(
 		db.MinerUser.ID.Equals(foundMiner.ID),
 	).Update(
-		db.MinerUser.APIKeyExpireAt.Set(newExpireAt),
+	// db.MinerUser.APIKeyExpireAt.Set(newExpireAt),
 	).Exec(ctx)
 
 	if err != nil {
@@ -172,8 +164,8 @@ func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 	_, err := s.dbClient.MinerUser.FindUnique(
 		db.MinerUser.Hotkey.Equals(hotkey),
 	).Update(
-		db.MinerUser.IsVerified.Set(false),
-		db.MinerUser.APIKeyExpireAt.Set(time.Now()),
+	// db.MinerUser.IsVerified.Set(false),
+	// db.MinerUser.APIKeyExpireAt.Set(time.Now()),
 	).Exec(ctx)
 
 	if err != nil {
@@ -193,8 +185,8 @@ func (s *MinerUserORM) ReregisterMiner(hotkey string) error {
 	_, err := s.dbClient.MinerUser.FindUnique(
 		db.MinerUser.Hotkey.Equals(hotkey),
 	).Update(
-		db.MinerUser.IsVerified.Set(true),
-		db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour*24)),
+	// db.MinerUser.IsVerified.Set(true),
+	// db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour*24)),
 	).Exec(ctx)
 
 	if err != nil {
