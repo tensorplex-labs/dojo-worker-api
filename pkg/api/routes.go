@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GET /api/v1/metrics/dojo-worker-count
 func LoginRoutes(router *gin.Engine) {
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	apiV1 := router.Group("/api/v1")
@@ -49,6 +50,13 @@ func LoginRoutes(router *gin.Engine) {
 				subScriptionKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerSubscriptionKeyGenerateController)
 				subScriptionKeyGroup.PUT("/disable", MinerCookieAuthMiddleware(), MinerSubscriptionKeyDisableController)
 			}
+		}
+		metrics := apiV1.Group("/metrics")
+		{
+			metrics.GET("/dojo-worker-count", GetDojoWorkerCountController)
+			metrics.GET("/completed-tasks-count", GetTotalCompletedTasksController)
+			metrics.GET("/task-result-count", GetTotalTasksResultsController)
+			metrics.GET("/average-task-completion-time", GetAvgTaskCompletionTimeController)
 		}
 	}
 }

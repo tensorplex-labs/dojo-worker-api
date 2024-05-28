@@ -138,3 +138,30 @@ model WorkerPartner {
 
     @@unique([miner_subscription_key, worker_id])
 }
+
+enum MetricsType {
+    TOTAL_NUM_DOJO_WORKERS
+    TOTAL_NUM_COMPLETED_TASKS
+    TOTAL_NUM_TASK_RESULTS
+    AVERAGE_TASK_COMPLETION_TIME
+}
+
+enum EventsType {
+    TASK_COMPLETION_TIME
+}
+
+model Metrics {
+    id           String      @id @default(uuid())
+    created_at   DateTime    @default(now())
+    updated_at   DateTime    @updatedAt
+    type         MetricsType @unique
+    metrics_data Json
+}
+
+model Events {
+    id          String     @id @default(uuid())
+    created_at  DateTime   @default(now())
+    updated_at  DateTime   @updatedAt
+    type        EventsType
+    events_data Json
+}

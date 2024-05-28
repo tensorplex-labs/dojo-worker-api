@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/v1/auth/{address}": {
+        "/auth/{address}": {
             "get": {
                 "description": "Generate a nonce for a given wallet address",
                 "consumes": [
@@ -71,7 +71,159 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/miner/info/{hotkey}": {
+        "/metrics/average-task-completion-time": {
+            "get": {
+                "description": "Retrieves the average task completion time from the metrics data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Get the average task completion time",
+                "responses": {
+                    "200": {
+                        "description": "Average task completion time retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/metric.AvgTaskCompletionTimeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get average task completion time or unmarshal data",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics/completed-tasks-count": {
+            "get": {
+                "description": "Retrieves the total number of completed tasks from the metrics data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Get the total number of completed tasks",
+                "responses": {
+                    "200": {
+                        "description": "Total number of completed tasks retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/metric.CompletedTaskCountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get completed tasks count or unmarshal data",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics/dojo-worker-count": {
+            "get": {
+                "description": "Retrieves the total number of Dojo workers from the metrics data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Get the total number of Dojo workers",
+                "responses": {
+                    "200": {
+                        "description": "Total number of Dojo workers retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/metric.DojoWorkerCountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get worker count or unmarshal data",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics/task-result-count": {
+            "get": {
+                "description": "Retrieves the total number of task results from the metrics data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Get the total number of task results",
+                "responses": {
+                    "200": {
+                        "description": "Total number of task results retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/metric.TaskResultCountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get task results count or unmarshal data",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/miner/info/{hotkey}": {
             "get": {
                 "description": "Retrieve miner information using the miner's user context",
                 "consumes": [
@@ -128,7 +280,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/miner/login/auth": {
+        "/miner/login/auth": {
             "post": {
                 "description": "Log in a miner by providing their wallet address, chain ID, message, signature, and timestamp",
                 "consumes": [
@@ -205,7 +357,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/miner/partner/disable": {
+        "/miner/partner/disable": {
             "put": {
                 "description": "Disable a worker by providing the worker's ID and a disable flag",
                 "consumes": [
@@ -276,7 +428,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/partner/edit": {
+        "/partner/edit": {
             "put": {
                 "description": "Update the subscription key and name of a worker partner",
                 "consumes": [
@@ -347,7 +499,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/tasks": {
+        "/tasks": {
             "get": {
                 "description": "Get a paginated list of tasks based on the specified parameters",
                 "consumes": [
@@ -440,7 +592,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/tasks/create": {
+        "/tasks/create": {
             "post": {
                 "description": "Create tasks by providing the necessary task details along with files to upload. This endpoint accepts multipart/form-data, and multiple files can be uploaded.",
                 "consumes": [
@@ -565,7 +717,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/tasks/submit-result/{task-id}": {
+        "/tasks/submit-result/{task-id}": {
             "put": {
                 "description": "Submit the result of a task",
                 "consumes": [
@@ -655,7 +807,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/tasks/{task-id}": {
+        "/tasks/{task-id}": {
             "get": {
                 "description": "Get details of a task by its ID",
                 "consumes": [
@@ -735,7 +887,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/worker/login/auth": {
+        "/worker/login/auth": {
             "post": {
                 "description": "Log in a worker by providing their wallet address, chain ID, message, signature, and timestamp",
                 "consumes": [
@@ -811,7 +963,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/worker/partner": {
+        "/worker/partner": {
             "post": {
                 "description": "Create a partnership between a worker and a miner",
                 "consumes": [
@@ -888,7 +1040,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/worker/partner/disable": {
+        "/worker/partner/disable": {
             "put": {
                 "description": "Disable a miner by providing the worker's subscription key and a disable flag",
                 "consumes": [
@@ -965,7 +1117,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/worker/partner/list": {
+        "/worker/partner/list": {
             "get": {
                 "description": "Retrieve a list of partnerships between a worker and miners",
                 "consumes": [
@@ -1101,6 +1253,38 @@ const docTemplate = `{
                 "TaskTypeDialogue",
                 "TaskTypeTextToImage"
             ]
+        },
+        "metric.AvgTaskCompletionTimeResponse": {
+            "type": "object",
+            "properties": {
+                "averageTaskCompletionTime": {
+                    "type": "integer"
+                }
+            }
+        },
+        "metric.CompletedTaskCountResponse": {
+            "type": "object",
+            "properties": {
+                "numCompletedTasks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "metric.DojoWorkerCountResponse": {
+            "type": "object",
+            "properties": {
+                "numDojoWorkers": {
+                    "type": "integer"
+                }
+            }
+        },
+        "metric.TaskResultCountResponse": {
+            "type": "object",
+            "properties": {
+                "numTaskResults": {
+                    "type": "integer"
+                }
+            }
         },
         "miner.MinerInfoResponse": {
             "type": "object",
