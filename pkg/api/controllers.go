@@ -15,6 +15,7 @@ import (
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/email"
+	"dojo-api/pkg/event"
 	"dojo-api/pkg/metric"
 	"dojo-api/pkg/miner"
 	"dojo-api/pkg/orm"
