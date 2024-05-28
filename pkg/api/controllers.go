@@ -495,7 +495,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	// Continue with your function if there was no error or if the "not found" condition was handled
-	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(c, minerSubscriptionKey)
+	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(minerSubscriptionKey)
 	if foundSubscription == nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Subscription key is invalid"))
 		return
@@ -1133,12 +1133,12 @@ func GenerateCookieAuth(c *gin.Context) {
 func handleCurrentSession(c *gin.Context) (*auth.SecureCookieSession, error) {
 	session, exists := c.Get("session")
 	if !exists {
-		return nil, errors.New("No session found")
+		return nil, errors.New("no session found")
 	}
 
 	currSession, ok := session.(auth.SecureCookieSession)
 	if !ok {
-		return nil, errors.New("Invalid session")
+		return nil, errors.New("invalid session")
 	}
 	return &currSession, nil
 }
@@ -1150,6 +1150,16 @@ func buildApiKeyResponse(apiKeys []db.APIKeyModel) miner.MinerApiKeysResponse {
 	}
 	return miner.MinerApiKeysResponse{
 		ApiKeys: keys,
+	}
+}
+
+func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) miner.MinerSubscriptionKeysResponse {
+	keys := make([]string, 0)
+	for _, subScriptionKey := range subScriptionKeys {
+		keys = append(keys, subScriptionKey.Key)
+	}
+	return miner.MinerSubscriptionKeysResponse{
+		SubscriptionKeys: keys,
 	}
 }
 
@@ -1259,4 +1269,119 @@ func MinerApiKeyDisableController(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerApiKeysResponse{ApiKeys: updatedApiKeys}))
+}
+
+func MinerSubscriptionKeyListController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get subscription keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get subscription keys"))
+		return
+	}
+
+	response := buildSubscriptionKeyResponse(subscriptionKeys)
+	log.Info().Msgf("%d Subscription Keys retrieved successfully for hotkey %s", len(subscriptionKeys), session.Hotkey)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+	return
+}
+
+func MinerSubscriptionKeyGenerateController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate random subscriptionKey key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscriptionKey key"))
+		return
+	}
+
+	createdSubscriptionKey, err := orm.NewSubscriptionKeyORM().CreateSubscriptionKeyByHotkey(session.Hotkey, subscriptionKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create subscription key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create subscription key"))
+		return
+	}
+	log.Info().Msgf("Subscription Key %s generated successfully", createdSubscriptionKey.Key)
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+	response := buildSubscriptionKeyResponse(subscriptionKeys)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+}
+
+func MinerSubscriptionKeyDisableController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	var request miner.MinerSubscriptionDisableRequest
+	if err := c.BindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to request")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+
+	var foundApiKey *db.SubscriptionKeyModel
+	for _, key := range subscriptionKeys {
+		if key.Key == request.SubscriptionKey {
+			foundApiKey = &key
+			break
+		}
+	}
+
+	if foundApiKey == nil {
+		log.Error().Msg("subscription Key belonging to miner not found")
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("subscription Key belonging to miner not found"))
+		return
+	}
+
+	disabledKey, err := orm.NewSubscriptionKeyORM().DisableSubscriptionKeyByHotkey(session.Hotkey, request.SubscriptionKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to disable subscription key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable subscription key"))
+		return
+	}
+	log.Info().Msgf("Subscription Key %s disabled successfully", disabledKey.Key)
+
+	newSubscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get new subscription keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get new subscription keys"))
+		return
+	}
+
+	updatedSubscriptionKeys := make([]string, 0)
+	for _, key := range newSubscriptionKeys {
+		if key.Key != request.SubscriptionKey && !key.IsDelete {
+			updatedSubscriptionKeys = append(updatedSubscriptionKeys, key.Key)
+		}
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerApiKeysResponse{ApiKeys: updatedSubscriptionKeys}))
 }
