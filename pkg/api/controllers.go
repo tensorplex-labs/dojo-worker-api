@@ -134,7 +134,6 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	requestBody, err = task.ProcessTaskRequest(requestBody)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
@@ -603,7 +602,6 @@ func GetWorkerPartnerListController(c *gin.Context) {
 //	@Failure		500		{object}	ApiResponse{error=string}			"Internal server error"
 //	@Router			/api/v1/tasks/{task-id} [get]
 func GetTaskByIdController(c *gin.Context) {
-
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
 
@@ -896,7 +894,6 @@ func DisableMinerByWorkerController(c *gin.Context) {
 
 	if toDisable {
 		count, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(workerData.ID, minerSubscriptionKey, toDisable)
-
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
 			return
@@ -1121,6 +1118,19 @@ func GenerateCookieAuth(c *gin.Context) {
 		}
 		http.SetCookie(c.Writer, cookie)
 		log.Info().Msgf("Session generated successfully for hotkey %v", requestBody.Hotkey)
+		minerUser, err := orm.NewMinerUserORM().CreateNewMiner(requestBody.Hotkey)
+		_, alreadyExists := db.IsErrUniqueConstraint(err)
+		if err != nil {
+			if alreadyExists {
+				log.Info().Msg("Miner already exists, skipping creation")
+				c.JSON(http.StatusOK, defaultSuccessResponse("Session generated successfully"))
+				return
+			}
+			log.Error().Err(err).Msg("Failed to create miner")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+		log.Info().Msgf("Successfully created new miner, id: %v", minerUser.ID)
 		c.JSON(http.StatusOK, defaultSuccessResponse("Session generated successfully"))
 		return
 	} else {

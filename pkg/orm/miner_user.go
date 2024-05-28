@@ -147,7 +147,6 @@ func (s *MinerUserORM) RefreshAPIKey(hotkey string, newExpireAt time.Time) (*db.
 	).Update(
 	// db.MinerUser.APIKeyExpireAt.Set(newExpireAt),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error updating API key expiration")
 		return nil, err
@@ -167,7 +166,6 @@ func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 	// db.MinerUser.IsVerified.Set(false),
 	// db.MinerUser.APIKeyExpireAt.Set(time.Now()),
 	).Exec(ctx)
-
 	if err != nil {
 		if err == db.ErrNotFound {
 			log.Info().Msg("User not found, continuing...")
@@ -188,7 +186,6 @@ func (s *MinerUserORM) ReregisterMiner(hotkey string) error {
 	// db.MinerUser.IsVerified.Set(true),
 	// db.MinerUser.APIKeyExpireAt.Set(time.Now().Add(time.Hour*24)),
 	).Exec(ctx)
-
 	if err != nil {
 		if err == db.ErrNotFound {
 			log.Info().Msg("User not found, continuing...")
@@ -199,4 +196,19 @@ func (s *MinerUserORM) ReregisterMiner(hotkey string) error {
 	}
 	log.Info().Msg("Miner reregistered successfully")
 	return nil
+}
+
+func (s *MinerUserORM) CreateNewMiner(hotkey string) (*db.MinerUserModel, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
+	ctx := context.Background()
+	createdMiner, err := s.dbClient.MinerUser.CreateOne(db.MinerUser.Hotkey.Set(hotkey)).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error creating miner and API key")
+		return nil, err
+	}
+
+	log.Info().Msgf("Successfully created new miner")
+	return createdMiner, nil
 }
