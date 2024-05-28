@@ -20,7 +20,7 @@ func NewWorkerPartnerORM() *WorkerPartnerORM {
 	return &WorkerPartnerORM{dbClient: clientWrapper.Client, clientWrapper: clientWrapper}
 }
 
-func (m *WorkerPartnerORM) Create(workerId string, minerId string, optionalName string) (*db.WorkerPartnerModel, error) {
+func (m *WorkerPartnerORM) CreateWorkerPartner(workerId string, subscriptionId string, optionalName string) (*db.WorkerPartnerModel, error) {
 	m.clientWrapper.BeforeQuery()
 	defer m.clientWrapper.AfterQuery()
 
@@ -33,16 +33,16 @@ func (m *WorkerPartnerORM) Create(workerId string, minerId string, optionalName 
 		return nil, fmt.Errorf("worker with ID %s not found", workerId)
 	}
 
-	miner, err := m.dbClient.MinerUser.FindUnique(
-		db.MinerUser.ID.Equals(minerId),
-	).Exec(ctx)
-	if err != nil && errors.Is(err, db.ErrNotFound) {
-		return nil, fmt.Errorf("miner with ID %s not found", minerId)
-	}
+	// miner, err := m.dbClient.MinerUser.FindUnique(
+	// 	db.MinerUser.ID.Equals(minerId),
+	// ).Exec(ctx)
+	// if err != nil && errors.Is(err, db.ErrNotFound) {
+	// 	return nil, fmt.Errorf("miner with ID %s not found", minerId)
+	// }
 
 	workerPartner, err := m.dbClient.WorkerPartner.CreateOne(
-		db.WorkerPartner.MinerUser.Link(
-			db.MinerUser.ID.Equals(miner.ID),
+		db.WorkerPartner.SubscriptionKey.Link(
+			db.SubscriptionKey.Key.Equals(subscriptionId),
 		),
 		db.WorkerPartner.DojoWorker.Link(
 			db.DojoWorker.ID.Equals(dojoWorker.ID),

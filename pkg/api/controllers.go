@@ -25,6 +25,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/gorilla/securecookie"
+	"github.com/redis/rueidis"
 	"github.com/rs/zerolog/log"
 	"github.com/spruceid/siwe-go"
 )
@@ -142,7 +145,6 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	requestBody, err = task.ProcessTaskRequest(requestBody)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse(err.Error()))
@@ -298,79 +300,79 @@ func SubmitTaskResultController(c *gin.Context) {
 	}))
 }
 
-// MinerLoginController godoc
-//
-//	@Summary		Miner login
-//	@Description	Log in a miner by providing their wallet address, chain ID, message, signature, and timestamp
-//	@Tags			Authentication
-//	@Accept			json
-//	@Produce		json
-//	@Param			Authorization	header		string										true	"Bearer token"
-//	@Param			body			body		auth.MinerLoginRequest						true	"Request body containing the miner login details"
-//	@Success		200				{object}	ApiResponse{body=auth.MinerLoginResponse}	"Miner logged in successfully"
-//	@Failure		400				{object}	ApiResponse									"Invalid request body or failed to parse message"
-//	@Failure		401				{object}	ApiResponse									"Unauthorized, invalid signature, message expired, or hotkey not registered"
-//	@Failure		404				{object}	ApiResponse									"Miner user not found"
-//	@Failure		500				{object}	ApiResponse									"Failed to get nonce from cache, internal server error, or failed to create new miner user"
-//	@Router			/miner/login/auth [post]
+// // MinerLoginController godoc
+// //
+// //	@Summary		Miner login
+// //	@Description	Log in a miner by providing their wallet address, chain ID, message, signature, and timestamp
+// //	@Tags			Authentication
+// //	@Accept			json
+// //	@Produce		json
+// //	@Param			Authorization	header		string										true	"Bearer token"
+// //	@Param			body			body		auth.MinerLoginRequest						true	"Request body containing the miner login details"
+// //	@Success		200				{object}	ApiResponse{body=auth.MinerLoginResponse}	"Miner logged in successfully"
+// //	@Failure		400				{object}	ApiResponse									"Invalid request body or failed to parse message"
+// //	@Failure		401				{object}	ApiResponse									"Unauthorized, invalid signature, message expired, or hotkey not registered"
+// //	@Failure		404				{object}	ApiResponse									"Miner user not found"
+// //	@Failure		500				{object}	ApiResponse									"Failed to get nonce from cache, internal server error, or failed to create new miner user"
+// //	@Router			/api/v1/miner/login/auth [post]
 func MinerLoginController(c *gin.Context) {
-	loginInterface, _ := c.Get("loginRequest")
-	loginRequest := loginInterface.(auth.MinerLoginRequest)
+	// loginInterface, _ := c.Get("loginRequest")
+	// loginRequest := loginInterface.(auth.MinerLoginRequest)
 
-	parsedMessage, err := siws.ParseMessage(loginRequest.Message)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to parse message")
-		if strings.Contains(err.Error(), "expired") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Message expired"))
-		} else {
-			c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
-		}
-		return
-	}
+	// parsedMessage, err := siws.ParseMessage(loginRequest.Message)
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to parse message")
+	// 	if strings.Contains(err.Error(), "expired") {
+	// 		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Message expired"))
+	// 	} else {
+	// 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Failed to parse message"))
+	// 	}
+	// 	return
+	// }
 
-	nonce := parsedMessage.Nonce
-	if addressNonce, err := cache.GetCacheInstance().Get(loginRequest.Hotkey); err != nil {
-		log.Error().Err(err).Msg("Failed to get nonce from cache")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get nonce from cache"))
-		return
-	} else if addressNonce != nonce {
-		log.Error().Msg("Nonce does not match")
-		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
+	// nonce := parsedMessage.Nonce
+	// if addressNonce, err := cache.GetCacheInstance().Get(loginRequest.Hotkey); err != nil {
+	// 	log.Error().Err(err).Msg("Failed to get nonce from cache")
+	// 	c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get nonce from cache"))
+	// 	return
+	// } else if addressNonce != nonce {
+	// 	log.Error().Msg("Nonce does not match")
+	// 	c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+	// 	return
+	// }
 
-	minerUserORM := orm.NewMinerUserORM()
-	minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey)
-	log.Info().Interface("minerUser", minerUser).Interface("error", err).Msg("Getting miner user by hotkey")
-	if minerUser != nil {
-		newExpireAt := time.Now().Add(time.Hour * 24)
-		minerUserORM.RefreshAPIKey(minerUser.Hotkey, newExpireAt)
-	} else if err == db.ErrNotFound {
-		newUser, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation)
-		if newErr != nil {
-			log.Error().Err(newErr).Msg("Failed to create new miner user")
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
-			return
-		} else {
-			response := auth.MinerLoginResponse{
-				ApiKey:          newUser.APIKey,
-				SubscriptionKey: newUser.SubscriptionKey,
-			}
-			c.JSON(http.StatusOK, defaultSuccessResponse(response))
-			return
-		}
-	} else if err != nil {
-		log.Error().Err(err).Msg("Failed to get miner user by hotkey")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
-		return
-	}
+	// minerUserORM := orm.NewMinerUserORM()
+	// minerUser, err := minerUserORM.GetUserByHotkey(loginRequest.Hotkey)
+	// log.Info().Interface("minerUser", minerUser).Interface("error", err).Msg("Getting miner user by hotkey")
+	// if minerUser != nil {
+	// 	newExpireAt := time.Now().Add(time.Hour * 24)
+	// 	minerUserORM.RefreshAPIKey(minerUser.Hotkey, newExpireAt)
+	// } else if err == db.ErrNotFound {
+	// 	newUser, newErr := handleNewMinerUser(loginRequest.Hotkey, loginRequest.Email, loginRequest.Organisation)
+	// 	if newErr != nil {
+	// 		log.Error().Err(newErr).Msg("Failed to create new miner user")
+	// 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create new miner user"))
+	// 		return
+	// 	} else {
+	// 		response := auth.MinerLoginResponse{
+	// 			ApiKey:          newUser.APIKey,
+	// 			SubscriptionKey: newUser.SubscriptionKey,
+	// 		}
+	// 		c.JSON(http.StatusOK, defaultSuccessResponse(response))
+	// 		return
+	// 	}
+	// } else if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to get miner user by hotkey")
+	// 	c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get miner user"))
+	// 	return
+	// }
 
-	response := auth.MinerLoginResponse{
-		ApiKey:          minerUser.APIKey,
-		SubscriptionKey: minerUser.SubscriptionKey,
-	}
+	// response := auth.MinerLoginResponse{
+	// 	ApiKey:          minerUser.APIKey,
+	// 	SubscriptionKey: minerUser.SubscriptionKey,
+	// }
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+	// c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
 func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (*db.MinerUserModel, error) {
@@ -415,30 +417,33 @@ func handleNewMinerUser(hotkey string, emailAddress string, organisation string)
 	return newMinerUser, nil
 }
 
-// MinerInfoController godoc
-//
-//	@Summary		Get miner information
-//	@Description	Retrieve miner information using the miner's user context
-//	@Tags			Miner
-//	@Accept			json
-//	@Produce		json
-//	@Param			hotkey		path		string										true	"Hot Key"
-//	@Param			x-api-key	header		string										true	"API Key"
-//	@Success		200			{object}	ApiResponse{body=miner.MinerInfoResponse}	"Miner information retrieved successfully"
-//	@Failure		401			{object}	ApiResponse									"Unauthorized"
-//	@Router			/miner/info/{hotkey} [get]
+// // MinerInfoController godoc
+// //
+// //	@Summary		Get miner information
+// //	@Description	Retrieve miner information using the miner's user context
+// //	@Tags			Miner
+// //	@Accept			json
+// //	@Produce		json
+// //	@Param			hotkey		path		string										true	"Hot Key"
+// //	@Param			x-api-key	header		string										true	"API Key"
+// //	@Success		200			{object}	ApiResponse{body=miner.MinerInfoResponse}	"Miner information retrieved successfully"
+// //	@Failure		401			{object}	ApiResponse									"Unauthorized"
+// //	@Router			/api/v1/miner/info/{hotkey} [get]
 func MinerInfoController(c *gin.Context) {
-	minerUserInterface, ok := c.Get("minerUser")
-	if !ok {
-		log.Error().Msg("Miner user not found in context")
-		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-		return
-	}
-	minerUser := minerUserInterface.(*db.MinerUserModel)
-	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerInfoResponse{
-		MinerId:         minerUser.ID,
-		SubscriptionKey: minerUser.SubscriptionKey,
-	}))
+	// minerUserInterface, ok := c.Get("minerUser")
+	//
+	//	if !ok {
+	//		log.Error().Msg("Miner user not found in context")
+	//		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+	//		return
+	//	}
+	//
+	// minerUser := minerUserInterface.(*db.MinerUserModel)
+	//
+	//	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerInfoResponse{
+	//		MinerId:         minerUser.ID,
+	//		SubscriptionKey: minerUser.SubscriptionKey,
+	//	}))
 }
 
 // WorkerPartnerCreateController godoc
@@ -503,9 +508,9 @@ func WorkerPartnerCreateController(c *gin.Context) {
 	}
 
 	// Continue with your function if there was no error or if the "not found" condition was handled
-	foundMinerUser, _ := orm.NewMinerUserORM().GetUserBySubscriptionKey(minerSubscriptionKey)
-	if foundMinerUser == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Miner subscription key is invalid"))
+	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(minerSubscriptionKey)
+	if foundSubscription == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Subscription key is invalid"))
 		return
 	}
 
@@ -523,7 +528,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	_, err = orm.NewWorkerPartnerORM().Create(worker.ID, foundMinerUser.ID, name)
+	_, err = orm.NewWorkerPartnerORM().CreateWorkerPartner(worker.ID, minerSubscriptionKey, name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker-miner partnership"))
 		return
@@ -611,7 +616,6 @@ func GetWorkerPartnerListController(c *gin.Context) {
 //	@Failure		500		{object}	ApiResponse{error=string}			"Internal server error"
 //	@Router			/tasks/{task-id} [get]
 func GetTaskByIdController(c *gin.Context) {
-
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
 
@@ -904,7 +908,6 @@ func DisableMinerByWorkerController(c *gin.Context) {
 
 	if toDisable {
 		count, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(workerData.ID, minerSubscriptionKey, toDisable)
-
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
 			return
@@ -931,69 +934,69 @@ func parseBool(value interface{}) (*bool, error) {
 	return &valueParsed, nil
 }
 
-// DisableWorkerByMinerController godoc
-//
-//	@Summary		Disable worker by miner
-//	@Description	Disable a worker by providing the worker's ID and a disable flag
-//	@Tags			Worker Partner
-//	@Accept			json
-//	@Produce		json
-//	@Param			x-api-key	header		string											true	"API Key"
-//	@Param			body		body		worker.DisableWorkerRequest						true	"Request body containing the worker ID and disable flag"
-//	@Success		200			{object}	ApiResponse{body=worker.DisableSuccessResponse}	"Worker disabled successfully"
-//	@Failure		400			{object}	ApiResponse										"Invalid request body or parameters"
-//	@Failure		404			{object}	ApiResponse										"Failed to disable worker partner, no records updated"
-//	@Failure		500			{object}	ApiResponse										"Internal server error - failed to disable worker partner"
-//	@Router			/miner/partner/disable [put]
+// // DisableWorkerByMinerController godoc
+// //
+// //	@Summary		Disable worker by miner
+// //	@Description	Disable a worker by providing the worker's ID and a disable flag
+// //	@Tags			Worker Partner
+// //	@Accept			json
+// //	@Produce		json
+// //	@Param			x-api-key	header		string											true	"API Key"
+// //	@Param			body		body		worker.DisableWorkerRequest						true	"Request body containing the worker ID and disable flag"
+// //	@Success		200			{object}	ApiResponse{body=worker.DisableSuccessResponse}	"Worker disabled successfully"
+// //	@Failure		400			{object}	ApiResponse										"Invalid request body or parameters"
+// //	@Failure		404			{object}	ApiResponse										"Failed to disable worker partner, no records updated"
+// //	@Failure		500			{object}	ApiResponse										"Internal server error - failed to disable worker partner"
+// //	@Router			/api/v1/miner/partner/disable [put]
 func DisableWorkerByMinerController(c *gin.Context) {
-	var requestMap map[string]interface{}
-	if err := c.BindJSON(&requestMap); err != nil {
-		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
-		return
-	}
+	// var requestMap map[string]interface{}
+	// if err := c.BindJSON(&requestMap); err != nil {
+	// 	log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+	// 	c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+	// 	return
+	// }
 
-	const WORKER_KEY = "workerId"
-	const DISABLE_KEY = "toDisable"
+	// const WORKER_KEY = "workerId"
+	// const DISABLE_KEY = "toDisable"
 
-	workerIdInterface, workerIdExists := requestMap[WORKER_KEY]
-	workerId, ok := workerIdInterface.(string)
-	if !workerIdExists || workerId == "" || !ok {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse(WORKER_KEY+" is required and must be a string"))
-		return
-	}
+	// workerIdInterface, workerIdExists := requestMap[WORKER_KEY]
+	// workerId, ok := workerIdInterface.(string)
+	// if !workerIdExists || workerId == "" || !ok {
+	// 	c.JSON(http.StatusBadRequest, defaultErrorResponse(WORKER_KEY+" is required and must be a string"))
+	// 	return
+	// }
 
-	toDisableInterface, toDisableExists := requestMap[DISABLE_KEY]
-	toDisableOptional, parseError := parseBool(toDisableInterface)
-	if !toDisableExists || parseError != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" must be a boolean value"))
-		return
-	}
-	toDisable := *toDisableOptional
+	// toDisableInterface, toDisableExists := requestMap[DISABLE_KEY]
+	// toDisableOptional, parseError := parseBool(toDisableInterface)
+	// if !toDisableExists || parseError != nil {
+	// 	c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" must be a boolean value"))
+	// 	return
+	// }
+	// toDisable := *toDisableOptional
 
-	minerUserValue, exists := c.Get("minerUser")
-	if !exists {
-		return
-	}
-	minerUser, _ := minerUserValue.(*db.MinerUserModel)
+	// minerUserValue, exists := c.Get("minerUser")
+	// if !exists {
+	// 	return
+	// }
+	// minerUser, _ := minerUserValue.(*db.MinerUserModel)
 
-	log.Info().Str(WORKER_KEY, workerId).Bool(DISABLE_KEY, toDisable).Str("subscriptionKey", minerUser.SubscriptionKey).Msg("Attempting to disable worker by miner")
+	// log.Info().Str(WORKER_KEY, workerId).Bool(DISABLE_KEY, toDisable).Str("subscriptionKey", minerUser.SubscriptionKey).Msg("Attempting to disable worker by miner")
 
-	if toDisable {
+	// if toDisable {
 
-		count, err := orm.NewWorkerPartnerORM().DisablePartnerByMiner(workerId, minerUser.SubscriptionKey, toDisable)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
-			return
-		}
-		if count > 0 {
-			c.JSON(http.StatusOK, defaultSuccessResponse(worker.DisableSuccessResponse{Message: "Worker disabled successfully"}))
-		} else {
-			c.JSON(http.StatusNotFound, defaultErrorResponse("Failed to disable worker partner, no records updated"))
-		}
-	} else {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
-	}
+	// 	count, err := orm.NewWorkerPartnerORM().DisablePartnerByMiner(workerId, minerUser.SubscriptionKey, toDisable)
+	// 	if err != nil {
+	// 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
+	// 		return
+	// 	}
+	// 	if count > 0 {
+	// 		c.JSON(http.StatusOK, defaultSuccessResponse(worker.DisableSuccessResponse{Message: "Worker disabled successfully"}))
+	// 	} else {
+	// 		c.JSON(http.StatusNotFound, defaultErrorResponse("Failed to disable worker partner, no records updated"))
+	// 	}
+	// } else {
+	// 	c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
+	// }
 }
 
 // GenerateNonceController godoc
@@ -1178,4 +1181,382 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 			}
 		}()
 	}
+}
+
+// GenerateCookieAuth godoc
+//
+//	@Summary		Generates a session given valid proof of ownership
+//
+//	@Description	Generates cookies that can be used to authenticate a user, given a valid signature, message for a specific hotkey
+//	@Tags			Authentication
+//	@Accept			json
+//	@Produce		json
+//
+//	@Param			body	body		auth.GenerateCookieAuthRequest					true	"Request body containing the hotkey, signature, and message"
+//	@Success		200		{object}	ApiResponse{body=task.SubmitTaskResultResponse}	"Task result submitted successfully"
+//
+//	@Param			address	path		string											true	"Wallet address"
+//	@Success		200		{object}	ApiResponse{body=worker.GenerateNonceResponse}	"Nonce generated successfully"
+//	@Failure		400		{object}	ApiResponse										"Invalid request body"
+//	@Failure		401		{object}	ApiResponse										"Unauthorized"
+//	@Failure		500		{object}	ApiResponse										"Error verifying signature"
+//	@Failure		500		{object}	ApiResponse										"Failed to generate session"
+//	@Router			/api/v1/auth/{address} [get]
+func GenerateCookieAuth(c *gin.Context) {
+	var requestBody auth.GenerateCookieAuthRequest
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		var missingFields []string
+		if requestBody.Hotkey == "" {
+			missingFields = append(missingFields, "hotkey")
+		}
+		if requestBody.Signature == "" {
+			missingFields = append(missingFields, "signature")
+		}
+		if requestBody.Message == "" {
+			missingFields = append(missingFields, "message")
+		}
+		errorMessage := "Invalid request body"
+		if len(missingFields) > 0 {
+			errorMessage += ": missing or invalid fields - " + strings.Join(missingFields, ", ")
+		}
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errorMessage))
+		return
+	}
+
+	isVerified, err := siws.SS58VerifySignature(requestBody.Message, requestBody.Hotkey, requestBody.Signature)
+	if err != nil {
+		log.Error().Err(err).Msg("Error verifying signature")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Error verifying signature"))
+		return
+	}
+
+	if !isVerified {
+		log.Error().Err(err).Msg("Verification result is false")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	// successfully authorized, now generate a session for them to use
+	cache := cache.GetCacheInstance()
+	hashKey := securecookie.GenerateRandomKey(64)
+	blockKey := securecookie.GenerateRandomKey(32)
+	s := securecookie.New(hashKey, blockKey)
+	sessionID := uuid.New().String()
+	cookieData := auth.CookieData{SessionId: sessionID, Hotkey: requestBody.Hotkey}
+
+	if encoded, err := s.Encode(auth.CookieName, cookieData); err == nil {
+		redisData := auth.SecureCookieSession{
+			HashKey:  hashKey,
+			BlockKey: blockKey,
+			CookieData: auth.CookieData{
+				SessionId: sessionID,
+				Hotkey:    requestBody.Hotkey,
+			},
+		}
+
+		expirationTime := 5 * time.Minute
+		if err := cache.Redis.Do(
+			context.Background(),
+			cache.Redis.B().JsonSet().Key(encoded).Path("$").Value(rueidis.JSON(redisData)).Build(),
+		).Error(); err != nil {
+			log.Error().Err(err).Msg("Failed to store session in redis")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+
+		if err := cache.Redis.Do(
+			context.Background(),
+			cache.Redis.B().Expire().Key(encoded).Seconds(int64(expirationTime.Seconds())).Build(),
+		).Error(); err != nil {
+			log.Error().Err(err).Msg("Failed to set expiration time for session")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+
+		cookie := &http.Cookie{
+			Name:     auth.CookieName,
+			Value:    encoded,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			Expires:  time.Now().Add(expirationTime),
+		}
+		http.SetCookie(c.Writer, cookie)
+		log.Info().Msgf("Session generated successfully for hotkey %v", requestBody.Hotkey)
+		minerUser, err := orm.NewMinerUserORM().CreateNewMiner(requestBody.Hotkey)
+		_, alreadyExists := db.IsErrUniqueConstraint(err)
+		if err != nil {
+			if alreadyExists {
+				log.Info().Msg("Miner already exists, skipping creation")
+				c.JSON(http.StatusOK, defaultSuccessResponse("Session generated successfully"))
+				return
+			}
+			log.Error().Err(err).Msg("Failed to create miner")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+			return
+		}
+		log.Info().Msgf("Successfully created new miner, id: %v", minerUser.ID)
+		c.JSON(http.StatusOK, defaultSuccessResponse("Session generated successfully"))
+		return
+	} else {
+		log.Error().Err(err).Msg("Failed to encode cookie")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
+		return
+	}
+}
+
+func handleCurrentSession(c *gin.Context) (*auth.SecureCookieSession, error) {
+	session, exists := c.Get("session")
+	if !exists {
+		return nil, errors.New("no session found")
+	}
+
+	currSession, ok := session.(auth.SecureCookieSession)
+	if !ok {
+		return nil, errors.New("invalid session")
+	}
+	return &currSession, nil
+}
+
+func buildApiKeyResponse(apiKeys []db.APIKeyModel) miner.MinerApiKeysResponse {
+	keys := make([]string, 0)
+	for _, apiKey := range apiKeys {
+		keys = append(keys, apiKey.Key)
+	}
+	return miner.MinerApiKeysResponse{
+		ApiKeys: keys,
+	}
+}
+
+func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) miner.MinerSubscriptionKeysResponse {
+	keys := make([]string, 0)
+	for _, subScriptionKey := range subScriptionKeys {
+		keys = append(keys, subScriptionKey.Key)
+	}
+	return miner.MinerSubscriptionKeysResponse{
+		SubscriptionKeys: keys,
+	}
+}
+
+func MinerApiKeyListController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	apiKeys, err := orm.NewApiKeyORM().GetApiKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+
+	response := buildApiKeyResponse(apiKeys)
+	log.Info().Msgf("%d API Keys retrieved successfully for hotkey %s", len(apiKeys), session.Hotkey)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+	return
+}
+
+func MinerApiKeyGenerateController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	apiKey, _, err := generateRandomApiKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate random api key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate api key"))
+		return
+	}
+
+	createdApiKey, err := orm.NewApiKeyORM().CreateApiKeyByHotkey(session.Hotkey, apiKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create api key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create api key"))
+		return
+	}
+	log.Info().Msgf("API Key %s generated successfully", createdApiKey.Key)
+
+	apiKeys, err := orm.NewApiKeyORM().GetApiKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+	response := buildApiKeyResponse(apiKeys)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+}
+
+func MinerApiKeyDisableController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	var request miner.MinerApiKeyDisableRequest
+	if err := c.BindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to request")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	apiKeys, err := orm.NewApiKeyORM().GetApiKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+
+	var foundApiKey *db.APIKeyModel
+	for _, key := range apiKeys {
+		if key.Key == request.ApiKey {
+			foundApiKey = &key
+			break
+		}
+	}
+
+	if foundApiKey == nil {
+		log.Error().Msg("API Key belonging to miner not found")
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("API Key belonging to miner not found"))
+		return
+	}
+
+	disabledKey, err := orm.NewApiKeyORM().DisableApiKeyByHotkey(session.Hotkey, request.ApiKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to disable api key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable api key"))
+		return
+	}
+	log.Info().Msgf("API Key %s disabled successfully", disabledKey.Key)
+
+	// create new array without request.ApiKey
+	updatedApiKeys := make([]string, 0)
+	for _, key := range apiKeys {
+		if key.Key != request.ApiKey && !key.IsDelete {
+			updatedApiKeys = append(updatedApiKeys, key.Key)
+		}
+	}
+	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerApiKeysResponse{ApiKeys: updatedApiKeys}))
+}
+
+func MinerSubscriptionKeyListController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get subscription keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get subscription keys"))
+		return
+	}
+
+	response := buildSubscriptionKeyResponse(subscriptionKeys)
+	log.Info().Msgf("%d Subscription Keys retrieved successfully for hotkey %s", len(subscriptionKeys), session.Hotkey)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+	return
+}
+
+func MinerSubscriptionKeyGenerateController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	subscriptionKey, err := utils.GenerateRandomMinerSubscriptionKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate random subscriptionKey key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate subscriptionKey key"))
+		return
+	}
+
+	createdSubscriptionKey, err := orm.NewSubscriptionKeyORM().CreateSubscriptionKeyByHotkey(session.Hotkey, subscriptionKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create subscription key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create subscription key"))
+		return
+	}
+	log.Info().Msgf("Subscription Key %s generated successfully", createdSubscriptionKey.Key)
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+	response := buildSubscriptionKeyResponse(subscriptionKeys)
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+}
+
+func MinerSubscriptionKeyDisableController(c *gin.Context) {
+	session, err := handleCurrentSession(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to authenticate current session")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	var request miner.MinerSubscriptionDisableRequest
+	if err := c.BindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to request")
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get api keys"))
+		return
+	}
+
+	var foundApiKey *db.SubscriptionKeyModel
+	for _, key := range subscriptionKeys {
+		if key.Key == request.SubscriptionKey {
+			foundApiKey = &key
+			break
+		}
+	}
+
+	if foundApiKey == nil {
+		log.Error().Msg("subscription Key belonging to miner not found")
+		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("subscription Key belonging to miner not found"))
+		return
+	}
+
+	disabledKey, err := orm.NewSubscriptionKeyORM().DisableSubscriptionKeyByHotkey(session.Hotkey, request.SubscriptionKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to disable subscription key")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable subscription key"))
+		return
+	}
+	log.Info().Msgf("Subscription Key %s disabled successfully", disabledKey.Key)
+
+	newSubscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get new subscription keys by miner hotkey")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get new subscription keys"))
+		return
+	}
+
+	updatedSubscriptionKeys := make([]string, 0)
+	for _, key := range newSubscriptionKeys {
+		if key.Key != request.SubscriptionKey && !key.IsDelete {
+			updatedSubscriptionKeys = append(updatedSubscriptionKeys, key.Key)
+		}
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerSubscriptionKeysResponse{SubscriptionKeys: updatedSubscriptionKeys}))
 }

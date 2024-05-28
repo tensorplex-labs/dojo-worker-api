@@ -31,10 +31,25 @@ func LoginRoutes(router *gin.Engine) {
 
 		miner := apiV1.Group("/miner")
 		{
-			miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
-			miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
+			// miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
+			// miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
 			// miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
-			miner.PUT("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
+			// miner.PUT("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
+			miner.POST("/session/auth", GenerateCookieAuth)
+
+			apiKeyGroup := miner.Group("/api-key")
+			{
+				apiKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerApiKeyListController)
+				apiKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerApiKeyGenerateController)
+				apiKeyGroup.PUT("/disable", MinerCookieAuthMiddleware(), MinerApiKeyDisableController)
+			}
+
+			subScriptionKeyGroup := miner.Group("/subscription-key")
+			{
+				subScriptionKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerSubscriptionKeyListController)
+				subScriptionKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerSubscriptionKeyGenerateController)
+				subScriptionKeyGroup.PUT("/disable", MinerCookieAuthMiddleware(), MinerSubscriptionKeyDisableController)
+			}
 		}
 		metrics := apiV1.Group("/metrics")
 		{
