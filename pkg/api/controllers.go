@@ -1231,6 +1231,7 @@ func GenerateCookieAuth(c *gin.Context) {
 	}
 
 	if !isVerified {
+		log.Error().Err(err).Msg("Verification result is false")
 		c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 		return
 	}
@@ -1557,5 +1558,5 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerApiKeysResponse{ApiKeys: updatedSubscriptionKeys}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerSubscriptionKeysResponse{SubscriptionKeys: updatedSubscriptionKeys}))
 }
