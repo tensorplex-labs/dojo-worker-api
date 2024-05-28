@@ -354,24 +354,29 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		minerUserORM := orm.NewMinerUserORM()
-		user, err := minerUserORM.GetUserByAPIKey(apiKey)
-		if err != nil {
+		foundApiKey, err := orm.NewApiKeyORM().GetByApiKey(apiKey)
+		if err != nil || foundApiKey == nil {
 			log.Error().Err(err).Msg("Failed to retrieve user by API key")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to retrieve user by API key"))
 			c.Abort()
 			return
 		}
 
-		if user.APIKeyExpireAt.Before(time.Now()) {
-			log.Error().Msg("API key has expired")
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("API key has expired"))
-			c.Abort()
+		if foundApiKey.IsDelete {
+			log.Error().Msg("API key has been disabled")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Invalid API Key"))
 			return
 		}
 
-		c.Set("minerUser", user)
+		subnetState := blockchain.GetSubnetStateSubscriberInstance()
+		_, isFound := subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
+		if !isFound {
+			log.Error().Msg("Miner hotkey is deregistered")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
 
+		c.Set("minerUser", foundApiKey.MinerUser())
 		log.Info().Msg("Miner user authenticated successfully")
 
 		c.Next()

@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"dojo-api/db"
+	"errors"
 
 	"github.com/rs/zerolog/log"
 )
@@ -84,4 +85,28 @@ func (a *ApiKeyORM) DisableApiKeyByHotkey(hotkey string, apiKey string) (*db.API
 		return nil, err
 	}
 	return disabledApiKey, nil
+}
+
+func (a *ApiKeyORM) GetByApiKey(apiKey string) (*db.APIKeyModel, error) {
+	a.clientWrapper.BeforeQuery()
+	defer a.clientWrapper.AfterQuery()
+
+	ctx := context.Background()
+
+	foundApiKey, err := a.dbClient.APIKey.FindFirst(
+		db.APIKey.Key.Equals(apiKey),
+	).With(
+		db.APIKey.MinerUser.Fetch(),
+	).Exec(ctx)
+
+	if err != nil {
+		if db.IsErrNotFound(err) {
+			log.Error().Err(err).Msgf("API key not found")
+			return nil, errors.New("API key not found")
+		}
+		log.Error().Err(err).Msgf("Error getting api key")
+		return nil, err
+	}
+
+	return foundApiKey, nil
 }
