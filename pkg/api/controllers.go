@@ -1356,7 +1356,6 @@ func MinerApiKeyListController(c *gin.Context) {
 	response := buildApiKeyResponse(apiKeys)
 	log.Info().Msgf("%d API Keys retrieved successfully for hotkey %s", len(apiKeys), session.Hotkey)
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
-	return
 }
 
 func MinerApiKeyGenerateController(c *gin.Context) {
@@ -1464,7 +1463,6 @@ func MinerSubscriptionKeyListController(c *gin.Context) {
 	response := buildSubscriptionKeyResponse(subscriptionKeys)
 	log.Info().Msgf("%d Subscription Keys retrieved successfully for hotkey %s", len(subscriptionKeys), session.Hotkey)
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
-	return
 }
 
 func MinerSubscriptionKeyGenerateController(c *gin.Context) {
