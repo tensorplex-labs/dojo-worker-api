@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/task"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -210,15 +211,27 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
 func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
-	var taskTypeParams []string
+	var validTaskTypes []string
 	for _, taskType := range taskTypes {
-		taskTypeParams = append(taskTypeParams, string(taskType))
+		_, err := task.IsValidTaskType(taskType)
+		if err != nil {
+			continue
+		}
+		validTaskTypes = append(validTaskTypes, string(taskType))
+	}
+
+	validSubscriptionKeys := make([]string, 0)
+	for _, key := range subscriptionKeys {
+		if !strings.HasPrefix(key, "sk-") || len(key[3:]) != 32 {
+			continue
+		}
+		validSubscriptionKeys = append(validSubscriptionKeys, key)
 	}
 
 	// need to set subquery to use "$?" and let the main query use dollar to resolve placeholders
-	subQuery, subQueryArgs, err := sq.Select("id").
-		From("\"MinerUser\"").
-		Where(sq.Eq{"subscription_key": subscriptionKeys}).
+	subQuery, subQueryArgs, err := sq.Select("miner_user_id").
+		From("\"SubscriptionKey\"").
+		Where(sq.Eq{"key": subscriptionKeys}).
 		PlaceholderFormat(sq.Question).
 		ToSql()
 	if err != nil {
@@ -230,7 +243,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
 		// need to do this since TaskType is a custom prisma enum type
-		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
+		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(validTaskTypes, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()
