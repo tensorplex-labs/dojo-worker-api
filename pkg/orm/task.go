@@ -141,7 +141,7 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 }
 
 // TODO: Optimization
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType, isSkipTask bool) ([]db.TaskModel, int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
@@ -176,6 +176,10 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	if len(taskTypes) > 0 {
 		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
+	}
+
+	if isSkipTask {
+		filterParams = append(filterParams, db.Task.Status.Equals(db.TaskStatusInProgress))
 	}
 
 	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)

@@ -69,7 +69,8 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 }
 
 // TODO: Implement yieldMin, yieldMax
-func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, []error) {
+// TODO: Refactor params parameter with struct
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string, isSkipTask bool) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
 	offset := (page - 1) * limit
 	// taskORM := orm.NewTaskORM()
@@ -97,7 +98,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 
 	log.Debug().Interface("completedTaskMap", completedTaskMap).Msg("Completed Task Mapping -------")
 
-	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
+	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes, isSkipTask)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, []error{err}

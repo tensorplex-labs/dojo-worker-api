@@ -694,6 +694,7 @@ func GetTasksByPageController(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	sort := c.DefaultQuery("sort", "createdAt")
+	isSkipTaskStr := c.DefaultQuery("isSkipTask", "false")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
@@ -709,9 +710,15 @@ func GetTasksByPageController(c *gin.Context) {
 		return
 	}
 
+	isSkipTask, err := strconv.ParseBool(isSkipTaskStr)
+	if err != nil {
+		log.Error().Err(err).Msg("Error converting isSkipTask to boolean:")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid isSkipTask parameter"))
+	}
+
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, taskErrors := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
+	taskPagination, taskErrors := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort, isSkipTask)
 	if len(taskErrors) > 0 {
 		isBadRequest := false
 		errorDetails := make([]string, 0)
@@ -1281,6 +1288,7 @@ func GenerateCookieAuth(c *gin.Context) {
 			Secure:   true,
 			Expires:  time.Now().Add(expirationTime),
 		}
+		log.Info().Msgf("Encode: %v", encoded)
 		http.SetCookie(c.Writer, cookie)
 		log.Info().Msgf("Session generated successfully for hotkey %v", requestBody.Hotkey)
 		minerUser, err := orm.NewMinerUserORM().CreateNewMiner(requestBody.Hotkey)
