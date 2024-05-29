@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"dojo-api/db"
-	"dojo-api/pkg/task"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -211,13 +210,9 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
 func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
-	var validTaskTypes []string
+	var taskTypesParam []string
 	for _, taskType := range taskTypes {
-		_, err := task.IsValidTaskType(taskType)
-		if err != nil {
-			continue
-		}
-		validTaskTypes = append(validTaskTypes, string(taskType))
+		taskTypesParam = append(taskTypesParam, string(taskType))
 	}
 
 	validSubscriptionKeys := make([]string, 0)
@@ -243,7 +238,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
 		// need to do this since TaskType is a custom prisma enum type
-		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(validTaskTypes, "', '")))).
+		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypesParam, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()
