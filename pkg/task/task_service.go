@@ -207,7 +207,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 	errors := make([]error, 0)
 
 	taskORM := orm.NewTaskORM()
-	for _, currTask := range request.TaskData {
+	for i, currTask := range request.TaskData {
 		taskType := db.TaskType(currTask.Task)
 
 		_, err := json.Marshal(currTask.Criteria)
@@ -219,6 +219,12 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 		taskData, err := json.Marshal(currTask)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error marshaling task data")
+			errors = append(errors, err)
+		}
+
+		rawTaskData, err := json.Marshal(request.RawTaskData[i])
+		if err != nil {
+			log.Error().Err(err).Msgf("Error marshaling raw task data")
 			errors = append(errors, err)
 		}
 
@@ -236,6 +242,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 			Body:        request.Body,
 			Type:        db.TaskType(taskType),
 			TaskData:    taskData,
+			RawTaskData: rawTaskData,
 			MaxResults:  request.MaxResults,
 			NumResults:  0,
 			Status:      db.TaskStatusInProgress,
@@ -510,7 +517,7 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 		return errors.New("expireAt is required")
 	}
 
-	for _, currTask := range request.TaskData {
+	for _, currTask := range request.RawTaskData {
 		err := ValidateTaskData(currTask)
 		if err != nil {
 			return err
@@ -526,50 +533,72 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	processedTaskData := make([]TaskData, 0)
-	for _, taskInterface := range taskData.TaskData {
+	obfuscatedTaskData := make([]TaskData, 0)
+	// obfuscatedTaskData := make([]TaskData, len(taskData.RawTaskData))
+	for _, taskInterface := range taskData.RawTaskData {
 		if taskInterface.Task == db.TaskTypeCodeGeneration {
-			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
+			processedTaskEntry,obfuscatedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")
 				return taskData, err
 			}
 			processedTaskData = append(processedTaskData, processedTaskEntry)
+			obfuscatedTaskData = append(obfuscatedTaskData, obfuscatedTaskEntry)
 		} else {
 			processedTaskData = append(processedTaskData, taskInterface)
+			obfuscatedTaskData = append(obfuscatedTaskData, taskInterface)
 		}
 	}
-	taskData.TaskData = processedTaskData
+	taskData.RawTaskData = processedTaskData
+	taskData.TaskData = obfuscatedTaskData
+
 	return taskData, nil
 }
 
-func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
+func copyTaskData(td TaskData) TaskData{
+	copyTd := td
+	copyTd.Responses = make([]ModelResponse, len(td.Responses))
+	copyTd.Dialogue = make([]Message, len(td.Dialogue))
+	copyTd.Criteria = make([]Criteria, len(td.Criteria))
+	copy(copyTd.Criteria, td.Criteria)
+	copy(copyTd.Responses, td.Responses)
+	copy(copyTd.Dialogue, td.Dialogue)
+	return copyTd
+}
+
+func ProcessCodeCompletion(taskData TaskData) (TaskData,TaskData, error) {
 	responses := taskData.Responses
+	obfuscatedTaskData := copyTaskData(taskData)
 	for i, response := range responses {
 		completionMap, ok := response.Completion.(map[string]interface{})
+		obfuscatedCompletionMap := utils.CopyMap(completionMap)
 		if !ok {
 			log.Error().Msg("You sure this is code generation?")
-			return taskData, errors.New("invalid completion format")
+			return taskData,obfuscatedTaskData, errors.New("invalid completion format")
 		}
 		if _, ok := completionMap["files"]; ok {
-			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
+			sandboxResponse, err := sandbox.GetCodesandbox(utils.CopyMap(completionMap))
 			if err != nil {
 				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
-				return taskData, err
+				return taskData,obfuscatedTaskData, err
 			}
 			if sandboxResponse.Url != "" {
 				completionMap["sandbox_url"] = sandboxResponse.Url
+				obfuscatedCompletionMap["files"] = sandboxResponse.ObfuscatedFiles
+				obfuscatedCompletionMap["sandbox_url"] = sandboxResponse.Url
 			} else {
 				fmt.Println(sandboxResponse)
 				log.Error().Msg("Error getting sandbox response")
-				return taskData, errors.New("error getting sandbox response")
+				return taskData,obfuscatedTaskData, errors.New("error getting sandbox response")
 			}
 		} else {
 			log.Error().Msg("Invalid completion format")
-			return taskData, errors.New("invalid completion format")
+			return taskData,obfuscatedTaskData, errors.New("invalid completion format")
 		}
 		taskData.Responses[i].Completion = completionMap
+		obfuscatedTaskData.Responses[i].Completion = obfuscatedCompletionMap
 	}
-	return taskData, nil
+	return taskData,obfuscatedTaskData, nil
 }
 
 func (t *TaskService) ValidateCompletedTResultByWorker(ctx context.Context, taskId string, workerId string) (bool, error) {
@@ -622,7 +651,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 		Title:        title,
 		Body:         body,
 		ExpireAt:     expireAt,
-		TaskData:     taskData,
+		RawTaskData:  taskData,
 		MaxResults:   maxResults,
 		TotalRewards: totalRewards,
 	}

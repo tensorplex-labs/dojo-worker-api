@@ -207,3 +207,29 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 
 	return result, nil
 }
+
+
+func CopyMap(originalMap map[string]interface{}) map[string]interface{} {
+    newMap := make(map[string]interface{})
+
+    for key, value := range originalMap {
+        switch v := value.(type) {
+        case map[string]interface{}:
+            newMap[key] = CopyMap(v)
+        case []interface{}:
+            newArray := make([]interface{}, len(v))
+            for i, item := range v {
+                if nestedMap, ok := item.(map[string]interface{}); ok {
+                    newArray[i] = CopyMap(nestedMap)
+                } else {
+                    newArray[i] = item
+                }
+            }
+            newMap[key] = newArray
+        default:
+            newMap[key] = value
+        }
+    }
+
+    return newMap
+}

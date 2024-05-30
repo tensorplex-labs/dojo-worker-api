@@ -58,9 +58,10 @@ type CreateTaskRequest struct {
 	Title        string      `json:"title"`
 	Body         string      `json:"body"`
 	ExpireAt     interface{} `json:"expireAt"`
-	TaskData     []TaskData  `json:"taskData"`
-	MaxResults   int         `json:"maxResults"`
-	TotalRewards float64     `json:"totalRewards"`
+	TaskData     []TaskData
+	RawTaskData  []TaskData `json:"taskData"`
+	MaxResults   int        `json:"maxResults"`
+	TotalRewards float64    `json:"totalRewards"`
 }
 
 type TaskData struct {

@@ -38,6 +38,7 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 		db.Task.Body.Set(task.Body),
 		db.Task.Type.Set(task.Type),
 		db.Task.TaskData.Set(task.TaskData),
+		db.Task.RawTaskData.Set(task.RawTaskData),
 		db.Task.Status.Set(task.Status),
 		db.Task.MaxResults.Set(task.MaxResults),
 		db.Task.NumResults.Set(task.NumResults),

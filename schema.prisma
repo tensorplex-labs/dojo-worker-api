@@ -84,6 +84,7 @@ model Task {
     type          TaskType
     // criteria        Json
     task_data     Json
+    raw_task_data Json
     status        TaskStatus
     max_results   Int
     num_results   Int

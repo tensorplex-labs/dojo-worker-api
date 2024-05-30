@@ -3,28 +3,34 @@ package sandbox
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
 	"errors"
-	"github.com/rs/zerolog/log"
 	"fmt"
+	"net/http"
+	"strings"
+
+
+	"github.com/rs/zerolog/log"
+	"github.com/vineesh12344/gojsfuck/jsfuck"
 )
 
 type Response struct {
-	Sandbox_id string `json:"sandbox_id"`
-	Error string `json:"error"`
-	Url string `json:"-"`
+	Sandbox_id      string `json:"sandbox_id"`
+	Error           string `json:"error"`
+	Url             string `json:"-"`
+	ObfuscatedFiles []map[string]interface{}
 }
 
 func getRequest(body map[string]interface{}) (Response, error) {
 	var response Response
 	url := "https://codesandbox.io/api/v1/sandboxes/define?json=1"
 	body["environment"] = "server"
-	jsonBody, err := json.Marshal(body); if err != nil {
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
 		response.Error = "Error marshalling JSON"
 		return response, err
 	}
 
-	req,err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
 		response.Error = "Error creating request"
 		return response, err
@@ -32,29 +38,35 @@ func getRequest(body map[string]interface{}) (Response, error) {
 	req.Header.Set("Content-Type", "application/json")
 	// req.Header.Set("_cfuvid", os.Getenv("CODESANDBOX_ID"))
 	// req.Header.Set(os.Getenv("CODESANDBOX_KEY"), os.Getenv("CODESANDBOX_KEY_VALUE"))
-	
+
 	client := &http.Client{}
-    resp, err := client.Do(req)
-    if err != nil {
+	resp, err := client.Do(req)
+	if err != nil {
 		response.Error = "Error sending request"
 		return response, err
-    }
-    defer resp.Body.Close()
+	}
+	defer resp.Body.Close()
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		log.Error().Msgf("Failed to decode JSON response: %v", err)
 		response.Error = "Failed to decode JSON response"
 		return response, fmt.Errorf("failed to decode JSON response: %w", err)
-	}	
+	}
 	return response, nil
 }
 
-func reformatFiles(files []interface{}, python bool) map[string]interface{} {
+func reformatFiles(files []interface{}, python bool) (map[string]interface{}, []map[string]interface{}) {
 	newFiles := make(map[string]interface{})
+	obfuscatedFiles := make([]map[string]interface{}, 0)
 	for _, file := range files {
 		file := file.(map[string]interface{})
+		obfuscatedFile := file
+		if strings.ToLower(file["language"].(string)) == "javascript" {
+			obfuscatedFile["content"] = obfuscate(file["content"].(string))
+		}
+		obfuscatedFiles = append(obfuscatedFiles, obfuscatedFile)
 		newFiles[file["filename"].(string)] = map[string]interface{}{
-			"content": file["content"],
+			"content":  file["content"],
 			"language": file["language"],
 		}
 	}
@@ -62,12 +74,20 @@ func reformatFiles(files []interface{}, python bool) map[string]interface{} {
 	if python {
 		newFiles["main.py"].(map[string]interface{})["isBinary"] = false
 	}
-	return newFiles
+	return newFiles, obfuscatedFiles
+}
+
+func obfuscate(code string) string {
+	encoder := jsfuck.New()
+	encoder.Init()
+	encoded := encoder.Encode(code)
+	return encoder.Wrap(encoded, true, true)
 }
 
 func GetCodesandbox(body map[string]interface{}) (Response, error) {
 	var response Response
-	files, ok := body["files"].([]interface{}); if !ok {
+	files, ok := body["files"].([]interface{})
+	if !ok {
 		log.Error().Msg("Error getting files")
 		response.Error = "Error getting files"
 		return response, errors.New("object has no files key")
@@ -75,12 +95,14 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 	javascript := false
 	python := false
 	for _, file := range files {
-		file, ok := file.(map[string]interface{}); if !ok {
+		file, ok := file.(map[string]interface{})
+		if !ok {
 			log.Error().Msg("Error getting file")
 			response.Error = "Error getting file"
 			return response, errors.New("file object is not a map")
 		}
-		language, ok := file["language"]; if !ok {
+		language, ok := file["language"]
+		if !ok {
 			log.Error().Msg("Error getting language")
 			response.Error = "Error getting language"
 			return response, errors.New("files object has no language key")
@@ -92,9 +114,11 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 			python = true
 		}
 	}
-	body["files"] = reformatFiles(body["files"].([]interface{}), python)
+	formattedFiles, obfuscatedFiles := reformatFiles(body["files"].([]interface{}), python)
+	body["files"] = formattedFiles
 
-	response, err := getRequest(body); 
+	response, err := getRequest(body)
+	response.ObfuscatedFiles = obfuscatedFiles
 	if err != nil {
 		response.Error = "Error getting request"
 		log.Error().Msg("Error getting request")
@@ -103,18 +127,12 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 
 	if javascript {
 		response.Url = "https://" + response.Sandbox_id + ".csb.app/"
-	}else if python {
+	} else if python {
 		response.Url = "https://" + response.Sandbox_id + "-8888.csb.app/"
-	}else {
+	} else {
 		log.Error().Msg("Invalid language")
 		response.Error = "Invalid language"
 		return response, errors.New("invalid language")
 	}
 	return response, nil
 }
-
-
-
-
-
-

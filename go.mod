@@ -53,17 +53,24 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gtank/merlin v0.1.1-0.20191105220539-8318aed1a79f // indirect
 	github.com/gtank/ristretto255 v0.1.2 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/karust/unjsfuck v1.0.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20181016162300-f8f6d4d2b643 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/relvacode/iso8601 v1.4.0 // indirect
+	github.com/spf13/cobra v1.7.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/swaggo/files v1.0.1 // indirect
 	github.com/swaggo/gin-swagger v1.6.0 // indirect
 	github.com/swaggo/swag v1.16.3 // indirect
+	github.com/tdewolff/minify/v2 v2.20.32 // indirect
+	github.com/tdewolff/parse/v2 v2.7.14 // indirect
+	github.com/vineesh12344/gojsfuck v0.2.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
