@@ -201,7 +201,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	// 	filterParams...,
 	// ).Exec(ctx)
 
-	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys, isSkipTask)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
 		return nil, 0, err
@@ -213,16 +213,16 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string, isSkipTask bool) (int, error) {
 	var taskTypeParams []string
 	for _, taskType := range taskTypes {
 		taskTypeParams = append(taskTypeParams, string(taskType))
 	}
 
 	// need to set subquery to use "$?" and let the main query use dollar to resolve placeholders
-	subQuery, subQueryArgs, err := sq.Select("id").
-		From("\"MinerUser\"").
-		Where(sq.Eq{"subscription_key": subscriptionKeys}).
+	subQuery, subQueryArgs, err := sq.Select("miner_user_id").
+		From("\"SubscriptionKey\"").
+		Where(sq.Eq{"key": subscriptionKeys}).
 		PlaceholderFormat(sq.Question).
 		ToSql()
 	if err != nil {
@@ -236,6 +236,11 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		// need to do this since TaskType is a custom prisma enum type
 		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
 		PlaceholderFormat(sq.Dollar)
+
+	// Conditionally add the status filter if isSkipTask is true
+	if isSkipTask {
+		mainQuery = mainQuery.Where(sq.Expr("status = ?::\"TaskStatus\"", "IN_PROGRESS"))
+	}
 
 	sql, args, err := mainQuery.ToSql()
 	if err != nil {
