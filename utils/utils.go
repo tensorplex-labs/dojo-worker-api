@@ -48,6 +48,8 @@ func init() {
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
 	LoadDotEnv("AWS_S3_BUCKET_NAME")
+	LoadDotEnv("DOMAIN_NAME")
+	LoadDotEnv("STORAGE_HOSTNAME")
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
