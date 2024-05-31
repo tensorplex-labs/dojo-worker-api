@@ -1288,7 +1288,6 @@ func GenerateCookieAuth(c *gin.Context) {
 			Secure:   true,
 			Expires:  time.Now().Add(expirationTime),
 		}
-		log.Info().Msgf("Encode: %v", encoded)
 		http.SetCookie(c.Writer, cookie)
 		log.Info().Msgf("Session generated successfully for hotkey %v", requestBody.Hotkey)
 		minerUser, err := orm.NewMinerUserORM().CreateNewMiner(requestBody.Hotkey)
