@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
+	"github.com/google/uuid"
 )
 
 type TaskService struct {
@@ -532,22 +533,31 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 }
 
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
-	processedTaskData := make([]TaskData, 0)
-	obfuscatedTaskData := make([]TaskData, 0)
-	// obfuscatedTaskData := make([]TaskData, len(taskData.RawTaskData))
-	for _, taskInterface := range taskData.RawTaskData {
+	processedTaskData := make([]TaskData, len(taskData.RawTaskData))
+	obfuscatedTaskData := make([]TaskData, len(taskData.RawTaskData))
+
+	for i, taskInterface := range taskData.RawTaskData {
+		var processedTaskEntry TaskData
+        var obfuscatedTaskEntry TaskData
+
 		if taskInterface.Task == db.TaskTypeCodeGeneration {
-			processedTaskEntry,obfuscatedTaskEntry, err := ProcessCodeCompletion(taskInterface)
+			var err error
+			processedTaskEntry, obfuscatedTaskEntry, err = ProcessCodeCompletion(taskInterface)
 			if err != nil {
-				log.Error().Msg("Error processing code completion")
+				log.Error().Msg(err.Error())
 				return taskData, err
 			}
-			processedTaskData = append(processedTaskData, processedTaskEntry)
-			obfuscatedTaskData = append(obfuscatedTaskData, obfuscatedTaskEntry)
 		} else {
-			processedTaskData = append(processedTaskData, taskInterface)
-			obfuscatedTaskData = append(obfuscatedTaskData, taskInterface)
+			processedTaskEntry = taskInterface
+			obfuscatedTaskEntry = copyTaskData(taskInterface)
 		}
+
+		for j := range processedTaskEntry.Responses {
+            obfuscatedTaskEntry.Responses[j].Model = uuid.New().String()
+        }
+
+        processedTaskData[i] = processedTaskEntry
+        obfuscatedTaskData[i] = obfuscatedTaskEntry
 	}
 	taskData.RawTaskData = processedTaskData
 	taskData.TaskData = obfuscatedTaskData
@@ -555,7 +565,7 @@ func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	return taskData, nil
 }
 
-func copyTaskData(td TaskData) TaskData{
+func copyTaskData(td TaskData) TaskData {
 	copyTd := td
 	copyTd.Responses = make([]ModelResponse, len(td.Responses))
 	copyTd.Dialogue = make([]Message, len(td.Dialogue))
@@ -566,39 +576,39 @@ func copyTaskData(td TaskData) TaskData{
 	return copyTd
 }
 
-func ProcessCodeCompletion(taskData TaskData) (TaskData,TaskData, error) {
+func ProcessCodeCompletion(taskData TaskData) (TaskData, TaskData, error) {
 	responses := taskData.Responses
 	obfuscatedTaskData := copyTaskData(taskData)
 	for i, response := range responses {
 		completionMap, ok := response.Completion.(map[string]interface{})
 		obfuscatedCompletionMap := utils.CopyMap(completionMap)
 		if !ok {
-			log.Error().Msg("You sure this is code generation?")
-			return taskData,obfuscatedTaskData, errors.New("invalid completion format")
+			return taskData, obfuscatedTaskData, errors.New("invalid completion format")
 		}
-		if _, ok := completionMap["files"]; ok {
-			sandboxResponse, err := sandbox.GetCodesandbox(utils.CopyMap(completionMap))
-			if err != nil {
-				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
-				return taskData,obfuscatedTaskData, err
-			}
-			if sandboxResponse.Url != "" {
-				completionMap["sandbox_url"] = sandboxResponse.Url
-				obfuscatedCompletionMap["files"] = sandboxResponse.ObfuscatedFiles
-				obfuscatedCompletionMap["sandbox_url"] = sandboxResponse.Url
-			} else {
-				fmt.Println(sandboxResponse)
-				log.Error().Msg("Error getting sandbox response")
-				return taskData,obfuscatedTaskData, errors.New("error getting sandbox response")
-			}
-		} else {
-			log.Error().Msg("Invalid completion format")
-			return taskData,obfuscatedTaskData, errors.New("invalid completion format")
+
+		_, ok = completionMap["files"]
+        if !ok {
+            return taskData, obfuscatedTaskData, errors.New("invalid completion format: missing 'files' key")
+        }
+
+		sandboxResponse, err := sandbox.GetCodesandbox(utils.CopyMap(completionMap))
+		if err != nil {
+			return taskData, obfuscatedTaskData, err
 		}
+
+		if sandboxResponse.Url == ""{
+			return taskData, obfuscatedTaskData, errors.New("error getting sandbox response")
+		}
+
+		completionMap["sandbox_url"] = sandboxResponse.Url
+		obfuscatedCompletionMap["files"] = sandboxResponse.ObfuscatedFiles
+		obfuscatedCompletionMap["sandbox_url"] = sandboxResponse.Url
+
 		taskData.Responses[i].Completion = completionMap
+		obfuscatedTaskData.Responses[i].Model = uuid.New().String()
 		obfuscatedTaskData.Responses[i].Completion = obfuscatedCompletionMap
 	}
-	return taskData,obfuscatedTaskData, nil
+	return taskData, obfuscatedTaskData, nil
 }
 
 func (t *TaskService) ValidateCompletedTResultByWorker(ctx context.Context, taskId string, workerId string) (bool, error) {
