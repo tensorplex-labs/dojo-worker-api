@@ -179,7 +179,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	}
 
 	if isSkipTask {
-		filterParams = append(filterParams, db.Task.Status.Equals(db.TaskStatusInProgress))
+		limit *= 10
 	}
 
 	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
