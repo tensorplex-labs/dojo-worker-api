@@ -360,3 +360,37 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 
 	return taskCountInt, nil
 }
+
+func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	// Fetch the current task to determine the ordering criteria
+	currentTask, err := o.dbClient.Task.FindFirst(
+		db.Task.ID.Equals(taskId),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the next task that is in-progress based on the created_at timestamp
+	nextTask, err := o.dbClient.Task.FindFirst(
+		db.Task.CreatedAt.Lt(currentTask.CreatedAt),
+		db.Task.Status.Equals(db.TaskStatusInProgress),
+	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+	if err != nil {
+		// If no next task is found, loop back to the first in-progress task
+		if errors.Is(err, db.ErrNotFound) {
+			nextTask, err = o.dbClient.Task.FindFirst(
+				db.Task.Status.Equals(db.TaskStatusInProgress),
+			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return nextTask, nil
+		}
+		return nil, err
+	}
+
+	return nextTask, nil
+}

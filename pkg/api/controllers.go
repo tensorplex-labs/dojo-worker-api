@@ -1565,3 +1565,26 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerSubscriptionKeysResponse{SubscriptionKeys: updatedSubscriptionKeys}))
 }
+
+func GetNextInProgressTaskController(c *gin.Context) {
+	// session, err := handleCurrentSession(c)
+	taskId := c.Param("task-id")
+	if taskId == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
+		return
+	}
+	task, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId)
+	if err != nil {
+		log.Error().Err(err).Msg("Filed to get next in progress task")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in progress task"))
+		return
+	}
+
+	if task == nil {
+		log.Info().Msg("No in progress tasks found")
+		c.JSON(http.StatusOK, defaultSuccessResponse("No in progress tasks found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(task))
+}
