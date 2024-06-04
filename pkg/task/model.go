@@ -118,7 +118,7 @@ type (
 )
 
 type NextTaskResponse struct {
-	NextTaskId string `json:"nextTaskId"`
+	NextInProgressTaskId string `json:"nextInProgressTaskId"`
 }
 
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {

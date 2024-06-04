@@ -1586,5 +1586,5 @@ func GetNextInProgressTaskController(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextTaskId: taskData.ID}))
+	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: taskData.ID}))
 }
