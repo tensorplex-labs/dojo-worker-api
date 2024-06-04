@@ -117,6 +117,10 @@ type (
 	MultiSelectValue []string
 )
 
+type NextTaskResponse struct {
+	NextInProgressTaskId string `json:"nextInProgressTaskId"`
+}
+
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
 	var floatStr string
 	err := json.Unmarshal(v, &floatStr)

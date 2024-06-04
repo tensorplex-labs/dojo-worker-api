@@ -141,7 +141,7 @@ func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerI
 }
 
 // TODO: Optimization
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType, isSkipTask bool) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
@@ -178,10 +178,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
 	}
 
-	if isSkipTask {
-		filterParams = append(filterParams, db.Task.Status.Equals(db.TaskStatusInProgress))
-	}
-
 	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
 
 	// Fetch tasks associated with these subscription keys
@@ -201,7 +197,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	// 	filterParams...,
 	// ).Exec(ctx)
 
-	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys, isSkipTask)
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
 		return nil, 0, err
@@ -213,7 +209,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string, isSkipTask bool) (int, error) {
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
 	var taskTypesParam []string
 	for _, taskType := range taskTypes {
 		taskTypesParam = append(taskTypesParam, string(taskType))
@@ -244,11 +240,6 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		// need to do this since TaskType is a custom prisma enum type
 		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypesParam, "', '")))).
 		PlaceholderFormat(sq.Dollar)
-
-	// Conditionally add the status filter if isSkipTask is true
-	if isSkipTask {
-		mainQuery = mainQuery.Where(sq.Expr("status = ?::\"TaskStatus\"", "IN_PROGRESS"))
-	}
 
 	sql, args, err := mainQuery.ToSql()
 	if err != nil {
@@ -359,4 +350,38 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	}
 
 	return taskCountInt, nil
+}
+
+func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	// Fetch the current task to determine the ordering criteria
+	currentTask, err := o.dbClient.Task.FindFirst(
+		db.Task.ID.Equals(taskId),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the next task that is in-progress based on the created_at timestamp
+	nextTask, err := o.dbClient.Task.FindFirst(
+		db.Task.CreatedAt.Lt(currentTask.CreatedAt),
+		db.Task.Status.Equals(db.TaskStatusInProgress),
+	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+	if err != nil {
+		// If no next task is found, loop back to the first in-progress task
+		if errors.Is(err, db.ErrNotFound) {
+			nextTask, err = o.dbClient.Task.FindFirst(
+				db.Task.Status.Equals(db.TaskStatusInProgress),
+			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return nextTask, nil
+		}
+		return nil, err
+	}
+
+	return nextTask, nil
 }

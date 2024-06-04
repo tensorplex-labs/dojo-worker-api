@@ -694,8 +694,6 @@ func GetTasksByPageController(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	sort := c.DefaultQuery("sort", "createdAt")
-	isSkipTaskStr := c.DefaultQuery("isSkipTask", "false")
-
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
@@ -710,15 +708,9 @@ func GetTasksByPageController(c *gin.Context) {
 		return
 	}
 
-	isSkipTask, err := strconv.ParseBool(isSkipTaskStr)
-	if err != nil {
-		log.Error().Err(err).Msg("Error converting isSkipTask to boolean:")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid isSkipTask parameter"))
-	}
-
 	// fetching tasks by pagination
 	taskService := task.NewTaskService()
-	taskPagination, taskErrors := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort, isSkipTask)
+	taskPagination, taskErrors := taskService.GetTasksByPagination(c.Request.Context(), worker.ID, page, limit, taskTypes, sort)
 	if len(taskErrors) > 0 {
 		isBadRequest := false
 		errorDetails := make([]string, 0)
@@ -1564,4 +1556,27 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(miner.MinerSubscriptionKeysResponse{SubscriptionKeys: updatedSubscriptionKeys}))
+}
+
+func GetNextInProgressTaskController(c *gin.Context) {
+	// session, err := handleCurrentSession(c)
+	taskId := c.Param("task-id")
+	if taskId == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
+		return
+	}
+	taskData, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId)
+	if err != nil {
+		log.Error().Err(err).Msg("Filed to get next in progress task")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in progress task"))
+		return
+	}
+
+	if taskData == nil {
+		log.Info().Msg("No in progress tasks found")
+		c.JSON(http.StatusOK, defaultSuccessResponse("No in progress tasks found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: taskData.ID}))
 }
