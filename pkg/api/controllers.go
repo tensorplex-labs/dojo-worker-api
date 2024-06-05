@@ -259,9 +259,16 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 	// Check if the task is expired
-	if taskData.ExpireAt.Before(time.Now()) {
+	if taskData.ExpireAt.Before(time.Now()) || taskData.Status == db.TaskStatusExpired {
 		log.Info().Str("taskId", taskId).Msg("Task is expired")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task is expired"))
+		c.Abort()
+		return
+	}
+
+	if taskData.MaxResults == taskData.NumResults || taskData.Status == db.TaskStatusCompleted {
+		log.Info().Str("taskId", taskId).Msg("Task has reached max results")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task has reached max results"))
 		c.Abort()
 		return
 	}
