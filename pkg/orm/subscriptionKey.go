@@ -18,18 +18,6 @@ func NewSubscriptionKeyORM() *SubscriptionKeyORM {
 	return &SubscriptionKeyORM{dbClient: clientWrapper.Client, clientWrapper: clientWrapper}
 }
 
-func (o *SubscriptionKeyORM) GetSubscriptionKeyByMinerId(minerId string) (*db.SubscriptionKeyModel, error) {
-	ctx := context.Background()
-
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-	subscription, err := o.dbClient.SubscriptionKey.FindFirst(
-		db.SubscriptionKey.MinerUserID.Equals(minerId),
-	).Exec(ctx)
-
-	return subscription, err
-}
-
 func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]db.SubscriptionKeyModel, error) {
 	a.clientWrapper.BeforeQuery()
 	defer a.clientWrapper.AfterQuery()

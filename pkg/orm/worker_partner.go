@@ -33,13 +33,6 @@ func (m *WorkerPartnerORM) CreateWorkerPartner(workerId string, subscriptionId s
 		return nil, fmt.Errorf("worker with ID %s not found", workerId)
 	}
 
-	// miner, err := m.dbClient.MinerUser.FindUnique(
-	// 	db.MinerUser.ID.Equals(minerId),
-	// ).Exec(ctx)
-	// if err != nil && errors.Is(err, db.ErrNotFound) {
-	// 	return nil, fmt.Errorf("miner with ID %s not found", minerId)
-	// }
-
 	workerPartner, err := m.dbClient.WorkerPartner.CreateOne(
 		db.WorkerPartner.SubscriptionKey.Link(
 			db.SubscriptionKey.Key.Equals(subscriptionId),

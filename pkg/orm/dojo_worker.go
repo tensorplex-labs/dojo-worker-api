@@ -33,23 +33,6 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 	return worker, err
 }
 
-func (s *DojoWorkerORM) GetById(ctx context.Context, workerId string) (*db.DojoWorkerModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
-	worker, err := s.dbClient.DojoWorker.FindUnique(
-		db.DojoWorker.ID.Equals(workerId),
-	).Exec(ctx)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			log.Error().Err(err).Msg("Worker not found")
-			return nil, err
-		}
-		return nil, err
-	}
-	return worker, nil
-}
-
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
