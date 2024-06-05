@@ -15,6 +15,77 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/auth/{address}": {
+            "get": {
+                "description": "Generates cookies that can be used to authenticate a user, given a valid signature, message for a specific hotkey",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Generates a session given valid proof of ownership",
+                "parameters": [
+                    {
+                        "description": "Request body containing the hotkey, signature, and message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.GenerateCookieAuthRequest"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Wallet address",
+                        "name": "address",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Nonce generated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/worker.GenerateNonceResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to generate session",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/{address}": {
             "get": {
                 "description": "Generate a nonce for a given wallet address",
@@ -223,9 +294,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/miner/info/{hotkey}": {
+        "/next-in-progress-task/{task-id}": {
             "get": {
-                "description": "Retrieve miner information using the miner's user context",
+                "description": "Fetch the next in-progress task by providing the task ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -233,28 +304,21 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Miner"
+                    "Tasks"
                 ],
-                "summary": "Get miner information",
+                "summary": "Get next in-progress task by task ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Hot Key",
-                        "name": "hotkey",
+                        "description": "Task ID",
+                        "name": "task-id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "API Key",
-                        "name": "x-api-key",
-                        "in": "header",
-                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Miner information retrieved successfully",
+                        "description": "Successful operation",
                         "schema": {
                             "allOf": [
                                 {
@@ -264,66 +328,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/miner.MinerInfoResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/miner/login/auth": {
-            "post": {
-                "description": "Log in a miner by providing their wallet address, chain ID, message, signature, and timestamp",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Miner login",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Request body containing the miner login details",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/auth.MinerLoginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Miner logged in successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "body": {
-                                            "$ref": "#/definitions/auth.MinerLoginResponse"
+                                            "$ref": "#/definitions/task.NextTaskResponse"
                                         }
                                     }
                                 }
@@ -331,96 +336,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request body or failed to parse message",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized, invalid signature, message expired, or hotkey not registered",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Miner user not found",
+                        "description": "Invalid request, task id is required",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
                     "500": {
-                        "description": "Failed to get nonce from cache, internal server error, or failed to create new miner user",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/miner/partner/disable": {
-            "put": {
-                "description": "Disable a worker by providing the worker's ID and a disable flag",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Worker Partner"
-                ],
-                "summary": "Disable worker by miner",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key",
-                        "name": "x-api-key",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Request body containing the worker ID and disable flag",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/worker.DisableWorkerRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Worker disabled successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "body": {
-                                            "$ref": "#/definitions/worker.DisableSuccessResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or parameters",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Failed to disable worker partner, no records updated",
-                        "schema": {
-                            "$ref": "#/definitions/api.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error - failed to disable worker partner",
+                        "description": "Failed to get next in-progress task",
                         "schema": {
                             "$ref": "#/definitions/api.ApiResponse"
                         }
@@ -1197,33 +1119,16 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.MinerLoginRequest": {
+        "auth.GenerateCookieAuthRequest": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
                 "hotkey": {
                     "type": "string"
                 },
                 "message": {
                     "type": "string"
                 },
-                "organisation": {
-                    "type": "string"
-                },
                 "signature": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.MinerLoginResponse": {
-            "type": "object",
-            "properties": {
-                "apiKey": {
-                    "type": "string"
-                },
-                "subscriptionKey": {
                     "type": "string"
                 }
             }
@@ -1286,13 +1191,10 @@ const docTemplate = `{
                 }
             }
         },
-        "miner.MinerInfoResponse": {
+        "task.NextTaskResponse": {
             "type": "object",
             "properties": {
-                "minerId": {
-                    "type": "string"
-                },
-                "subscriptionKey": {
+                "nextInProgressTaskId": {
                     "type": "string"
                 }
             }
@@ -1440,17 +1342,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "worker.DisableWorkerRequest": {
-            "type": "object",
-            "properties": {
-                "toDisable": {
-                    "type": "boolean"
-                },
-                "workerId": {
                     "type": "string"
                 }
             }

@@ -102,6 +102,17 @@ type Result struct {
 	Value interface{} `json:"value"`
 }
 
+// embed TaskResultModel to reuse its fields
+// override ResultData, also will shadow the original "result_data" JSON field
+type TaskResult struct {
+	db.TaskResultModel
+	ResultData []Result `json:"result_data"`
+}
+
+type TaskResultResponse struct {
+	TaskResults []TaskResult `json:"taskResults"`
+}
+
 type SubmitTaskResultRequest struct {
 	ResultData []Result `json:"resultData"`
 }
@@ -119,6 +130,13 @@ type (
 
 type NextTaskResponse struct {
 	NextInProgressTaskId string `json:"nextInProgressTaskId"`
+}
+
+type PaginationParams struct {
+	Page  int      `json:"page"`
+	Limit int      `json:"limit"`
+	Types []string `json:"types"`
+	Sort  string   `json:"sort"`
 }
 
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
