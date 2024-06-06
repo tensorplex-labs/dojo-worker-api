@@ -15,10 +15,11 @@ type ListWorkerPartnersResponse struct {
 	Partners []WorkerPartner `json:"partners"`
 }
 
+// no usage but for go swagger
 type UpdateWorkerPartnerRequest struct {
-	MinerSubscriptionKey    string `json:"minerSubscriptionKey"`
-	NewMinerSubscriptionKey string `json:"newMinerSubscriptionKey"`
-	Name                    string `json:"name"`
+	MinerSubscriptionKey    string `json:"minerSubscriptionKey" binding:"required"`
+	NewMinerSubscriptionKey string `json:"newMinerSubscriptionKey" binding:"required"`
+	Name                    string `json:"name" binding:"required"`
 }
 
 type UpdateWorkerPartnerResponse struct {
@@ -26,25 +27,25 @@ type UpdateWorkerPartnerResponse struct {
 }
 
 type DisableMinerRequest struct {
-	MinerSubscriptionKey string `json:"minerSubscriptionKey"`
-	ToDisable            bool   `json:"toDisable"`
+	MinerSubscriptionKey string `json:"minerSubscriptionKey" binding:"required"`
+	ToDisable            bool   `json:"toDisable" binding:"required"`
 }
 
 type DisableSuccessResponse struct {
 	Message string `json:"message"`
 }
 
-type DisableWorkerRequest struct {
-	WorkerId  string `json:"workerId"`
-	ToDisable bool   `json:"toDisable"`
-}
+// type DisableWorkerRequest struct {
+// 	WorkerId  string `json:"workerId" binding:"required"`
+// 	ToDisable bool   `json:"toDisable" binding:"required"`
+// }
 
 type WorkerLoginRequest struct {
-	WalletAddress string `json:"walletAddress"`
-	ChainId       string `json:"chainId"`
-	Message       string `json:"message"`
-	Signature     string `json:"signature"`
-	Timestamp     string `json:"timestamp"`
+	WalletAddress string `json:"walletAddress" binding:"required"`
+	ChainId       string `json:"chainId" binding:"required"`
+	Message       string `json:"message" binding:"required"`
+	Signature     string `json:"signature" binding:"required"`
+	Timestamp     string `json:"timestamp" binding:"required"`
 }
 
 type WorkerLoginSuccessResponse struct {
@@ -52,8 +53,8 @@ type WorkerLoginSuccessResponse struct {
 }
 
 type WorkerPartnerCreateRequest struct {
-	Name                 string `json:"name"`
-	MinerSubscriptionKey string `json:"minerSubscriptionKey"`
+	Name                 string `json:"name" binding:"required"`
+	MinerSubscriptionKey string `json:"minerSubscriptionKey" binding:"required"`
 }
 
 type GenerateNonceResponse struct {

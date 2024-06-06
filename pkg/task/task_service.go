@@ -69,15 +69,14 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 }
 
 // TODO: Implement yieldMin, yieldMax
-// TODO: Refactor params parameter with struct
-func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, page int, limit int, types []string, sort string) (*TaskPagination, []error) {
+func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, params PaginationParams) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
-	offset := (page - 1) * limit
+	offset := (params.Page - 1) * params.Limit
 	// taskORM := orm.NewTaskORM()
 
 	// Determine the sort order dynamically
 	var sortQuery db.TaskOrderByParam
-	switch sort {
+	switch params.Sort {
 	case "createdAt":
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	case "numResults":
@@ -88,7 +87,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
 	}
 
-	taskTypes, errs := convertStringToTaskTypes(types)
+	taskTypes, errs := convertStringToTaskTypes(params.Types)
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -98,7 +97,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 
 	log.Debug().Interface("completedTaskMap", completedTaskMap).Msg("Completed Task Mapping -------")
 
-	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, limit, sortQuery, taskTypes)
+	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, params.Limit, sortQuery, taskTypes)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, []error{err}
@@ -131,12 +130,12 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		taskResponses = append(taskResponses, taskResponse)
 	}
 
-	totalPages := int(math.Ceil(float64(totalTasks) / float64(limit)))
+	totalPages := int(math.Ceil(float64(totalTasks) / float64(params.Limit)))
 
 	// Construct pagination metadata
 	pagination := Pagination{
-		Page:       page,
-		Limit:      limit,
+		Page:       params.Page,
+		Limit:      params.Limit,
 		TotalPages: totalPages,
 		TotalItems: totalTasks,
 	}

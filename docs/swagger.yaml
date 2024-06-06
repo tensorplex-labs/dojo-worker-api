@@ -6,24 +6,13 @@ definitions:
       success:
         type: boolean
     type: object
-  auth.MinerLoginRequest:
+  auth.GenerateCookieAuthRequest:
     properties:
-      email:
-        type: string
       hotkey:
         type: string
       message:
         type: string
-      organisation:
-        type: string
       signature:
-        type: string
-    type: object
-  auth.MinerLoginResponse:
-    properties:
-      apiKey:
-        type: string
-      subscriptionKey:
         type: string
     type: object
   db.TaskStatus:
@@ -66,11 +55,9 @@ definitions:
       numTaskResults:
         type: integer
     type: object
-  miner.MinerInfoResponse:
+  task.NextTaskResponse:
     properties:
-      minerId:
-        type: string
-      subscriptionKey:
+      nextInProgressTaskId:
         type: string
     type: object
   task.Pagination:
@@ -169,13 +156,6 @@ definitions:
       message:
         type: string
     type: object
-  worker.DisableWorkerRequest:
-    properties:
-      toDisable:
-        type: boolean
-      workerId:
-        type: string
-    type: object
   worker.GenerateNonceResponse:
     properties:
       nonce:
@@ -243,6 +223,51 @@ info:
   title: Dojo Worker API
   version: "1.0"
 paths:
+  /api/v1/auth/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Generates cookies that can be used to authenticate a user, given
+        a valid signature, message for a specific hotkey
+      parameters:
+      - description: Request body containing the hotkey, signature, and message
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.GenerateCookieAuthRequest'
+      - description: Wallet address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nonce generated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.GenerateNonceResponse'
+              type: object
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Failed to generate session
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Generates a session given valid proof of ownership
+      tags:
+      - Authentication
   /auth/{address}:
     get:
       consumes:
@@ -366,136 +391,40 @@ paths:
       summary: Get the total number of task results
       tags:
       - Metrics
-  /miner/info/{hotkey}:
+  /next-in-progress-task/{task-id}:
     get:
       consumes:
       - application/json
-      description: Retrieve miner information using the miner's user context
+      description: Fetch the next in-progress task by providing the task ID
       parameters:
-      - description: Hot Key
+      - description: Task ID
         in: path
-        name: hotkey
-        required: true
-        type: string
-      - description: API Key
-        in: header
-        name: x-api-key
+        name: task-id
         required: true
         type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Miner information retrieved successfully
+          description: Successful operation
           schema:
             allOf:
             - $ref: '#/definitions/api.ApiResponse'
             - properties:
                 body:
-                  $ref: '#/definitions/miner.MinerInfoResponse'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-      summary: Get miner information
-      tags:
-      - Miner
-  /miner/login/auth:
-    post:
-      consumes:
-      - application/json
-      description: Log in a miner by providing their wallet address, chain ID, message,
-        signature, and timestamp
-      parameters:
-      - description: Bearer token
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: Request body containing the miner login details
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/auth.MinerLoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Miner logged in successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/api.ApiResponse'
-            - properties:
-                body:
-                  $ref: '#/definitions/auth.MinerLoginResponse'
+                  $ref: '#/definitions/task.NextTaskResponse'
               type: object
         "400":
-          description: Invalid request body or failed to parse message
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "401":
-          description: Unauthorized, invalid signature, message expired, or hotkey
-            not registered
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "404":
-          description: Miner user not found
+          description: Invalid request, task id is required
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
-          description: Failed to get nonce from cache, internal server error, or failed
-            to create new miner user
+          description: Failed to get next in-progress task
           schema:
             $ref: '#/definitions/api.ApiResponse'
-      summary: Miner login
+      summary: Get next in-progress task by task ID
       tags:
-      - Authentication
-  /miner/partner/disable:
-    put:
-      consumes:
-      - application/json
-      description: Disable a worker by providing the worker's ID and a disable flag
-      parameters:
-      - description: API Key
-        in: header
-        name: x-api-key
-        required: true
-        type: string
-      - description: Request body containing the worker ID and disable flag
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/worker.DisableWorkerRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Worker disabled successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/api.ApiResponse'
-            - properties:
-                body:
-                  $ref: '#/definitions/worker.DisableSuccessResponse'
-              type: object
-        "400":
-          description: Invalid request body or parameters
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "404":
-          description: Failed to disable worker partner, no records updated
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-        "500":
-          description: Internal server error - failed to disable worker partner
-          schema:
-            $ref: '#/definitions/api.ApiResponse'
-      summary: Disable worker by miner
-      tags:
-      - Worker Partner
+      - Tasks
   /partner/edit:
     put:
       consumes:
@@ -776,7 +705,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "409":
-          description: Task result already completed by worker
+          description: Task has reached max results
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
