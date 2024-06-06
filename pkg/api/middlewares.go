@@ -21,6 +21,7 @@ import (
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
+	"dojo-api/pkg/worker"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -72,25 +73,19 @@ func WorkerAuthMiddleware() gin.HandlerFunc {
 
 func WorkerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var requestMap map[string]string
-		if err := c.BindJSON(&requestMap); err != nil {
+		var requestBody worker.WorkerLoginRequest
+		if err := c.BindJSON(&requestBody); err != nil {
 			log.Error().Err(err).Msg("Invalid request body")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
 			c.Abort()
 			return
 		}
-		walletAddress, walletExists := requestMap["walletAddress"]
-		chainId, chainIdExists := requestMap["chainId"]
-		signature, signatureExists := requestMap["signature"]
-		message, messageExists := requestMap["message"]
-		timestamp, timestampExists := requestMap["timestamp"]
 
-		if !timestampExists {
-			log.Error().Msg("Timestamp is missing")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("timestamp is missing"))
-			c.Abort()
-			return
-		}
+		walletAddress := requestBody.WalletAddress
+		chainId := requestBody.ChainId
+		signature := requestBody.Signature
+		message := requestBody.Message
+		timestamp := requestBody.Timestamp
 
 		timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
 		if err != nil {
@@ -103,34 +98,6 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 		if !isTimestampValid(timestampInt) {
 			log.Error().Msg("Timestamp is invalid or expired")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("Bad request"))
-			c.Abort()
-			return
-		}
-
-		if !walletExists {
-			log.Error().Msg("walletAddress is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("walletAddress is required"))
-			c.Abort()
-			return
-		}
-
-		if !chainIdExists {
-			log.Error().Msg("chainId is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("chainId is required"))
-			c.Abort()
-			return
-		}
-
-		if !messageExists {
-			log.Error().Msg("message is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("message is required"))
-			c.Abort()
-			return
-		}
-
-		if !signatureExists {
-			log.Error().Msg("signature is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("signature is required"))
 			c.Abort()
 			return
 		}

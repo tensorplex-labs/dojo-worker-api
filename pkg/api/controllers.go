@@ -459,44 +459,30 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
+	workerData, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
 
-	var requestMap map[string]string
-	if err := c.BindJSON(&requestMap); err != nil {
-		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+	var requestBody worker.WorkerPartnerCreateRequest
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	name, ok := requestMap["name"]
-	if !ok {
-		log.Error().Msg("Missing Miner Name")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing Miner Name"))
-		return
-	}
-
-	minerSubscriptionKey, ok := requestMap["minerSubscriptionKey"]
-	if !ok {
-		log.Error().Msg("Missing minerSubscriptionKey")
-		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing minerSubscriptionKey"))
-		return
-	}
-
 	// Continue with your function if there was no error or if the "not found" condition was handled
-	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(minerSubscriptionKey)
+	foundSubscription, _ := orm.NewSubscriptionKeyORM().GetSubscriptionByKey(requestBody.MinerSubscriptionKey)
 	if foundSubscription == nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Subscription key is invalid"))
 		return
 	}
 
-	existingPartner, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(worker.ID, minerSubscriptionKey)
+	existingPartner, _ := orm.NewWorkerPartnerORM().GetWorkerPartnerByWorkerIdAndSubscriptionKey(workerData.ID, requestBody.MinerSubscriptionKey)
 	if existingPartner != nil {
 		log.Debug().Interface("existingPartner", existingPartner).Msg("Existing partnership found")
-		numRowsChanged, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(worker.ID, minerSubscriptionKey, false)
+		numRowsChanged, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(workerData.ID, requestBody.MinerSubscriptionKey, false)
 		if numRowsChanged > 0 && err == nil {
 			log.Info().Int("numRowsChanged", numRowsChanged).Err(err).Msg("Worker-miner partnership re-enabled")
 			c.AbortWithStatusJSON(http.StatusOK, defaultSuccessResponse("Worker-miner partnership re-enabled"))
@@ -507,7 +493,7 @@ func WorkerPartnerCreateController(c *gin.Context) {
 		return
 	}
 
-	_, err = orm.NewWorkerPartnerORM().CreateWorkerPartner(worker.ID, minerSubscriptionKey, name)
+	_, err = orm.NewWorkerPartnerORM().CreateWorkerPartner(workerData.ID, requestBody.MinerSubscriptionKey, requestBody.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create worker-miner partnership"))
 		return
@@ -777,16 +763,16 @@ func GetTaskResultsController(c *gin.Context) {
 func UpdateWorkerPartnerController(c *gin.Context) {
 	jwtClaims, _ := c.Get("userInfo")
 
-	var requestMap map[string]string
-	if err := c.BindJSON(&requestMap); err != nil {
-		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+	var requestBody worker.UpdateWorkerPartnerRequest
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	minerSubscriptionKey := requestMap["minerSubscriptionKey"]
-	newMinerSubscriptionKey := requestMap["newMinerSubscriptionKey"]
-	name := requestMap["name"]
+	minerSubscriptionKey := requestBody.MinerSubscriptionKey
+	newMinerSubscriptionKey := requestBody.NewMinerSubscriptionKey
+	name := requestBody.Name
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
 	if !ok {
@@ -825,7 +811,7 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 // DisableMinerByWorkerController godoc
 //
 //	@Summary		Disable miner by worker
-//	@Description	Disable a miner by providing the worker's subscription key and a disable flag
+//	@Description	Disable a miner by providing the worker subscription key and a disable flag
 //	@Tags			Worker Partner
 //	@Accept			json
 //	@Produce		json
@@ -838,28 +824,13 @@ func UpdateWorkerPartnerController(c *gin.Context) {
 //	@Failure		500				{object}	ApiResponse										"Internal server error - failed to disable worker partner"
 //	@Router			/worker/partner/disable [put]
 func DisableMinerByWorkerController(c *gin.Context) {
-	var requestMap map[string]interface{}
-	if err := c.BindJSON(&requestMap); err != nil {
-		log.Error().Err(err).Msg("Failed to bind JSON to requestMap")
+	var requestBody worker.DisableMinerRequest
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
 		return
 	}
 
-	const SUB_KEY = "minerSubscriptionKey"
-	const DISABLE_KEY = "toDisable"
-
-	minerSubKeyInterface, minerSubscriptionKeyExists := requestMap[SUB_KEY]
-	minerSubscriptionKey, ok := minerSubKeyInterface.(string)
-	if !minerSubscriptionKeyExists || minerSubscriptionKey == "" || !ok {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse(SUB_KEY+" is required, must be a string, and cannot be empty"))
-		return
-	}
-
-	toDisableInterface, toDisableExists := requestMap[DISABLE_KEY]
-	if !toDisableExists {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" is required"))
-		return
-	}
 	jwtClaims, _ := c.Get("userInfo")
 
 	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
@@ -873,19 +844,10 @@ func DisableMinerByWorkerController(c *gin.Context) {
 		return
 	}
 
-	// check if bool
-	toDisableOptional, parseError := parseBool(toDisableInterface)
-	if parseError != nil {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse(DISABLE_KEY+" must be a boolean value"))
+	log.Info().Interface("requestBody", requestBody).Msg("Disabling miner by worker")
 
-		return
-	}
-	toDisable := *toDisableOptional
-
-	log.Info().Str("minerSubscriptionKey", minerSubscriptionKey).Bool(DISABLE_KEY, toDisable).Msg("Disabling miner by worker")
-
-	if toDisable {
-		count, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(workerData.ID, minerSubscriptionKey, toDisable)
+	if requestBody.ToDisable {
+		count, err := orm.NewWorkerPartnerORM().DisablePartnerByWorker(workerData.ID, requestBody.MinerSubscriptionKey, requestBody.ToDisable)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to disable worker partner"))
 			return
@@ -898,18 +860,6 @@ func DisableMinerByWorkerController(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request param"))
 	}
-}
-
-func parseBool(value interface{}) (*bool, error) {
-	valueBool, ok := value.(bool)
-	if ok {
-		return &valueBool, nil
-	}
-	valueParsed, err := strconv.ParseBool(value.(string))
-	if err != nil {
-		return nil, err
-	}
-	return &valueParsed, nil
 }
 
 // GenerateNonceController godoc

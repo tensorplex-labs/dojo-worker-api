@@ -114,7 +114,7 @@ type TaskResultResponse struct {
 }
 
 type SubmitTaskResultRequest struct {
-	ResultData []Result `json:"resultData"`
+	ResultData []Result `json:"resultData" binding:"required"`
 }
 
 type SubmitTaskResultResponse struct {
