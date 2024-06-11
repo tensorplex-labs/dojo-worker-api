@@ -84,6 +84,7 @@ type Message struct {
 type Criteria struct {
 	Type    CriteriaType `json:"type"`
 	Options []string     `json:"options,omitempty"`
+	Text    string       `json:"text,omitempty"`
 	Min     float64      `json:"min,omitempty"`
 	Max     float64      `json:"max,omitempty"`
 }
@@ -133,10 +134,11 @@ type NextTaskResponse struct {
 }
 
 type PaginationParams struct {
-	Page  int      `json:"page"`
-	Limit int      `json:"limit"`
-	Types []string `json:"types"`
-	Sort  string   `json:"sort"`
+	Page  int          `json:"page"`
+	Limit int          `json:"limit"`
+	Types []string     `json:"types"`
+	Sort  string       `json:"sort"`
+	Order db.SortOrder `json:"order"`
 }
 
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {

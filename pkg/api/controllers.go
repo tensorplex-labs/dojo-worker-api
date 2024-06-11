@@ -659,6 +659,7 @@ func GetTasksByPageController(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	sort := c.DefaultQuery("sort", "createdAt")
+	orderStr := c.DefaultQuery("order", "asc")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
@@ -673,11 +674,22 @@ func GetTasksByPageController(c *gin.Context) {
 		return
 	}
 
+	if orderStr != "asc" && orderStr != "desc" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid order parameter"))
+		return
+	}
+
+	order := db.SortOrderDesc
+	if orderStr == "asc" {
+		order = db.SortOrderAsc
+	}
+
 	paginationParams := task.PaginationParams{
 		Page:  page,
 		Limit: limit,
 		Sort:  sort,
 		Types: taskTypes,
+		Order: order,
 	}
 
 	// fetching tasks by pagination
