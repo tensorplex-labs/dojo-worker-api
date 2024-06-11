@@ -72,19 +72,18 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, params PaginationParams) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
 	offset := (params.Page - 1) * params.Limit
-	// taskORM := orm.NewTaskORM()
 
 	// Determine the sort order dynamically
 	var sortQuery db.TaskOrderByParam
 	switch params.Sort {
 	case "createdAt":
-		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
+		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	case "numResults":
-		sortQuery = db.Task.NumResults.Order(db.SortOrderDesc)
+		sortQuery = db.Task.NumResults.Order(params.Order)
 	case "numCriteria":
-		sortQuery = db.Task.NumCriteria.Order(db.SortOrderDesc)
+		sortQuery = db.Task.NumCriteria.Order(params.Order)
 	default:
-		sortQuery = db.Task.CreatedAt.Order(db.SortOrderDesc)
+		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	}
 
 	taskTypes, errs := convertStringToTaskTypes(params.Types)
