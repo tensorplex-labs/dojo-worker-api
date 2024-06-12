@@ -1,0 +1,69 @@
+{
+  "task": "CODE_GENERATION",
+  "prompt": "Write me a program that visualized our solar system, you may use python, javascript or pure HTML.",
+  "criteria": [
+    {
+      "type": "multi-select",
+      "options": [
+        "The code is well-written and clear.",
+        "The code does not have any malicious intent.",
+        "The code correctly accepts user input."
+      ]
+    },
+    {
+      "max": 10,
+      "min": 1,
+      "type": "multi-score",
+      "options": ["phind/phind-codellama-34b", "openai/gpt-4-turbo"]
+    }
+  ],
+  "responses": [
+    {
+      "model": "openai/gpt-4-turbo",
+      "completion": {
+        "files": {
+          "index.js": {
+            "content": "console.log('Hello, World!');",
+            "language": "javascript"
+          },
+          "index.html": {
+            "content": "<!DOCTYPE html>\n<html>\n<head>\n<title>Page Title</title>\n</head>\n<body>\n<h1>Welcome</h1>\n<p>Hello world</p>\n<script src='index.js'></script>\n</body>\n</html>",
+            "language": "html"
+          }
+        },
+        "environment": "server",
+        "sandbox_url": "https://yv92fs.csb.app/",
+        "additional_notes": "The code uses built-in libraries so no additional commands are required.",
+        "installation_commands": null
+      }
+    },
+    {
+      "model": "phind/phind-codellama-34b",
+      "completion": {
+        "files": {
+          "main.py": {
+            "content": "from dash import Dash, dcc, html, Input, Output, callback\n\nimport plotly.express as px\n\nimport json\nimport pandas as pd\n\nexternal_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']\n\napp = Dash(__name__, external_stylesheets=external_stylesheets)\n\nstyles = {\n    'pre': {\n        'border': 'thin lightgrey solid',\n        'overflowX': 'scroll'\n    }\n}\n\ndf = pd.DataFrame({\n    \"x\": [1,2,1,2],\n    \"y\": [1,2,3,4],\n    \"customdata\": [1,2,3,4],\n    \"fruit\": [\"apple\", \"apple\", \"orange\", \"orange\"]\n})\n\nfig = px.scatter(df, x=\"x\", y=\"y\", color=\"fruit\", custom_data=[\"customdata\"])\n\nfig.update_layout(clickmode='event+select')\n\nfig.update_traces(marker_size=20)\n\napp.layout = html.Div([\n    dcc.Graph(\n        id='basic-interactions',\n        figure=fig\n    ),\n\n    html.Div(className='row', children=[\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Hover Data**\n\n                Mouse over values in the graph.\n            \"\"\"),\n            html.Pre(id='hover-data', style=styles['pre'])\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Click Data**\n\n                Click on points in the graph.\n            \"\"\"),\n            html.Pre(id='click-data', style=styles['pre']),\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Selection Data**\n\n                Choose the lasso or rectangle tool in the graph's menu\n                bar and then select points in the graph.\n\n                Note that if `layout.clickmode = 'event+select'`, selection data also\n                accumulates (or un-accumulates) selected data if you hold down the shift\n                button while clicking.\n            \"\"\"),\n            html.Pre(id='selected-data', style=styles['pre']),\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Zoom and Relayout Data**\n\n                Click and drag on the graph to zoom or click on the zoom\n                buttons in the graph's menu bar.\n                Clicking on legend items will also fire\n                this event.\n            \"\"\"),\n            html.Pre(id='relayout-data', style=styles['pre']),\n        ], className='three columns')\n    ])\n])\n\n\n@callback(\n    Output('hover-data', 'children'),\n    Input('basic-interactions', 'hoverData'))\ndef display_hover_data(hoverData):\n    return json.dumps(hoverData, indent=2)\n\n\n@callback(\n    Output('click-data', 'children'),\n    Input('basic-interactions', 'clickData'))\ndef display_click_data(clickData):\n    return json.dumps(clickData, indent=2)\n\n\n@callback(\n    Output('selected-data', 'children'),\n    Input('basic-interactions', 'selectedData'))\ndef display_selected_data(selectedData):\n    return json.dumps(selectedData, indent=2)\n\n\n@callback(\n    Output('relayout-data', 'children'),\n    Input('basic-interactions', 'relayoutData'))\ndef display_relayout_data(relayoutData):\n    return json.dumps(relayoutData, indent=2)\n\n\nif __name__ == '__main__':\n    app.run(debug=True)\n",
+            "isBinary": false,
+            "language": "python"
+          },
+          "requirements.txt": {
+            "content": "dash==2.16.1\npandas==2.0.3",
+            "language": "text"
+          },
+          ".codesandbox/tasks.json": {
+            "content": "{\n  // These tasks will run in order when initializing your CodeSandbox project.\n  \"setupTasks\": [\n    {\n      \"name\": \"pip install -r requirements.txt\",\n      \"command\": \"pip install -r requirements.txt\"\n    }\n  ],\n\n  // These tasks can be run from CodeSandbox. Running one will open a log in the app.\n  \"tasks\": {\n    \"start\": {\n      \"name\": \"start\",\n      \"command\": \"python main.py\",\n      \"runAtStart\": true,\n      \"preview\": {\n        \"port\": 8050\n      },\n      \"restartOn\": {\n        \"files\": [\n          \"main.py\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    },\n    \"install-dependencies\": {\n      \"name\": \"Installing Dependencies\",\n      \"command\": \"pip install -r requirements.txt\",\n      \"restartOn\": {\n        \"files\": [\n          \"requirements.txt\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    }\n  }\n}",
+            "language": "json"
+          },
+          ".devcontainer/devcontainer.json": {
+            "content": "{\n  \"name\": \"Devcontainer\",\n  \"image\": \"mcr.microsoft.com/devcontainers/python:3.8-bookworm\",\n  \"customizations\": {\n    \"vscode\": {\n      \"extensions\": [\"ms-python.python\"]\n    }\n  }\n}",
+            "language": "json"
+          }
+        },
+        "environment": "server",
+        "sandbox_url": "https://4rr3sv-8888.csb.app/",
+        "additional_notes": "The code uses the matplotlib library to create the visualization of the solar system. You can install it using the command 'pip install matplotlib'.",
+        "installation_commands": "pip install matplotlib"
+      }
+    }
+  ]
+}

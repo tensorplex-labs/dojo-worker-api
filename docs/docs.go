@@ -466,6 +466,12 @@ const docTemplate = `{
                         "description": "Sort field (default is createdAt)",
                         "name": "sort",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Order field (default is desc order) e.g., asc or desc",
+                        "name": "order",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -964,7 +970,7 @@ const docTemplate = `{
         },
         "/worker/partner/disable": {
             "put": {
-                "description": "Disable a miner by providing the worker's subscription key and a disable flag",
+                "description": "Disable a miner by providing the worker subscription key and a disable flag",
                 "consumes": [
                     "application/json"
                 ],
@@ -1227,6 +1233,9 @@ const docTemplate = `{
         },
         "task.SubmitTaskResultRequest": {
             "type": "object",
+            "required": [
+                "resultData"
+            ],
             "properties": {
                 "resultData": {
                     "type": "array",
@@ -1329,6 +1338,10 @@ const docTemplate = `{
         },
         "worker.DisableMinerRequest": {
             "type": "object",
+            "required": [
+                "minerSubscriptionKey",
+                "toDisable"
+            ],
             "properties": {
                 "minerSubscriptionKey": {
                     "type": "string"
@@ -1367,6 +1380,11 @@ const docTemplate = `{
         },
         "worker.UpdateWorkerPartnerRequest": {
             "type": "object",
+            "required": [
+                "minerSubscriptionKey",
+                "name",
+                "newMinerSubscriptionKey"
+            ],
             "properties": {
                 "minerSubscriptionKey": {
                     "type": "string"
@@ -1389,6 +1407,13 @@ const docTemplate = `{
         },
         "worker.WorkerLoginRequest": {
             "type": "object",
+            "required": [
+                "chainId",
+                "message",
+                "signature",
+                "timestamp",
+                "walletAddress"
+            ],
             "properties": {
                 "chainId": {
                     "type": "string"
@@ -1432,6 +1457,10 @@ const docTemplate = `{
         },
         "worker.WorkerPartnerCreateRequest": {
             "type": "object",
+            "required": [
+                "minerSubscriptionKey",
+                "name"
+            ],
             "properties": {
                 "minerSubscriptionKey": {
                     "type": "string"
