@@ -12,16 +12,16 @@ import (
 
 // TaskResponse reflects the task structure used in API responses
 type TaskResponse struct {
-	ID          string          `json:"taskId"`
-	Title       string          `json:"title"`
-	Body        string          `json:"body"`
-	ExpireAt    time.Time       `json:"expireAt"`
-	Type        db.TaskType     `json:"type"`
-	TaskData    json.RawMessage `json:"taskData"`
-	Status      db.TaskStatus   `json:"status"`
-	NumResults  int             `json:"numResults"`
-	MaxResults  int             `json:"maxResults"`
-	NumCriteria int             `json:"numCriteria"`
+	ID          string        `json:"taskId"`
+	Title       string        `json:"title"`
+	Body        string        `json:"body"`
+	ExpireAt    time.Time     `json:"expireAt"`
+	Type        db.TaskType   `json:"type"`
+	TaskData    interface{}   `json:"taskData"`
+	Status      db.TaskStatus `json:"status"`
+	NumResults  int           `json:"numResults"`
+	MaxResults  int           `json:"maxResults"`
+	NumCriteria int           `json:"numCriteria"`
 }
 
 type TaskPaginationResponse struct {
@@ -84,6 +84,7 @@ type Message struct {
 type Criteria struct {
 	Type    CriteriaType `json:"type"`
 	Options []string     `json:"options,omitempty"`
+	Text    string       `json:"text,omitempty"`
 	Min     float64      `json:"min,omitempty"`
 	Max     float64      `json:"max,omitempty"`
 }
@@ -102,8 +103,23 @@ type Result struct {
 	Value interface{} `json:"value"`
 }
 
+// embed TaskResultModel to reuse its fields
+// override ResultData, also will shadow the original "result_data" JSON field
+type TaskResult struct {
+	db.TaskResultModel
+	ResultData []Result `json:"result_data"`
+}
+
+type TaskResultResponse struct {
+	TaskResults []TaskResult `json:"taskResults"`
+}
+
 type SubmitTaskResultRequest struct {
-	ResultData []Result `json:"resultData"`
+	ResultData []Result `json:"resultData" binding:"required"`
+}
+
+type SubmitTaskResultResponse struct {
+	NumResults int `json:"numResults"`
 }
 
 type (
@@ -112,6 +128,18 @@ type (
 	MultiScoreValue  map[string]float64
 	MultiSelectValue []string
 )
+
+type NextTaskResponse struct {
+	NextInProgressTaskId string `json:"nextInProgressTaskId"`
+}
+
+type PaginationParams struct {
+	Page  int          `json:"page"`
+	Limit int          `json:"limit"`
+	Types []string     `json:"types"`
+	Sort  string       `json:"sort"`
+	Order db.SortOrder `json:"order"`
+}
 
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
 	var floatStr string

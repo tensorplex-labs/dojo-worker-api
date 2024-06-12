@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -49,76 +50,12 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 }
 
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
-
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).Exec(ctx)
 	return task, err
-}
-
-func (o *TaskORM) GetByPage(ctx context.Context, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, error) {
-
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-	tasks, err := o.dbClient.Task.FindMany(
-		db.Task.Type.In(taskTypes),
-	).OrderBy(sortQuery).
-		Skip(offset).
-		Take(limit).
-		Exec(ctx)
-	return tasks, err
-}
-
-// TODO: Optimization
-func (o *TaskORM) GetTaskByIdWithSub(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
-
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-	// Fetch the task along with its associated MinerUser
-	task, err := o.dbClient.Task.FindUnique(
-		db.Task.ID.Equals(taskId),
-	).With(
-		db.Task.MinerUser.Fetch(),
-	).Exec(ctx)
-
-	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching task by taskId")
-		return nil, err
-	}
-
-	if task == nil {
-		log.Error().Err(err).Msg("No Task found with the given taskId")
-		return nil, err
-	}
-
-	// Retrieve the MinerUser from the fetched task
-	minerUser, ok := task.MinerUser()
-	if !ok || minerUser == nil {
-		log.Error().Err(err).Msg("Error in fetching MinerUser by MinerSubscriptionKey")
-		return nil, err
-	}
-
-	// Check if there's a WorkerPartner link for the given MinerUser and DojoWorker
-	exists, err := o.dbClient.WorkerPartner.FindFirst(
-		db.WorkerPartner.MinerSubscriptionKey.Equals(minerUser.SubscriptionKey),
-		db.WorkerPartner.WorkerID.Equals(workerId),
-		db.WorkerPartner.IsDeleteByMiner.Equals(false),
-		db.WorkerPartner.IsDeleteByWorker.Equals(false),
-	).Exec(ctx)
-
-	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching WorkerPartner by MinerSubscriptionKey and WorkerID")
-		return nil, err
-	}
-	if exists == nil {
-		log.Error().Err(err).Msg("No WorkerPartner found with the given MinerSubscriptionKey and WorkerID")
-		return nil, err
-	}
-
-	// If all checks pass, return the task
-	return task, nil
 }
 
 // TODO: Optimization
@@ -149,7 +86,9 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 	filterParams := []db.TaskWhereParam{
 		db.Task.MinerUser.Where(
-			db.MinerUser.SubscriptionKey.In(subscriptionKeys),
+			db.MinerUser.SubscriptionKeys.Some(
+				db.SubscriptionKey.Key.In(subscriptionKeys), // SubscriptionKey should be one of the keys in the subscriptionKeys slice.
+			),
 		),
 	}
 
@@ -166,7 +105,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
 		return nil, 0, err
@@ -190,18 +128,25 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
 func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
-	var taskTypeParams []string
+	var taskTypesParam []string
 	for _, taskType := range taskTypes {
-		taskTypeParams = append(taskTypeParams, string(taskType))
+		taskTypesParam = append(taskTypesParam, string(taskType))
+	}
+
+	validSubscriptionKeys := make([]string, 0)
+	for _, key := range subscriptionKeys {
+		if !strings.HasPrefix(key, "sk-") || len(key[3:]) != 32 {
+			continue
+		}
+		validSubscriptionKeys = append(validSubscriptionKeys, key)
 	}
 
 	// need to set subquery to use "$?" and let the main query use dollar to resolve placeholders
-	subQuery, subQueryArgs, err := sq.Select("id").
-		From("\"MinerUser\"").
-		Where(sq.Eq{"subscription_key": subscriptionKeys}).
+	subQuery, subQueryArgs, err := sq.Select("miner_user_id").
+		From("\"SubscriptionKey\"").
+		Where(sq.Eq{"key": subscriptionKeys}).
 		PlaceholderFormat(sq.Question).
 		ToSql()
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error building subquery")
 		return 0, err
@@ -211,7 +156,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
 		// need to do this since TaskType is a custom prisma enum type
-		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypeParams, "', '")))).
+		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypesParam, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()
@@ -264,7 +209,6 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 			).
 			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
 			Exec(ctx)
-
 		if err != nil {
 			log.Error().Err(err).Msg("Error in fetching expired tasks")
 		}
@@ -297,4 +241,65 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 
 		o.clientWrapper.AfterQuery()
 	}
+}
+
+func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	query := "SELECT COUNT(*) as count FROM \"TaskResult\" WHERE status = 'COMPLETED';"
+	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found for completed tasks count query")
+	}
+
+	taskCountStr := string(result[0].Count)
+	taskCountInt, err := strconv.Atoi(taskCountStr)
+	if err != nil {
+		return 0, err
+	}
+
+	return taskCountInt, nil
+}
+
+func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	// Fetch the current task to determine the ordering criteria
+	currentTask, err := o.dbClient.Task.FindFirst(
+		db.Task.ID.Equals(taskId),
+	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the next task that is in-progress based on the created_at timestamp
+	nextTask, err := o.dbClient.Task.FindFirst(
+		db.Task.CreatedAt.Lt(currentTask.CreatedAt),
+		db.Task.Status.Equals(db.TaskStatusInProgress),
+	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+	if err != nil {
+		// If no next task is found, loop back to the first in-progress task
+		if errors.Is(err, db.ErrNotFound) {
+			nextTask, err = o.dbClient.Task.FindFirst(
+				db.Task.Status.Equals(db.TaskStatusInProgress),
+			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return nextTask, nil
+		}
+		return nil, err
+	}
+
+	return nextTask, nil
 }

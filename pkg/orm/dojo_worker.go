@@ -3,6 +3,8 @@ package orm
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 
 	"dojo-api/db"
 
@@ -31,23 +33,6 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 	return worker, err
 }
 
-func (s *DojoWorkerORM) GetById(ctx context.Context, workerId string) (*db.DojoWorkerModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
-	worker, err := s.dbClient.DojoWorker.FindUnique(
-		db.DojoWorker.ID.Equals(workerId),
-	).Exec(ctx)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			log.Error().Err(err).Msg("Worker not found")
-			return nil, err
-		}
-		return nil, err
-	}
-	return worker, nil
-}
-
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
@@ -64,4 +49,34 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 		return nil, err
 	}
 	return worker, nil
+}
+
+func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
+	s.clientWrapper.BeforeQuery()
+	defer s.clientWrapper.AfterQuery()
+
+	ctx := context.Background()
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	query := "SELECT COUNT(*) as count FROM \"DojoWorker\";"
+	err := s.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found from getting dojoWorker count")
+	}
+
+	workerCountStr := string(result[0].Count)
+	workerCountInt, err := strconv.Atoi(workerCountStr)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return workerCountInt, nil
 }

@@ -39,18 +39,38 @@ enum TaskType {
     TEXT_TO_IMAGE
 }
 
+model ApiKey {
+    id            String    @id @default(uuid())
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
+    key           String    @unique
+    is_delete     Boolean   @default(false)
+    miner_user_id String
+    MinerUser     MinerUser @relation(fields: [miner_user_id], references: [id])
+}
+
+model SubscriptionKey {
+    id            String          @id @default(uuid())
+    created_at    DateTime        @default(now())
+    updated_at    DateTime        @updatedAt
+    key           String          @unique
+    is_delete     Boolean         @default(false)
+    miner_user_id String
+    MinerUser     MinerUser       @relation(fields: [miner_user_id], references: [id])
+    WorkerPartner WorkerPartner[]
+}
+
 model MinerUser {
-    id                String          @id @default(uuid())
-    created_at        DateTime        @default(now())
-    updated_at        DateTime        @updatedAt
-    hotkey            String          @unique
-    api_key           String          @unique
-    api_key_expire_at DateTime
-    is_verified       Boolean         @default(false)
+    id                String            @id @default(uuid())
+    created_at        DateTime          @default(now())
+    updated_at        DateTime          @updatedAt
+    hotkey            String            @unique
+    api_keys          ApiKey[]
+    // api_key_expire_at DateTime
+    // is_verified       Boolean         @default(false)
     tasks             Task[]
-    worker_partners   WorkerPartner[]
-    subscription_key  String          @unique
-    email             String
+    subscription_keys SubscriptionKey[]
+    email             String?
     organizationName  String?
 }
 
@@ -105,16 +125,43 @@ model DojoWorker {
 }
 
 model WorkerPartner {
-    id                     String     @id @default(uuid())
-    created_at             DateTime   @default(now())
-    updated_at             DateTime   @updatedAt
-    MinerUser              MinerUser  @relation(fields: [miner_subscription_key], references: [subscription_key])
+    id                     String          @id @default(uuid())
+    created_at             DateTime        @default(now())
+    updated_at             DateTime        @updatedAt
+    SubscriptionKey        SubscriptionKey @relation(fields: [miner_subscription_key], references: [key])
     miner_subscription_key String
-    DojoWorker             DojoWorker @relation(fields: [worker_id], references: [id])
+    DojoWorker             DojoWorker      @relation(fields: [worker_id], references: [id])
     worker_id              String
-    is_delete_by_miner     Boolean    @default(false)
-    is_delete_by_worker    Boolean    @default(false)
+    is_delete_by_miner     Boolean         @default(false)
+    is_delete_by_worker    Boolean         @default(false)
     name                   String?
 
     @@unique([miner_subscription_key, worker_id])
+}
+
+enum MetricsType {
+    TOTAL_NUM_DOJO_WORKERS
+    TOTAL_NUM_COMPLETED_TASKS
+    TOTAL_NUM_TASK_RESULTS
+    AVERAGE_TASK_COMPLETION_TIME
+}
+
+enum EventsType {
+    TASK_COMPLETION_TIME
+}
+
+model Metrics {
+    id           String      @id @default(uuid())
+    created_at   DateTime    @default(now())
+    updated_at   DateTime    @updatedAt
+    type         MetricsType @unique
+    metrics_data Json
+}
+
+model Events {
+    id          String     @id @default(uuid())
+    created_at  DateTime   @default(now())
+    updated_at  DateTime   @updatedAt
+    type        EventsType
+    events_data Json
 }

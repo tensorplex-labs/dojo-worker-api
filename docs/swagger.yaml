@@ -1,0 +1,906 @@
+definitions:
+  api.ApiResponse:
+    properties:
+      body: {}
+      error: {}
+      success:
+        type: boolean
+    type: object
+  auth.GenerateCookieAuthRequest:
+    properties:
+      hotkey:
+        type: string
+      message:
+        type: string
+      signature:
+        type: string
+    type: object
+  db.TaskStatus:
+    enum:
+    - IN_PROGRESS
+    - COMPLETED
+    - EXPIRED
+    type: string
+    x-enum-varnames:
+    - TaskStatusInProgress
+    - TaskStatusCompleted
+    - TaskStatusExpired
+  db.TaskType:
+    enum:
+    - CODE_GENERATION
+    - DIALOGUE
+    - TEXT_TO_IMAGE
+    type: string
+    x-enum-varnames:
+    - TaskTypeCodeGeneration
+    - TaskTypeDialogue
+    - TaskTypeTextToImage
+  metric.AvgTaskCompletionTimeResponse:
+    properties:
+      averageTaskCompletionTime:
+        type: integer
+    type: object
+  metric.CompletedTaskCountResponse:
+    properties:
+      numCompletedTasks:
+        type: integer
+    type: object
+  metric.DojoWorkerCountResponse:
+    properties:
+      numDojoWorkers:
+        type: integer
+    type: object
+  metric.TaskResultCountResponse:
+    properties:
+      numTaskResults:
+        type: integer
+    type: object
+  task.NextTaskResponse:
+    properties:
+      nextInProgressTaskId:
+        type: string
+    type: object
+  task.Pagination:
+    properties:
+      pageNumber:
+        type: integer
+      pageSize:
+        type: integer
+      totalItems:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  task.Result:
+    properties:
+      type:
+        type: string
+      value: {}
+    type: object
+  task.SubmitTaskResultRequest:
+    properties:
+      resultData:
+        items:
+          $ref: '#/definitions/task.Result'
+        type: array
+    type: object
+  task.SubmitTaskResultResponse:
+    properties:
+      numResults:
+        type: integer
+    type: object
+  task.TaskPagination:
+    properties:
+      pagination:
+        $ref: '#/definitions/task.Pagination'
+      tasks:
+        items:
+          $ref: '#/definitions/task.TaskPaginationResponse'
+        type: array
+    type: object
+  task.TaskPaginationResponse:
+    properties:
+      body:
+        type: string
+      expireAt:
+        type: string
+      isCompletedByWorker:
+        type: boolean
+      maxResults:
+        type: integer
+      numCriteria:
+        type: integer
+      numResults:
+        type: integer
+      status:
+        $ref: '#/definitions/db.TaskStatus'
+      taskData: {}
+      taskId:
+        type: string
+      title:
+        type: string
+      type:
+        $ref: '#/definitions/db.TaskType'
+    type: object
+  task.TaskResponse:
+    properties:
+      body:
+        type: string
+      expireAt:
+        type: string
+      maxResults:
+        type: integer
+      numCriteria:
+        type: integer
+      numResults:
+        type: integer
+      status:
+        $ref: '#/definitions/db.TaskStatus'
+      taskData: {}
+      taskId:
+        type: string
+      title:
+        type: string
+      type:
+        $ref: '#/definitions/db.TaskType'
+    type: object
+  worker.DisableMinerRequest:
+    properties:
+      minerSubscriptionKey:
+        type: string
+      toDisable:
+        type: boolean
+    type: object
+  worker.DisableSuccessResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  worker.GenerateNonceResponse:
+    properties:
+      nonce:
+        type: string
+    type: object
+  worker.ListWorkerPartnersResponse:
+    properties:
+      partners:
+        items:
+          $ref: '#/definitions/worker.WorkerPartner'
+        type: array
+    type: object
+  worker.UpdateWorkerPartnerRequest:
+    properties:
+      minerSubscriptionKey:
+        type: string
+      name:
+        type: string
+      newMinerSubscriptionKey:
+        type: string
+    type: object
+  worker.UpdateWorkerPartnerResponse:
+    properties:
+      workerPartner:
+        $ref: '#/definitions/worker.WorkerPartner'
+    type: object
+  worker.WorkerLoginRequest:
+    properties:
+      chainId:
+        type: string
+      message:
+        type: string
+      signature:
+        type: string
+      timestamp:
+        type: string
+      walletAddress:
+        type: string
+    type: object
+  worker.WorkerLoginSuccessResponse:
+    properties:
+      token: {}
+    type: object
+  worker.WorkerPartner:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      subscriptionKey:
+        type: string
+    type: object
+  worker.WorkerPartnerCreateRequest:
+    properties:
+      minerSubscriptionKey:
+        type: string
+      name:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is the worker API for the Dojo project.
+  title: Dojo Worker API
+  version: "1.0"
+paths:
+  /api/v1/auth/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Generates cookies that can be used to authenticate a user, given
+        a valid signature, message for a specific hotkey
+      parameters:
+      - description: Request body containing the hotkey, signature, and message
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.GenerateCookieAuthRequest'
+      - description: Wallet address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nonce generated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.GenerateNonceResponse'
+              type: object
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Failed to generate session
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Generates a session given valid proof of ownership
+      tags:
+      - Authentication
+  /auth/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Generate a nonce for a given wallet address
+      parameters:
+      - description: Wallet address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nonce generated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.GenerateNonceResponse'
+              type: object
+        "400":
+          description: Address parameter is required
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Failed to store nonce
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Generate nonce
+      tags:
+      - Authentication
+  /metrics/average-task-completion-time:
+    get:
+      description: Retrieves the average task completion time from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Average task completion time retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.AvgTaskCompletionTimeResponse'
+              type: object
+        "500":
+          description: Failed to get average task completion time or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the average task completion time
+      tags:
+      - Metrics
+  /metrics/completed-tasks-count:
+    get:
+      description: Retrieves the total number of completed tasks from the metrics
+        data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of completed tasks retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.CompletedTaskCountResponse'
+              type: object
+        "500":
+          description: Failed to get completed tasks count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of completed tasks
+      tags:
+      - Metrics
+  /metrics/dojo-worker-count:
+    get:
+      description: Retrieves the total number of Dojo workers from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of Dojo workers retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.DojoWorkerCountResponse'
+              type: object
+        "500":
+          description: Failed to get worker count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of Dojo workers
+      tags:
+      - Metrics
+  /metrics/task-result-count:
+    get:
+      description: Retrieves the total number of task results from the metrics data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total number of task results retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/metric.TaskResultCountResponse'
+              type: object
+        "500":
+          description: Failed to get task results count or unmarshal data
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get the total number of task results
+      tags:
+      - Metrics
+  /next-in-progress-task/{task-id}:
+    get:
+      consumes:
+      - application/json
+      description: Fetch the next in-progress task by providing the task ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: task-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful operation
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/task.NextTaskResponse'
+              type: object
+        "400":
+          description: Invalid request, task id is required
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Failed to get next in-progress task
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get next in-progress task by task ID
+      tags:
+      - Tasks
+  /partner/edit:
+    put:
+      consumes:
+      - application/json
+      description: Update the subscription key and name of a worker partner
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Request body containing the details to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/worker.UpdateWorkerPartnerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully updated worker partner
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.UpdateWorkerPartnerResponse'
+              type: object
+        "400":
+          description: Invalid request body or missing required parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error - failed to update worker partner
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Update worker partner details
+      tags:
+      - Worker Partner
+  /tasks:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of tasks based on the specified parameters
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma-separated list of task types (e.g., CODE_GENERATION,TEXT_TO_IMAGE,DIALOGUE).
+          Use 'All' to include all types.
+        in: query
+        name: task
+        required: true
+        type: string
+      - description: Page number (default is 1)
+        in: query
+        name: page
+        type: integer
+      - description: Number of tasks per page (default is 10)
+        in: query
+        name: limit
+        type: integer
+      - description: Sort field (default is createdAt)
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved task pagination response
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/task.TaskPagination'
+              type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: No tasks found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Retrieve tasks by pagination
+      tags:
+      - Tasks
+  /tasks/{task-id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a task by its ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: task-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved task response
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/task.TaskResponse'
+              type: object
+        "404":
+          description: Task not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                error:
+                  type: string
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                error:
+                  type: string
+              type: object
+      summary: Retrieve task by ID
+      tags:
+      - Tasks
+  /tasks/create:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create tasks by providing the necessary task details along with
+        files to upload. This endpoint accepts multipart/form-data, and multiple files
+        can be uploaded.
+      parameters:
+      - description: API Key for Miner Authentication
+        in: header
+        name: x-api-key
+        required: true
+        type: string
+      - description: 'Content-Type: multipart/form-data'
+        in: header
+        name: Content-Type
+        required: true
+        type: string
+      - description: Title of the task
+        in: formData
+        name: Title
+        required: true
+        type: string
+      - description: Body of the task
+        in: formData
+        name: Body
+        required: true
+        type: string
+      - description: Expiration date of the task
+        in: formData
+        name: ExpireAt
+        required: true
+        type: string
+      - description: Task data in JSON format
+        in: formData
+        name: TaskData
+        required: true
+        type: string
+      - description: Maximum results
+        in: formData
+        name: MaxResults
+        required: true
+        type: integer
+      - description: Total rewards
+        in: formData
+        name: TotalRewards
+        required: true
+        type: number
+      - collectionFormat: csv
+        description: Files to upload (can upload multiple files)
+        in: formData
+        items:
+          type: file
+        name: files
+        required: true
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tasks created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  items:
+                    type: string
+                  type: array
+              type: object
+        "400":
+          description: Bad request, invalid form data, or failed to process request
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error, failed to upload files
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Create Tasks
+      tags:
+      - Tasks
+  /tasks/submit-result/{task-id}:
+    put:
+      consumes:
+      - application/json
+      description: Submit the result of a task
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Task ID
+        in: path
+        name: task-id
+        required: true
+        type: string
+      - description: Request body containing the task result data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/task.SubmitTaskResultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task result submitted successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/task.SubmitTaskResultResponse'
+              type: object
+        "400":
+          description: Invalid request body or task is expired
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Task not found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "409":
+          description: Task has reached max results
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Submit task result
+      tags:
+      - Tasks
+  /worker/login/auth:
+    post:
+      consumes:
+      - application/json
+      description: Log in a worker by providing their wallet address, chain ID, message,
+        signature, and timestamp
+      parameters:
+      - description: Request body containing the worker login details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/worker.WorkerLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Worker logged in successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.WorkerLoginSuccessResponse'
+              type: object
+        "400":
+          description: Invalid wallet address or chain ID
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "403":
+          description: Forbidden access
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "409":
+          description: Worker already exists
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Failed to create worker
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Worker login
+      tags:
+      - Authentication
+  /worker/partner:
+    post:
+      consumes:
+      - application/json
+      description: Create a partnership between a worker and a miner
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Request body containing the name and miner subscription key
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/worker.WorkerPartnerCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully created worker-miner partnership
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  type: string
+              type: object
+        "400":
+          description: Invalid request body or missing required fields
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Miner subscription key is invalid
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Create worker-miner partnership
+      tags:
+      - Worker Partner
+  /worker/partner/disable:
+    put:
+      consumes:
+      - application/json
+      description: Disable a miner by providing the worker's subscription key and
+        a disable flag
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Request body containing the miner subscription key and disable
+          flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/worker.DisableMinerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Miner disabled successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.DisableSuccessResponse'
+              type: object
+        "400":
+          description: Invalid request body or parameters
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Failed to disable worker partner, no records updated
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error - failed to disable worker partner
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Disable miner by worker
+      tags:
+      - Worker Partner
+  /worker/partner/list:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of partnerships between a worker and miners
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved worker-miner partnership list
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/worker.ListWorkerPartnersResponse'
+              type: object
+        "400":
+          description: Invalid request or missing required fields
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Worker not found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Get worker-miner partnership list
+      tags:
+      - Worker Partner
+swagger: "2.0"

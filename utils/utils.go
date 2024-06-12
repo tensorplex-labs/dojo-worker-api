@@ -181,8 +181,6 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 		return nil, err
 	}
 	defer src.Close()
-	// Generate a unique file name for the S3 object
-	// fileName := fmt.Sprintf("uploads/%d_%s", time.Now().Unix(), file.Filename)
 
 	// Create an S3 client
 	log.Info().Interface("file", file).Msg("Uploading file")
