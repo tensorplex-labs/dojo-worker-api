@@ -631,8 +631,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 }
 
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
-	bucketName := utils.LoadDotEnv("STORAGE_HOSTNAME")
-	domainName := utils.LoadDotEnv("DOMAIN_NAME")
+	publicURL := utils.LoadDotEnv("S3_PUBLIC_URL")
 	for i, t := range requestBody.TaskData {
 		if t.Task == db.TaskTypeTextToImage {
 			for j, response := range t.Responses {
@@ -658,7 +657,7 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 				}
 
 				log.Info().Interface("fileObj", fileObj).Msg("File uploaded successfully")
-				fileURL := fmt.Sprintf("https://%s.%s/%s", bucketName, domainName, *fileObj.Key)
+				fileURL := fmt.Sprintf("%s/%s", publicURL, *fileObj.Key)
 				log.Info().Str("fileURL", fileURL).Msg("File URL")
 
 				// Update the response completion with the S3 URL
