@@ -612,6 +612,7 @@ func GetTaskByIdController(c *gin.Context) {
 //	@Param			page			query		int										false	"Page number (default is 1)"
 //	@Param			limit			query		int										false	"Number of tasks per page (default is 10)"
 //	@Param			sort			query		string									false	"Sort field (default is createdAt)"
+//	@Param			order			query		string									false	"Order field (default is desc order) e.g., asc or desc"
 //	@Success		200				{object}	ApiResponse{body=task.TaskPagination}	"Successfully retrieved task pagination response"
 //	@Failure		400				{object}	ApiResponse								"Invalid request parameters"
 //	@Failure		401				{object}	ApiResponse								"Unauthorized"
@@ -659,7 +660,7 @@ func GetTasksByPageController(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	sort := c.DefaultQuery("sort", "createdAt")
-	orderStr := c.DefaultQuery("order", "asc")
+	orderStr := c.DefaultQuery("order", "desc")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
 		log.Error().Err(err).Msg("Error converting page to integer:")
@@ -675,6 +676,7 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	if orderStr != "asc" && orderStr != "desc" {
+		log.Error().Msgf("Invalid order parameter: %s", orderStr)
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid order parameter"))
 		return
 	}

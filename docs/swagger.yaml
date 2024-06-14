@@ -83,6 +83,8 @@ definitions:
         items:
           $ref: '#/definitions/task.Result'
         type: array
+    required:
+    - resultData
     type: object
   task.SubmitTaskResultResponse:
     properties:
@@ -150,6 +152,9 @@ definitions:
         type: string
       toDisable:
         type: boolean
+    required:
+    - minerSubscriptionKey
+    - toDisable
     type: object
   worker.DisableSuccessResponse:
     properties:
@@ -176,6 +181,10 @@ definitions:
         type: string
       newMinerSubscriptionKey:
         type: string
+    required:
+    - minerSubscriptionKey
+    - name
+    - newMinerSubscriptionKey
     type: object
   worker.UpdateWorkerPartnerResponse:
     properties:
@@ -194,6 +203,12 @@ definitions:
         type: string
       walletAddress:
         type: string
+    required:
+    - chainId
+    - message
+    - signature
+    - timestamp
+    - walletAddress
     type: object
   worker.WorkerLoginSuccessResponse:
     properties:
@@ -216,6 +231,9 @@ definitions:
         type: string
       name:
         type: string
+    required:
+    - minerSubscriptionKey
+    - name
     type: object
 info:
   contact: {}
@@ -497,6 +515,10 @@ paths:
       - description: Sort field (default is createdAt)
         in: query
         name: sort
+        type: string
+      - description: Order field (default is desc order) e.g., asc or desc
+        in: query
+        name: order
         type: string
       produces:
       - application/json
@@ -815,8 +837,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Disable a miner by providing the worker's subscription key and
-        a disable flag
+      description: Disable a miner by providing the worker subscription key and a
+        disable flag
       parameters:
       - description: Bearer token
         in: header
