@@ -1,29 +1,22 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"dojo-api/pkg/blockchain"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	debug := flag.Bool("debug", false, "sets log level to debug")
-	trace := flag.Bool("trace", false, "sets log level to trace")
-	flag.Parse()
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if *debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else if *trace {
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	}
+	substrateService := blockchain.NewSubstrateService()
+	substrateService.GetLatestFinalizedBlock()
+	// a bit lower than last finalized block on testnet
+	const initialBlockId = 1_923_000
+	substrateService.GetLatestUnFinalizedBlock(initialBlockId)
 
 	// TODO write unit tests??
 	// service := blockchain.NewSubstrateService()
@@ -33,8 +26,18 @@ func main() {
 	// fmt.Println(service.CheckIsRegistered(21, "***REMOVED***"))
 	// service.SubscribeAxonInfos(21)
 	// fmt.Println(service.TotalHotkeyStake("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
-	subnetSubscriber := blockchain.NewSubnetStateSubscriber()
-	subnetSubscriber.SubscribeSubnetState(21)
+	subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+
+	fmt.Println(subnetSubscriber.FindValidatorHotkeyIndex("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+	// fmt.Println(subnetSubscriber.FindMinerHotkeyIndex("***REMOVED***"))
+
+	// Deleting
+	subnetSubscriber.OnNonRegisteredFound("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3")
+	fmt.Println(subnetSubscriber.FindValidatorHotkeyIndex("5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"))
 
 	// wait for interrupt signal to gracefully shutdown the program
 	quit := make(chan os.Signal, 1)

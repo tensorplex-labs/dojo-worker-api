@@ -7,13 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
+
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ValidatorMinStake = GetValidatorMinStake()
-)
+var ValidatorMinStake = GetValidatorMinStake()
 
 func GetValidatorMinStake() int {
 	err := godotenv.Load()
@@ -37,9 +39,9 @@ func GetValidatorMinStake() int {
 // TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
 	SubnetId               int
-	ActiveValidatorHotkeys []string
-	ActiveMinerHotkeys     []string
-	ActiveAxonInfos        []AxonInfo
+	ActiveValidatorHotkeys map[int]string
+	ActiveMinerHotkeys     map[int]string
+	ActiveParticipants     []Participant
 }
 
 type GlobalState struct {
@@ -50,14 +52,31 @@ type SubnetStateSubscriber struct {
 	substrateService *SubstrateService
 	SubnetState      *SubnetState // meant for only tracking our subnet state
 	GlobalState      *GlobalState
+	initialised      bool
+	mutex            sync.RWMutex
 }
 
-func NewSubnetStateSubscriber() *SubnetStateSubscriber {
-	return &SubnetStateSubscriber{
-		substrateService: NewSubstrateService(),
-		SubnetState:      &SubnetState{},
-		GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
-	}
+var (
+	instance *SubnetStateSubscriber
+	once     sync.Once
+)
+
+func GetSubnetStateSubscriberInstance() *SubnetStateSubscriber {
+	once.Do(func() {
+		instance = &SubnetStateSubscriber{
+			substrateService: NewSubstrateService(),
+			SubnetState:      &SubnetState{},
+			GlobalState:      &GlobalState{HotkeyStakes: make(map[string]float64)},
+			initialised:      false,
+		}
+		subnetUidStr := utils.LoadDotEnv("SUBNET_UID")
+		subnetUid, err := strconv.Atoi(subnetUidStr)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error parsing SUBNET_UID, failed to start subscriber")
+		}
+		instance.SubscribeSubnetState(subnetUid)
+	})
+	return instance
 }
 
 func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
@@ -67,40 +86,70 @@ func (s *SubnetStateSubscriber) OnNonRegisteredFound(hotkey string) {
 	}
 
 	// clear from active validators if found
-	for i, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+	for key, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
-			s.SubnetState.ActiveValidatorHotkeys = append(s.SubnetState.ActiveValidatorHotkeys[:i], s.SubnetState.ActiveValidatorHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveValidatorHotkeys, key)
 			break
 		}
 	}
 
 	// clear from active miners if found
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for key, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			s.SubnetState.ActiveMinerHotkeys = append(s.SubnetState.ActiveMinerHotkeys[:i], s.SubnetState.ActiveMinerHotkeys[i+1:]...)
+			delete(s.SubnetState.ActiveMinerHotkeys, key)
+			break
+		}
+	}
+	// clear from axon infos
+	for i, axonInfo := range s.SubnetState.ActiveParticipants {
+		if hotkey == axonInfo.Hotkey {
+			s.SubnetState.ActiveParticipants = append(s.SubnetState.ActiveParticipants[:i], s.SubnetState.ActiveParticipants[i+1:]...)
 			break
 		}
 	}
 
-	// clear from axon infos
-	for i, axonInfo := range s.SubnetState.ActiveAxonInfos {
-		if hotkey == axonInfo.Hotkey {
-			s.SubnetState.ActiveAxonInfos = append(s.SubnetState.ActiveAxonInfos[:i], s.SubnetState.ActiveAxonInfos[i+1:]...)
-			break
-		}
+	minerUserORM := orm.NewMinerUserORM()
+	if err := minerUserORM.DeregisterMiner(hotkey); err != nil {
+		log.Error().Err(err).Msg("Error deregistering miner")
 	}
 }
 
+func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
+	if hotkey == "" {
+		log.Fatal().Msg("Hotkey is empty, cannot add to active validators/miners/axons")
+		return
+	}
+
+	minerUserORM := orm.NewMinerUserORM()
+	_, err := minerUserORM.GetUserByHotkey(hotkey)
+	if err != nil {
+		if err == db.ErrNotFound {
+			log.Info().Msg("User not found, continuing...")
+			return
+		}
+		log.Error().Err(err).Msg("Error getting user by hotkey")
+		return
+	}
+
+	// if !minerUser.IsVerified {
+	// 	if err := minerUserORM.ReregisterMiner(hotkey); err != nil {
+	// 		log.Error().Err(err).Msg("Error reregistering miner")
+	// 	}
+	// }
+
+	// refresh api key
+	// newExpireAt := time.Now().Add(time.Hour * 24)
+	// orm.NewMinerUserORM().RefreshAPIKey(hotkey, newExpireAt)
+}
+
 func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
-	axonInfos, err := s.substrateService.GetAllAxons(subnetId)
+	participants, err := s.substrateService.GetAllParticipants(subnetId)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting all axons")
 		return &SubnetState{}
 	}
 
-	subnetState := SubnetState{SubnetId: subnetId, ActiveAxonInfos: axonInfos}
-	minerHotkeys := make([]string, 0)
-	validatorHotkeys := make([]string, 0)
+	subnetState := SubnetState{SubnetId: subnetId, ActiveParticipants: participants}
 
 	hotkeyToStake := make(map[string]float64)
 	hotkeyToIsRegistered := make(map[string]bool)
@@ -108,60 +157,81 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
 
-	for _, axonInfo := range axonInfos {
+	for _, participant := range participants {
 		wg.Add(1)
-		go func(currAxonInfo AxonInfo) {
+		go func(currParticipant Participant) {
 			defer wg.Done()
-			if currAxonInfo.Hotkey == "" {
-				log.Trace().Msgf("AxonInfo empty hotkey, %+v", currAxonInfo)
+			if currParticipant.Hotkey == "" {
+				log.Trace().Msgf("AxonInfo empty hotkey, %+v", currParticipant)
 				return
 			}
-			stake, err := s.substrateService.TotalHotkeyStake(currAxonInfo.Hotkey)
+			stake, err := s.substrateService.TotalHotkeyStake(currParticipant.Hotkey)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting total hotkey stake")
 				return
 			}
 
-			isRegistered, err := s.substrateService.CheckIsRegistered(subnetId, currAxonInfo.Hotkey)
+			isRegistered, err := s.substrateService.CheckIsRegistered(subnetId, currParticipant.Hotkey)
 			if err != nil {
 				log.Error().Err(err).Msg("Error checking if hotkey is registered")
 				return
 			}
 
 			mutex.Lock()
-			hotkeyToStake[currAxonInfo.Hotkey] = stake
-			hotkeyToIsRegistered[currAxonInfo.Hotkey] = isRegistered
+			hotkeyToStake[currParticipant.Hotkey] = stake
+			hotkeyToIsRegistered[currParticipant.Hotkey] = isRegistered
 			mutex.Unlock()
-
-			if !isRegistered {
-				log.Warn().Msgf("Hotkey %s is not registered", currAxonInfo.Hotkey)
-				s.OnNonRegisteredFound(currAxonInfo.Hotkey)
-			}
-		}(axonInfo)
+		}(participant)
 	}
 	wg.Wait()
 
-	for _, axonInfo := range axonInfos {
-		if axonInfo.Hotkey == "" {
+	activeMinerHotkeys := make(map[int]string)
+	activeValidatorHotkeys := make(map[int]string)
+	// here we only consider active participants
+	for _, participant := range participants {
+		hotkey := participant.Hotkey
+		if hotkey == "" {
+			continue
+		}
+		isRegistered := hotkeyToIsRegistered[participant.Hotkey]
+		if !isRegistered {
+			log.Warn().Msgf("Hotkey %s is not registered", hotkey)
 			continue
 		}
 
-		stake := hotkeyToStake[axonInfo.Hotkey]
+		stake := hotkeyToStake[participant.Hotkey]
 		if stake > float64(ValidatorMinStake) {
-			validatorHotkeys = append(validatorHotkeys, axonInfo.Hotkey)
+			activeValidatorHotkeys[participant.Uid] = participant.Hotkey
 		} else {
-			minerHotkeys = append(minerHotkeys, axonInfo.Hotkey)
+			activeMinerHotkeys[participant.Uid] = participant.Hotkey
 		}
 	}
 
-	subnetState.ActiveValidatorHotkeys = validatorHotkeys
-	subnetState.ActiveMinerHotkeys = minerHotkeys
+	// handle deregistrations
+	for hotkey, isRegistered := range hotkeyToIsRegistered {
+		if !isRegistered {
+			s.OnNonRegisteredFound(hotkey)
+		} else {
+			s.OnRegisteredFound(hotkey)
+		}
+	}
+
+	subnetState.ActiveValidatorHotkeys = activeValidatorHotkeys
+	subnetState.ActiveMinerHotkeys = activeMinerHotkeys
+
 	return &subnetState
 }
 
+func (s *SubnetStateSubscriber) IsInitialised() bool {
+	return s.initialised
+}
+
 func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
-	ticker := time.NewTicker(69 * BlockTimeInSeconds * time.Second)
+	ticker := time.NewTicker(5 * BlockTimeInSeconds * time.Second)
+	s.mutex.Lock()
 	s.SubnetState = s.GetSubnetState(subnetId)
+	s.initialised = true
+	s.mutex.Unlock()
 
 	prettySubnetState, err := json.MarshalIndent(s.SubnetState, "", "  ")
 	if err != nil {
@@ -173,16 +243,28 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 
 	go func() {
 		for range ticker.C {
+			s.mutex.Lock()
 			s.SubnetState = s.GetSubnetState(subnetId)
+			s.mutex.Unlock()
 		}
 	}()
 	return nil
 }
 
 func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) {
-	for i, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
+	for uid, mhotkey := range s.SubnetState.ActiveMinerHotkeys {
 		if hotkey == mhotkey {
-			return i, true
+			return uid, true
+		}
+	}
+	return -1, false
+}
+
+func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
+	// TODO fix why validator hotkey changes so quickly, should be a bug
+	for uid, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
+		if hotkey == vhotkey {
+			return uid, true
 		}
 	}
 	return -1, false

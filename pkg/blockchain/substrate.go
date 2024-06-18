@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
 
@@ -48,8 +49,12 @@ type AxonInfo struct {
 
 	// additional fields we need, to store it in a more organized manner
 	IpAddress string `json:"ipAddress"`
-	Hotkey    string `json:"hotkey"`
-	Uid       int    `json:"uid"`
+}
+
+type Participant struct {
+	Axon   AxonInfo `json:"axon"`
+	Hotkey string   `json:"hotkey"`
+	Uid    int      `json:"uid"`
 }
 
 func NewSubstrateService() *SubstrateService {
@@ -160,14 +165,15 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	return &axonInfoValue, nil
 }
 
-func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
+// TODO think about this, this is dependent on axons being served
+func (s *SubstrateService) GetAllParticipants(subnetId int) ([]Participant, error) {
 	maxUid, err := s.GetMaxUID(subnetId)
 	if err != nil {
 		return nil, err
 	}
 
-	var allAxonInfos []AxonInfo = make([]AxonInfo, 0)
-	axonInfoChan := make(chan AxonInfo)
+	var allParticipants []Participant = make([]Participant, 0)
+	participantChan := make(chan Participant)
 	go func() {
 		wg := sync.WaitGroup{}
 		for uid := 0; uid < maxUid; uid++ {
@@ -175,38 +181,41 @@ func (s *SubstrateService) GetAllAxons(subnetId int) ([]AxonInfo, error) {
 			go func(neuronUid int) {
 				defer wg.Done()
 
-				currAxonInfo := AxonInfo{}
+				currParticipant := Participant{}
 				hotkey, err := s.GetHotkeyByUid(subnetId, neuronUid)
 				if err != nil {
 					log.Error().Err(err).Msgf("Error getting hotkey for uid %d", neuronUid)
 					return
 				}
 				axonInfo, _ := s.GetAxonInfo(subnetId, hotkey)
-				// no axon info so avoid putting it onto the channel
-				if axonInfo == nil {
-					return
+				// if axon is served we will store the data for the participant
+				if axonInfo != nil {
+					currParticipant.Axon = *axonInfo
 				}
-				currAxonInfo = *axonInfo
-				currAxonInfo.Hotkey = hotkey
-				currAxonInfo.Uid = neuronUid
+				currParticipant.Hotkey = hotkey
+				currParticipant.Uid = neuronUid
 
 				// place it in the channel
-				axonInfoChan <- currAxonInfo
+				participantChan <- currParticipant
 			}(uid)
 		}
 		wg.Wait()
-		close(axonInfoChan)
+		close(participantChan)
 	}()
 
-	for axonInfo := range axonInfoChan {
-		ipAddress := utils.IpDecimalToDotted(axonInfo.IpDecimal)
-		if ipAddress != "" {
-			axonInfo.IpAddress = ipAddress
+	for participant := range participantChan {
+		if participant.Axon != (AxonInfo{}) {
+			ipAddress := utils.IpDecimalToDotted(participant.Axon.IpDecimal)
+			if ipAddress != "" {
+				participant.Axon.IpAddress = ipAddress
+			}
+		} else {
+			log.Debug().Msgf("Axon info for uid %d is empty, skipping", participant.Uid)
 		}
-		log.Debug().Msgf("Axon info for uid %d: %+v", axonInfo.Uid, axonInfo)
-		allAxonInfos = append(allAxonInfos, axonInfo)
+		log.Debug().Msgf("Axon info for uid %d: %+v", participant.Uid, participant)
+		allParticipants = append(allParticipants, participant)
 	}
-	return allAxonInfos, nil
+	return allParticipants, nil
 }
 
 func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool, error) {
@@ -311,4 +320,126 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 		return nil, err
 	}
 	return &runtimeSpec, nil
+}
+
+type BlockErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Stack   string `json:"stack"`
+	Level   string `json:"level"`
+}
+
+type BlockResponse struct {
+	Number         string `json:"number"`
+	Hash           string `json:"hash"`
+	ParentHash     string `json:"parentHash"`
+	StateRoot      string `json:"stateRoot"`
+	ExtrinsicsRoot string `json:"extrinsicsRoot"`
+	Logs           []struct {
+		Type  string   `json:"type"`
+		Index string   `json:"index"`
+		Value []string `json:"value"`
+	} `json:"logs"`
+	OnFinalize struct {
+		Events []interface{} `json:"events"`
+	} `json:"onFinalize"`
+	Finalized bool `json:"finalized"`
+}
+
+func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
+	log.Info().Msgf("Fetching block with ID: %d", blockId)
+	path := fmt.Sprintf("http://%s/blocks/%d", s.substrateApiUrl, blockId)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to create request for block ID: %d", blockId)
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to fetch block ID: %d", blockId)
+		return nil, err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to read response body for block ID: %d", blockId)
+		return nil, err
+	}
+
+	var block BlockResponse
+	err = json.Unmarshal(body, &block)
+	if err != nil || reflect.DeepEqual(block, BlockResponse{}) {
+		log.Error().Err(err).Msgf("Failed to unmarshal block response for block ID: %d, trying to unmarshal block error response", blockId)
+		var blockError BlockErrorResponse
+		err = json.Unmarshal(body, &blockError)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to unmarshal block error response for block ID: %d", blockId)
+			return nil, err
+		}
+		return nil, fmt.Errorf("block error message: %s, stack: %s", blockError.Message, blockError.Stack)
+	}
+
+	log.Info().Msgf("Successfully fetched block with ID: %d, data: %v", blockId, block)
+	return &block, nil
+}
+
+// Use binary search to get the latest block since substrate API's
+func (s *SubstrateService) GetLatestUnFinalizedBlock(low int) (*BlockResponse, error) {
+	// try to get latest block, assume an initial block that's way too large
+	const blocksPeryear = (24 * 3600 * 360) / 12
+	high := low + blocksPeryear
+	log.Info().Msgf("Searching for the latest block between %d and %d", low, high)
+	var latestBlock *BlockResponse
+	for low <= high {
+		mid := (low + high) / 2
+		block, err := s.getBlockById(mid)
+		if err != nil {
+			log.Warn().Msgf("Block ID: %d not found, adjusting search range", mid)
+			high = mid - 1
+		} else {
+			log.Info().Msgf("Block ID: %d found, updating latest block and adjusting search range", mid)
+			latestBlock = block
+			low = mid + 1
+		}
+	}
+
+	if latestBlock != nil {
+		log.Info().Msgf("Latest block number: %+v", latestBlock.Number)
+		return latestBlock, nil
+	}
+
+	log.Error().Msg("Failed to find the latest block")
+	return nil, fmt.Errorf("failed to find the latest block")
+}
+
+func (s *SubstrateService) GetLatestFinalizedBlock() (*BlockResponse, error) {
+	path := fmt.Sprintf("http://%s/blocks/head", s.substrateApiUrl)
+
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create new HTTP request")
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to execute HTTP request")
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read response body")
+		return nil, err
+	}
+
+	var block BlockResponse
+	err = json.Unmarshal(body, &block)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal response body into BlockResponse")
+		return nil, err
+	}
+
+	log.Info().Msgf("Successfully fetched latest finalized block: %+v", block)
+	return &block, nil
 }

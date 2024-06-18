@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,21 +12,30 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/securecookie"
+	"github.com/redis/rueidis"
+	"github.com/spruceid/siwe-go"
+
+	"dojo-api/pkg/auth"
 	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/blockchain/siws"
+	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
+	"dojo-api/pkg/worker"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // AuthMiddleware checks if the request is authenticated
 func WorkerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Info().Msg("Authenticating token")
+
 		jwtSecret := os.Getenv("JWT_SECRET")
 		token := c.GetHeader("Authorization")
 		if token == "" {
@@ -62,42 +73,31 @@ func WorkerAuthMiddleware() gin.HandlerFunc {
 
 func WorkerLoginMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var requestMap map[string]string
-		if err := c.BindJSON(&requestMap); err != nil {
+		var requestBody worker.WorkerLoginRequest
+		if err := c.BindJSON(&requestBody); err != nil {
 			log.Error().Err(err).Msg("Invalid request body")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
 			c.Abort()
 			return
 		}
-		walletAddress, walletExists := requestMap["walletAddress"]
-		chainId, chainIdExists := requestMap["chainId"]
-		signature, signatureExists := requestMap["signature"]
-		message, messageExists := requestMap["message"]
 
-		if !walletExists {
-			log.Error().Msg("walletAddress is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("walletAddress is required"))
+		walletAddress := requestBody.WalletAddress
+		chainId := requestBody.ChainId
+		signature := requestBody.Signature
+		message := requestBody.Message
+		timestamp := requestBody.Timestamp
+
+		timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			log.Error().Err(err).Msg("Invalid timestamp format")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid timestamp format"))
 			c.Abort()
 			return
 		}
 
-		if !chainIdExists {
-			log.Error().Msg("chainId is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("chainId is required"))
-			c.Abort()
-			return
-		}
-
-		if !messageExists {
-			log.Error().Msg("message is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("message is required"))
-			c.Abort()
-			return
-		}
-
-		if !signatureExists {
-			log.Error().Msg("signature is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("signature is required"))
+		if !isTimestampValid(timestampInt) {
+			log.Error().Msg("Timestamp is invalid or expired")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("Bad request"))
 			c.Abort()
 			return
 		}
@@ -142,8 +142,48 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 	}
 }
 
-// login middleware for network user
+// login middleware for miner user
 func MinerLoginMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var loginRequest auth.MinerLoginRequest
+		if err := c.BindJSON(&loginRequest); err != nil {
+			log.Error().Err(err).Msg("Invalid request body")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
+			c.Abort()
+			return
+		}
+
+		isVerified, err := siws.SS58VerifySignature(loginRequest.Message, loginRequest.Hotkey, loginRequest.Signature)
+		if err != nil {
+			log.Error().Err(err).Msg("Error verifying signature")
+			println(loginRequest.Message, loginRequest.Signature, loginRequest.Hotkey)
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("error verifying signature"))
+			c.Abort()
+			return
+		}
+
+		if !isVerified {
+			log.Error().Msg("Invalid signature")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("invalid signature"))
+			c.Abort()
+			return
+		}
+
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(loginRequest.Hotkey)
+		if !found {
+			log.Error().Msg("Hotkey is not registered")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
+			c.Abort()
+			return
+		}
+
+		c.Set("loginRequest", loginRequest)
+		c.Next()
+	}
+}
+
+func MinerVerificationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var requestMap map[string]string
 		if err := c.BindJSON(&requestMap); err != nil {
@@ -153,52 +193,31 @@ func MinerLoginMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		coldkey, coldkeyExists := requestMap["coldkey"]
-		if !coldkeyExists {
-			log.Error().Msg("coldkey is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("coldkey is required"))
-			c.Abort()
-			return
-		}
-
-		hotkey, hotkeyExists := requestMap["hotkey"]
-		if !hotkeyExists {
+		hotkey, ok := requestMap["hotkey"]
+		if !ok {
 			log.Error().Msg("hotkey is required")
 			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
 			c.Abort()
 			return
 		}
 
-		subnetSubscriber := blockchain.NewSubnetStateSubscriber()
-		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
-		var verified bool
-		var apiKey string
-		var expiry time.Time
-		if found {
-			verified = true
-			minerUserORM := orm.NewMinerUserORM()
-			minerUser, err := minerUserORM.GetUserByAPIKey(hotkey)
-			if err != nil || minerUser == nil || minerUser.APIKeyExpireAt.Before(time.Now()) {
-				apiKey, expiry, err = generateRandomApiKey()
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to generate random API key")
-					c.JSON(http.StatusInternalServerError, defaultErrorResponse("failed to generate random API key"))
-					c.Abort()
-					return
-				}
-			} else {
-				apiKey = minerUser.APIKey
-				expiry = minerUser.APIKeyExpireAt
-			}
-		} else {
-			verified, apiKey, expiry = false, "", time.Time{}
+		if _, ok := requestMap["email"]; !ok {
+			log.Error().Msg("email is required")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("email is required"))
+			c.Abort()
+			return
 		}
 
-		c.Set("verified", verified)
-		c.Set("hotkey", hotkey)
-		c.Set("coldkey", coldkey)
-		c.Set("apiKey", apiKey)
-		c.Set("expiry", expiry)
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
+		if !found {
+			log.Error().Msg("Hotkey is not registered")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
+			c.Abort()
+			return
+		}
+
+		c.Set("requestMap", requestMap)
 		c.Next()
 	}
 }
@@ -249,47 +268,52 @@ func verifyEthereumAddress(address string) (bool, error) {
 	return true, nil
 }
 
-func verifySignature(walletAddress, message, signatureHex string) (bool, error) {
-	// Remove the 0x prefix if present
-	signatureHex = strings.TrimPrefix(signatureHex, "0x")
-
-	// Decode the hex-encoded signature
-	signatureBytes, err := hex.DecodeString(signatureHex)
+func verifySignature(walletAddress string, message string, signatureHex string) (bool, error) {
+	messageDomain, err := siwe.ParseMessage(message)
 	if err != nil {
-		log.Error().Err(err).Str("signatureHex", signatureHex).Msg("Failed to decode signature")
-		return false, fmt.Errorf("failed to decode signature: %v", err)
+		log.Error().Err(err).Msg("Failed to parse SIWE message")
+		return false, fmt.Errorf("failed to parse SIWE message: %v", err)
 	}
+	log.Info().Str("SIWE Message", messageDomain.String()).Msg("SIWE message parsed successfully")
 
-	// Adjust the V value in the signature (last byte) to be 0 or 1
-	if signatureBytes[64] >= 27 {
-		signatureBytes[64] -= 27
-	}
-
-	// Hash the message to get the message digest as expected by SigToPub
-	msgHash := crypto.Keccak256Hash([]byte(message))
-
-	// Recover the public key from the signature
-	pubKey, err := crypto.SigToPub(msgHash.Bytes(), signatureBytes)
+	cache := cache.GetCacheInstance()
+	addressNonce, err := cache.Get(walletAddress)
 	if err != nil {
-		log.Error().Err(err).Str("messageHash", msgHash.Hex()).Msg("Failed to recover public key")
-		return false, fmt.Errorf("failed to recover public key: %v", err)
+		log.Error().Str("walletAddress", walletAddress).Err(err).Msg("Failed to retrieve nonce from cache")
+		return false, fmt.Errorf("failed to retrieve nonce from cache: %v", err)
 	}
 
-	// Convert the recovered public key to an Ethereum address
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
+	nonceFromMessage := messageDomain.GetNonce()
+	if nonceFromMessage != addressNonce {
+		log.Error().Str("cachedNonce", addressNonce).Str("messageNonce", nonceFromMessage).Msg("Nonce mismatch")
+		return false, fmt.Errorf("nonce mismatch: expected %s, got %s", addressNonce, nonceFromMessage)
+	}
 
-	// Compare the recovered address with the wallet address
+	verifiedPublicKey, err := messageDomain.Verify(signatureHex, nil, nil, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify signature with SIWE")
+		return false, fmt.Errorf("failed to verify signature with SIWE: %v", err)
+	}
+
+	if verifiedPublicKey == nil {
+		log.Error().Msg("Signature verification failed")
+		return false, fmt.Errorf("signature verification failed")
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*verifiedPublicKey).Hex()
 	if !strings.EqualFold(recoveredAddr, walletAddress) {
 		log.Error().Str("recoveredAddress", recoveredAddr).Str("walletAddress", walletAddress).Msg("Recovered address does not match wallet address")
-		return false, fmt.Errorf("recovered address %s does not match wallet address %s", recoveredAddr, walletAddress)
+		return false, fmt.Errorf("recovered address does not match wallet address")
 	}
-
-	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully")
+	log.Info().Str("walletAddress", walletAddress).Msg("Signature verified successfully with SIWE")
 	return true, nil
 }
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		log.Info().Msg("Authenticating miner user")
+
 		apiKey := c.GetHeader("X-API-KEY")
 		if apiKey == "" {
 			log.Error().Msg("API key is required")
@@ -297,31 +321,115 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		minerUserORM := orm.NewMinerUserORM()
-		user, err := minerUserORM.GetUserByAPIKey(apiKey)
-		if err != nil {
+		foundApiKey, err := orm.NewApiKeyORM().GetByApiKey(apiKey)
+		if err != nil || foundApiKey == nil {
 			log.Error().Err(err).Msg("Failed to retrieve user by API key")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to retrieve user by API key"))
 			c.Abort()
 			return
 		}
 
-		if user.APIKeyExpireAt.Before(time.Now()) {
-			log.Error().Msg("API key has expired")
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("API key has expired"))
-			c.Abort()
+		if foundApiKey.IsDelete {
+			log.Error().Msg("API key has been disabled")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Invalid API Key"))
 			return
 		}
-		c.Set("user", user)
+
+		subnetState := blockchain.GetSubnetStateSubscriberInstance()
+		_, isFound := subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
+		if !isFound {
+			log.Error().Msg("Miner hotkey is deregistered")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		c.Set("minerUser", foundApiKey.MinerUser())
+		log.Info().Msg("Miner user authenticated successfully")
+
 		c.Next()
 	}
 }
 
 func generateRandomApiKey() (string, time.Time, error) {
-	apiKey, err := uuid.NewRandom()
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to generate UUID: %v", err)
+		log.Error().Stack().Err(err).Msg("Error generating random bytes")
+		return "", time.Time{}, err
 	}
-	expiry := time.Now().Add(24 * time.Hour)
-	return apiKey.String(), expiry, nil
+	key := hex.EncodeToString(b)
+	key = "sk-" + key
+
+	expiry := time.Now().Add(time.Hour * 24)
+	return key, expiry, nil
+}
+
+func isTimestampValid(requestTimestamp int64) bool {
+	const tolerance = 15 * 60 // 15 minutes in seconds
+	currentTime := time.Now().Unix()
+	return requestTimestamp <= currentTime && currentTime-requestTimestamp <= tolerance
+}
+
+func MinerCookieAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cookie, err := c.Cookie(auth.CookieName)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to retrieve named cookie %v", auth.CookieName)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		cache := cache.GetCacheInstance()
+		result := cache.Redis.Do(
+			c.Request.Context(),
+			cache.Redis.B().JsonGet().Key(cookie).Build(),
+		)
+		if result.Error() != nil {
+			if rueidis.IsRedisNil(result.Error()) {
+				log.Error().Err(result.Error()).Msg("Cookie not found in cache")
+				c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+				return
+			}
+			log.Error().Err(result.Error()).Msg("Failed to retrieve cookie from cache")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		redisBytes, err := result.AsBytes()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to convert result to bytes")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		var session auth.SecureCookieSession
+		if err := json.Unmarshal(redisBytes, &session); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal redis data from JSON")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		blockKey := session.BlockKey
+		hashKey := session.HashKey
+		// reconstruct secure cookie
+		s := securecookie.New(hashKey, blockKey)
+		var cookieData auth.CookieData
+		if err = s.Decode(auth.CookieName, cookie, &cookieData); err != nil {
+			log.Error().Err(err).Msg("Failed to decode cookie")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		if session.CookieData.Hotkey != cookieData.Hotkey || session.CookieData.SessionId != cookieData.SessionId {
+			log.Error().Str("expectedHotkey", session.CookieData.Hotkey).Str("actualHotkey", cookieData.Hotkey).
+				Str("expectedSessionId", session.CookieData.SessionId).Str("actualSessionId", cookieData.SessionId).
+				Msg("Cookie data mismatch")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+			return
+		}
+
+		log.Info().Msgf("Cookie validated successfully for hotkey %v, session id %v", session.Hotkey, session.SessionId)
+		c.Set("session", session)
+		c.Next()
+	}
 }
