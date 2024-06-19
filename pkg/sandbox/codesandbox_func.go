@@ -20,8 +20,7 @@ type Response struct {
 func getRequest(body map[string]interface{}) (Response, error) {
 	var response Response
 	url := "https://codesandbox.io/api/v1/sandboxes/define?json=1"
-	// only use this to create devboxes, but we want to create sandboxes. https://codesandbox.io/docs/learn/devboxes/your-first-sandbox#programmatically-creating-devboxes
-	// body["environment"] = "server"
+	body["environment"] = "server"
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		response.Error = "Error marshalling JSON"
