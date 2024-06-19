@@ -3,10 +3,12 @@ package sandbox
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
 	"errors"
-	"github.com/rs/zerolog/log"
 	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Response struct {
@@ -86,9 +88,9 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 			return response, errors.New("files object has no language key")
 		}
 
-		if language == "javascript" {
+		if strings.ToLower(language.(string)) == "javascript" {
 			javascript = true
-		} else if language == "python" {
+		} else if strings.ToLower(language.(string)) == "python" {
 			python = true
 		}
 	}
