@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/playwright-community/playwright-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,11 +20,61 @@ type Response struct {
 	Url        string `json:"-"`
 }
 
+var (
+	pwBrowser playwright.Browser
+	once      sync.Once
+)
+
+func GetBrowser() playwright.Browser {
+	once.Do(func() {
+		pw, err := playwright.Run()
+		if err != nil {
+			log.Fatal().Err(err).Msg("could not start playwright")
+		}
+		chrome, err := pw.Chromium.Launch(
+			playwright.BrowserTypeLaunchOptions{
+				Headless: playwright.Bool(true),
+			},
+		)
+		if err != nil {
+			log.Fatal().Err(err).Msgf("could not launch browser")
+		}
+		pwBrowser = chrome
+	})
+	return pwBrowser
+}
+
+func activateSandbox(sandboxId string) {
+	browser := GetBrowser()
+	if browser == nil {
+		log.Error().Msg("Error getting browser")
+		return
+	}
+	browserContext, err := browser.NewContext(
+		playwright.BrowserNewContextOptions{},
+	)
+	if err != nil {
+		log.Fatal().Msgf("could not start playwright: %v", err)
+	}
+	page, err := browserContext.NewPage()
+	if err != nil {
+		log.Fatal().Msgf("could not create page: %v", err)
+	}
+	page.SetViewportSize(1920, 1080)
+	_, err = page.Goto(fmt.Sprintf("https://codesandbox.io/p/redirect-to-project-editor/%s", sandboxId))
+	if err != nil {
+		log.Fatal().Msgf("could not goto: %v", err)
+	}
+	time.Sleep(20 * time.Second)
+	if err = browserContext.Close(); err != nil {
+		log.Fatal().Msgf("could not close browser: %v", err)
+	}
+}
+
 func getRequest(body map[string]interface{}) (Response, error) {
 	var response Response
 	url := "https://codesandbox.io/api/v1/sandboxes/define?json=1"
-	// only use this to create devboxes, but we want to create sandboxes. https://codesandbox.io/docs/learn/devboxes/your-first-sandbox#programmatically-creating-devboxes
-	// body["environment"] = "server"
+	body["environment"] = "server"
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		response.Error = "Error marshalling JSON"
@@ -121,6 +174,8 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 		log.Error().Msg("Error getting request")
 		return response, err
 	}
+
+	go activateSandbox(response.Sandbox_id)
 
 	if javascript {
 		response.Url = "https://" + response.Sandbox_id + ".csb.app/"
