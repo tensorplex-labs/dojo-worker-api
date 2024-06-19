@@ -26,11 +26,25 @@ func getRequest(body map[string]interface{}) (Response, error) {
 		return Response{Error: "Invalid files format in body"}, errors.New("invalid files format in body")
 	}
 
-	// purposely choose a random small package, ~2kB
+	// use javascript template
 	files["package.json"] = map[string]interface{}{
 		"content": map[string]interface{}{
-			"dependencies": map[string]interface{}{
-				"is-typedarray": "1.0.0",
+			"name":        "javascript",
+			"version":     "1.0.0",
+			"description": "The JavaScript template",
+			// jank as fuck but works now
+			"scripts": map[string]interface{}{
+				"start": "parcel ./index.html",
+				"build": "parcel build ./index.html",
+			},
+			"devDependencies": map[string]interface{}{
+				"parcel":       "^2.0.0",
+				"babel-eslint": "^10.1.0",
+				"eslint":       "^7.2.0",
+			},
+			"keywords": []interface{}{
+				"css",
+				"javascript",
 			},
 		},
 	}
