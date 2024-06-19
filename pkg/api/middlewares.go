@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -311,7 +312,6 @@ func verifySignature(walletAddress string, message string, signatureHex string) 
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		log.Info().Msg("Authenticating miner user")
 
 		apiKey := c.GetHeader("X-API-KEY")
@@ -404,10 +404,21 @@ func MinerCookieAuthMiddleware() gin.HandlerFunc {
 
 		var session auth.SecureCookieSession
 		if err := json.Unmarshal(redisBytes, &session); err != nil {
-			log.Error().Err(err).Msg("Failed to unmarshal redis data from JSON")
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
-			return
+			var sessions []auth.SecureCookieSession
+			if err := json.Unmarshal(redisBytes, &sessions); err != nil {
+				log.Error().Err(err).Bytes("redisBytes", redisBytes).Msg("Failed to unmarshal redis data into list of sessions")
+			}
+			if len(sessions) == 1 {
+				session = sessions[0]
+			}
+
+			if reflect.DeepEqual(session, auth.SecureCookieSession{}) {
+				log.Error().Err(err).Bytes("redisBytes", redisBytes).Msg("Failed to unmarshal redis data from JSON")
+				c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+				return
+			}
 		}
+		log.Info().Msgf("Cookie validated successfully for hotkey %v, session id %v", session.Hotkey, session.SessionId)
 
 		blockKey := session.BlockKey
 		hashKey := session.HashKey
