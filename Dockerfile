@@ -9,6 +9,7 @@ RUN go mod download
 COPY . .
 
 RUN go run github.com/steebchen/prisma-client-go generate
+RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps
 
 ARG PLATFORM=linux
 ARG ARCH=amd64
