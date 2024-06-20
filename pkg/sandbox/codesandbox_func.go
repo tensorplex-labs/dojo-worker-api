@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"math/rand"
 	"time"
 
 	"github.com/playwright-community/playwright-go"
@@ -105,8 +106,10 @@ func getRequest(body map[string]interface{}) (Response, error) {
 
 		if resp.StatusCode == http.StatusInternalServerError {
 			if i < maxRetries-1 {
-				log.Warn().Msgf("Request failed with status code 500. Retrying in %v...", retryDelay)
-				time.Sleep(retryDelay)
+				jitter := time.Duration(rand.Float64())
+				delay := retryDelay + jitter
+				log.Warn().Msgf("Request failed with status code 500. Retrying in %v...", delay)
+				time.Sleep(delay)
 				continue
 			} else {
 				response.Error = "Internal Server Error"

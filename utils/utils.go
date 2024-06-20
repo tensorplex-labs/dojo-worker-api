@@ -53,7 +53,7 @@ func init() {
 
 	err = playwright.Install(
 		&playwright.RunOptions{
-			Browsers: []string{"chromium"},
+			Browsers: []string{"firefox"},
 		},
 	)
 	if err != nil {
