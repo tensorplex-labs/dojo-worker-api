@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"math/rand"
 	"time"
 
 	"github.com/playwright-community/playwright-go"
@@ -31,7 +32,7 @@ func GetBrowser() playwright.Browser {
 		if err != nil {
 			log.Fatal().Err(err).Msg("could not start playwright")
 		}
-		chrome, err := pw.Chromium.Launch(
+		firefox, err := pw.Firefox.Launch(
 			playwright.BrowserTypeLaunchOptions{
 				Headless: playwright.Bool(true),
 			},
@@ -39,7 +40,7 @@ func GetBrowser() playwright.Browser {
 		if err != nil {
 			log.Fatal().Err(err).Msgf("could not launch browser")
 		}
-		pwBrowser = chrome
+		pwBrowser = firefox
 	})
 	return pwBrowser
 }
@@ -91,18 +92,40 @@ func getRequest(body map[string]interface{}) (Response, error) {
 	// req.Header.Set(os.Getenv("CODESANDBOX_KEY"), os.Getenv("CODESANDBOX_KEY_VALUE"))
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		response.Error = "Error sending request"
-		return response, err
-	}
-	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		log.Error().Msgf("Failed to decode JSON response: %v", err)
-		response.Error = "Failed to decode JSON response"
-		return response, fmt.Errorf("failed to decode JSON response: %w", err)
+	maxRetries := 3
+	retryDelay := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			response.Error = "Error sending request"
+			return response, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusInternalServerError {
+			if i < maxRetries-1 {
+				jitter := time.Duration(rand.Float64())
+				delay := retryDelay + jitter
+				log.Warn().Msgf("Request failed with status code 500. Retrying in %v...", delay)
+				time.Sleep(delay)
+				continue
+			} else {
+				response.Error = "Internal Server Error"
+				return response, fmt.Errorf("server returned 500 status code after %d retries", maxRetries)
+			}
+		}
+
+		// Request was successful, break out of the retry loop
+		if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+			log.Error().Msgf("Failed to decode JSON response: %v", err)
+			response.Error = "Failed to decode JSON response"
+			return response, fmt.Errorf("failed to decode JSON response: %w", err)
+		}
+		break
 	}
+
 	return response, nil
 }
 
