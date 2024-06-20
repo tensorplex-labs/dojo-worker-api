@@ -1,5 +1,7 @@
 FROM golang:1.22 as builder
 
+RUN apt update -y && apt install -y build-essential xorg gnome-core libgtk-3-dev --no-install-recommends --yes
+
 WORKDIR /app
 
 COPY go.mod go.sum ./
