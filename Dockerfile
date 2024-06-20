@@ -1,7 +1,5 @@
 FROM golang:1.22 as builder
 
-RUN apt update -y && apt install -y build-essential xorg gnome-core libgtk-3-dev --no-install-recommends --yes
-
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -19,7 +17,16 @@ RUN CGO_ENABLED=0 GOARCH=${ARCH} GOOS=${PLATFORM} go build -a -installsuffix cgo
 
 FROM ubuntu:22.04
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    build-essential \
+    xorg \
+    gnome-core \
+    libgtk-3-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /dojo-api
 
