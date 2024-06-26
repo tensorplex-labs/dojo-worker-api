@@ -10,6 +10,7 @@ import (
 	"sync"
 	"math/rand"
 	"time"
+	"io"
 
 	"github.com/playwright-community/playwright-go"
 	"github.com/rs/zerolog/log"
@@ -104,6 +105,18 @@ func getRequest(body map[string]interface{}) (Response, error) {
 		}
 		defer resp.Body.Close()
 
+		// Read the response body
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Error().Msgf("Failed to read response body: %v", err)
+			response.Error = "Failed to read response body"
+			return response, fmt.Errorf("failed to read response body: %w", err)
+		}
+	
+		// Log the response payload
+		log.Info().Msgf("Response payload (attempt %d): %s", i+1, string(body))
+		log.Info().Msgf("Response status code: %d", resp.StatusCode)
+
 		if resp.StatusCode == http.StatusInternalServerError {
 			if i < maxRetries-1 {
 				jitter := time.Duration(rand.Float64())
@@ -197,6 +210,8 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 		log.Error().Msg("Error getting request")
 		return response, err
 	}
+	log.Info().Msgf("Sandbox ID: %s", response.Sandbox_id)
+	log.Info().Msgf("Sandbox error: %s", response.Error)
 
 	go activateSandbox(response.Sandbox_id)
 
