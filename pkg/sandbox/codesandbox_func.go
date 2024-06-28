@@ -131,7 +131,7 @@ func getRequest(body map[string]interface{}) (Response, error) {
 		}
 
 		// Request was successful, break out of the retry loop
-		if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(body)).Decode(&response); err != nil {
 			log.Error().Msgf("Failed to decode JSON response: %v", err)
 			response.Error = "Failed to decode JSON response"
 			return response, fmt.Errorf("failed to decode JSON response: %w", err)
