@@ -335,13 +335,18 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		subnetState := blockchain.GetSubnetStateSubscriberInstance()
-		_, isFound := subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
-		if !isFound {
-			log.Error().Msg("Miner hotkey is deregistered")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
-			return
-		}
+		/* TODO @dev re-enable after testnet is okay,
+		currently disable due to testnet registrations not being picked up
+		*/
+
+		// subnetState := blockchain.GetSubnetStateSubscriberInstance()
+		// _, isFound := subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
+
+		// if !isFound {
+		// 	log.Error().Msg("Miner hotkey is deregistered")
+		// 	c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		// 	return
+		// }
 
 		c.Set("minerUser", foundApiKey.MinerUser())
 		log.Info().Msg("Miner user authenticated successfully")
