@@ -180,7 +180,7 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 		response.Error = "Error getting files"
 		return response, errors.New("object has no files key")
 	}
-	javascript := false
+	standard_language := false
 	python := false
 	for _, file := range files {
 		file, ok := file.(map[string]interface{})
@@ -196,8 +196,8 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 			return response, errors.New("files object has no language key")
 		}
 
-		if strings.ToLower(language.(string)) == "javascript" {
-			javascript = true
+		if strings.EqualFold(language.(string), "javascript") || strings.EqualFold(language.(string), "html"){
+			standard_language = true
 		} else if strings.ToLower(language.(string)) == "python" {
 			python = true
 		}
@@ -215,7 +215,7 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 
 	go activateSandbox(response.Sandbox_id)
 
-	if javascript {
+	if standard_language {
 		response.Url = "https://" + response.Sandbox_id + ".csb.app/"
 	} else if python {
 		response.Url = "https://" + response.Sandbox_id + "-8888.csb.app/"
