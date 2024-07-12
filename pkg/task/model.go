@@ -65,7 +65,6 @@ type CreateTaskRequest struct {
 
 type TaskData struct {
 	Prompt    string          `json:"prompt"`
-	Dialogue  []Message       `json:"dialogue,omitempty"`
 	Responses []ModelResponse `json:"responses,omitempty"`
 	Task      db.TaskType     `json:"task"`
 	Criteria  []Criteria      `json:"criteria"`

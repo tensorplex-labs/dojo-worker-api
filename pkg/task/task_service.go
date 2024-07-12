@@ -399,49 +399,54 @@ func ValidateTaskData(taskData TaskData) error {
 		return err
 	}
 
-	if taskData.Task == db.TaskTypeDialogue {
-		if len(taskData.Dialogue) == 0 {
-			return errors.New("dialogue cannot be empty")
-		}
-	} else {
-		if taskData.Prompt == "" {
-			return errors.New("prompt is required")
-		}
+	if taskData.Prompt == "" {
+		return errors.New("prompt is required")
+	}
+
+	if len(taskData.Responses) == 0 {
+		return errors.New("responses shouldn't be empty")
 	}
 
 	task := taskData.Task
-	if task == db.TaskTypeTextToImage || task == db.TaskTypeCodeGeneration {
-		for _, taskresponse := range taskData.Responses {
-			if task == db.TaskTypeTextToImage {
-				if _, ok := taskresponse.Completion.(string); !ok {
-					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
-				}
-			} else if task == db.TaskTypeCodeGeneration {
-				if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
-					return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
-				}
+	for _, taskresponse := range taskData.Responses {
+		switch task{
+		case db.TaskTypeTextToImage :
+			if _, ok := taskresponse.Completion.(string); !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
+		case db.TaskTypeCodeGeneration :
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
 
-				files, ok := taskresponse.Completion.(map[string]interface{})["files"]
+			files, ok := taskresponse.Completion.(map[string]interface{})["files"]
+			if !ok {
+				return errors.New("files is required for code generation task")
+			}
+
+			if _, ok = files.([]interface{}); !ok {
+				return errors.New("files must be an array")
+			}
+		case db.TaskTypeDialogue:
+			messages, ok := taskresponse.Completion.([]interface{})
+			if !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
+		
+			for _, msg := range messages {
+				message, ok := msg.(map[string]interface{})
 				if !ok {
-					return errors.New("files is required for code generation task")
+					return fmt.Errorf("invalid message format: %v", msg)
 				}
-
-				if _, ok = files.([]interface{}); !ok {
-					return errors.New("files must be an array")
+		
+				if _, ok := message["role"].(string); !ok {
+					return errors.New("role is required for each message")
+				}
+		
+				if _, ok := message["message"].(string); !ok {
+					return errors.New("message is required for each message")
 				}
 			}
-		}
-
-		if len(taskData.Dialogue) != 0 {
-			return errors.New("dialogue should be empty for code generation and text to image tasks")
-		}
-	} else if task == db.TaskTypeDialogue {
-		if len(taskData.Responses) != 0 {
-			return errors.New("responses should be empty for dialogue task")
-		}
-
-		if len(taskData.Dialogue) == 0 {
-			return errors.New("dialogue is required for dialogue task")
 		}
 	}
 
