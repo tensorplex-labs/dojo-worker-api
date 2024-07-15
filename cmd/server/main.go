@@ -2,18 +2,19 @@ package main
 
 import (
 	"context"
-	_ "dojo-api/docs"
-	"dojo-api/pkg/api"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/utils"
-
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	_ "dojo-api/docs"
+	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -97,6 +98,8 @@ func onShutdown() {
 	connHandler.OnShutdown()
 	cache := cache.GetCacheInstance()
 	cache.Shutdown()
+	browser := sandbox.GetBrowser()
+	browser.Close()
 }
 
 func loadEnvVars() {
