@@ -55,6 +55,30 @@ definitions:
       numTaskResults:
         type: integer
     type: object
+  miner.MinerApiKeyDisableRequest:
+    properties:
+      apiKey:
+        type: string
+    type: object
+  miner.MinerApiKeysResponse:
+    properties:
+      apiKeys:
+        items:
+          type: string
+        type: array
+    type: object
+  miner.MinerSubscriptionDisableRequest:
+    properties:
+      subscriptionKey:
+        type: string
+    type: object
+  miner.MinerSubscriptionKeysResponse:
+    properties:
+      subscriptionKeys:
+        items:
+          type: string
+        type: array
+    type: object
   task.NextTaskResponse:
     properties:
       nextInProgressTaskId:
@@ -409,6 +433,204 @@ paths:
       summary: Get the total number of task results
       tags:
       - Metrics
+  /miner/api-keys:
+    post:
+      consumes:
+      - application/json
+      description: Generate a new API key associated with the miner's hotkey
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/miner.MinerApiKeysResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Generate a new API key for a miner
+      tags:
+      - Miner
+  /miner/api-keys/disable:
+    put:
+      consumes:
+      - application/json
+      description: Disable a specific API key associated with the miner's hotkey
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Disable API key request body
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/miner.MinerApiKeyDisableRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully disabled API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/miner.MinerApiKeysResponse'
+              type: object
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: API key not found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Disable an API key for a miner
+      tags:
+      - Miner
+  /miner/subscription-keys:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of subscription keys associated with the miner's hotkey
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved subscription keys
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/miner.MinerSubscriptionKeysResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Retrieve subscription keys for a miner
+      tags:
+      - Miner
+    post:
+      consumes:
+      - application/json
+      description: Generate a new subscription key associated with the miner's hotkey
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated subscription key
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/miner.MinerSubscriptionKeysResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Generate a new subscription key for a miner
+      tags:
+      - Miner
+  /miner/subscription-keys/disable:
+    put:
+      consumes:
+      - application/json
+      description: Disable a specific subscription key associated with the miner's
+        hotkey
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Disable subscription key request body
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/miner.MinerSubscriptionDisableRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully disabled subscription key
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.ApiResponse'
+            - properties:
+                body:
+                  $ref: '#/definitions/miner.MinerSubscriptionKeysResponse'
+              type: object
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "404":
+          description: Subscription key not found
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+      summary: Disable a subscription key for a miner
+      tags:
+      - Miner
   /next-in-progress-task/{task-id}:
     get:
       consumes:
