@@ -2,14 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-
 	"dojo-api/db"
 	"dojo-api/pkg/auth"
 	"dojo-api/pkg/blockchain/siws"
@@ -20,6 +12,13 @@ import (
 	"dojo-api/pkg/task"
 	"dojo-api/pkg/worker"
 	"dojo-api/utils"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"

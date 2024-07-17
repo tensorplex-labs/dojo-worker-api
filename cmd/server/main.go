@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,11 +15,6 @@ import (
 	"time"
 
 	_ "dojo-api/docs"
-	"dojo-api/pkg/api"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
-	"dojo-api/utils"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"

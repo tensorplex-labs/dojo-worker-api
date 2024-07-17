@@ -3,6 +3,12 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"dojo-api/pkg/auth"
+	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/blockchain/siws"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/worker"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,13 +21,6 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/redis/rueidis"
 	"github.com/spruceid/siwe-go"
-
-	"dojo-api/pkg/auth"
-	"dojo-api/pkg/blockchain"
-	"dojo-api/pkg/blockchain/siws"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/worker"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -311,7 +310,6 @@ func verifySignature(walletAddress string, message string, signatureHex string) 
 
 func MinerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		log.Info().Msg("Authenticating miner user")
 
 		apiKey := c.GetHeader("X-API-KEY")

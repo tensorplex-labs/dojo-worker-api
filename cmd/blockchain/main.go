@@ -1,12 +1,11 @@
 package main
 
 import (
+	"dojo-api/pkg/blockchain"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"dojo-api/pkg/blockchain"
 
 	"github.com/rs/zerolog/log"
 )

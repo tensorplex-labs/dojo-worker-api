@@ -1,0 +1,35 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1  # Use the latest stable version
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-merge-conflict
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: check-identities
+        require_serial: true
+        name: check-identities
+        entry: .githooks/check_identities.sh
+        # stages: [commit, push]
+        language: script
+
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        alias: linter
+        name: golangci-lint
+        entry: make lint
+        language: system
+        files: \.go$
+        stages: [commit, push]
