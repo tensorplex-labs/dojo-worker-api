@@ -2,7 +2,6 @@ package email
 
 import (
 	"crypto/tls"
-
 	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
