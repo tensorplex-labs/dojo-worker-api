@@ -31,4 +31,3 @@ stages:
 
 build-image:
   extends: .docker-build
-

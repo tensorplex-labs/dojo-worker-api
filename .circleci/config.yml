@@ -1,0 +1,55 @@
+version: 2.1
+
+executors:
+  go-executor:
+    docker:
+      - image: cimg/go:1.21.10
+        environment:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
+          DB_USERNAME: "postgres"
+          DB_PASSWORD: "postgres"
+          DB_HOST: "localhost"
+          DB_NAME: "subnet_db"
+      - image: cimg/postgres:14.0
+        environment:
+          POSTGRES_DB: subnet_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+    working_directory: ~/repo
+
+jobs:
+  lint:
+    executor: go-executor
+    steps:
+      - checkout
+      - run:
+          name: Install golangci-lint
+          command: |
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.59.1
+      - run:
+          name: Wait for Postgres to be available
+          command: |
+            for i in `seq 1 30`; do
+              nc -z localhost 5432 && echo Success && exit 0
+              echo -n .
+              sleep 1
+            done
+            echo Failed waiting for Postgres && exit 1
+      - run:
+          name: Tidy Go Modules
+          command: go mod tidy
+      - run:
+          name: Generate Prisma Client
+          command: go run github.com/steebchen/prisma-client-go generate
+      - run:
+          name: Push Prisma DB
+          command: go run github.com/steebchen/prisma-client-go db push
+      - run:
+          name: Run golangci-lint
+          command: golangci-lint run --fast --timeout 10m
+
+workflows:
+  version: 2
+  linting:
+    jobs:
+      - lint

@@ -29,7 +29,6 @@ func (orm *MetricsORM) GetMetricsDataByMetricType(ctx context.Context, metricTyp
 	metrics, err := orm.dbClient.Metrics.FindUnique(
 		db.Metrics.Type.Equals(metricType),
 	).Exec(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +43,6 @@ func (orm *MetricsORM) CreateNewMetric(ctx context.Context, metricType db.Metric
 	metrics, err := orm.dbClient.Metrics.FindUnique(
 		db.Metrics.Type.Equals(metricType),
 	).Exec(ctx)
-
 	if err != nil {
 		if db.IsErrNotFound(err) {
 			return orm.createMetric(ctx, metricType, data)
