@@ -17,10 +17,9 @@ jobs:
         image: postgres:14.0
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
-          DB_USERNAME: "postgres"
-          DB_PASSWORD: "postgres"
-          DB_HOST: "localhost"
-          DB_NAME: "subnet_db"
+          POSTGRES_DB: subnet_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
