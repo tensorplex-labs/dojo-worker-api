@@ -16,7 +16,6 @@ jobs:
       postgres:
         image: postgres:14.0
         env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
           POSTGRES_DB: subnet_db
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -54,9 +53,13 @@ jobs:
         run: go mod tidy
 
       - name: Generate Prisma Client
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
         run: go run github.com/steebchen/prisma-client-go generate
 
       - name: Push Prisma DB
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
         run: go run github.com/steebchen/prisma-client-go db push
 
       - name: Run golangci-lint
