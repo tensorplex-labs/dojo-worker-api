@@ -1,16 +1,15 @@
 name: Run Linter
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
+      - dev
+      - staging
       - main
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     services:
       postgres:
@@ -52,11 +51,6 @@ jobs:
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
         run: go run github.com/steebchen/prisma-client-go generate
-
-      - name: Push Prisma DB
-        env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
-        run: go run github.com/steebchen/prisma-client-go db push
 
       - name: Build cmd/server/main.go
         run: go build -v cmd/server/main.go
