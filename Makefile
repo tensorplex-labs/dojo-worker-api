@@ -8,7 +8,7 @@ run:
 	air cmd/server/main.go
 
 lint:
-	golangci-lint run --fast --timeout 3m --config .golangci.yaml
+	golangci-lint run --fast --timeout 3m --config .golangci.yml
 
 format:
 	gofumpt -w -l .

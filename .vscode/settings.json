@@ -1,13 +1,12 @@
 {
   "[go]": {
-    // "editor.formatOnSave": true,
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "always"
     }
   },
 
   "[go.mod]": {
-    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "always"
     }

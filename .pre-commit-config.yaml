@@ -21,7 +21,7 @@ repos:
         require_serial: true
         name: check-identities
         entry: .githooks/check_identities.sh
-        # stages: [commit, push]
+        stages: [commit, push]
         language: script
 
   - repo: local
