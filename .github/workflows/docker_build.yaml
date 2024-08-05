@@ -24,7 +24,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Branch name
-        id: get_branch
         run: |
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
           SANITIZED_BRANCH_NAME=${BRANCH_NAME//\//-}
