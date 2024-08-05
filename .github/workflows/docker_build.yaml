@@ -13,6 +13,9 @@ jobs:
   docker_publish:
     name: Docker Build
     runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
