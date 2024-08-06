@@ -37,6 +37,7 @@ enum TaskType {
     CODE_GENERATION
     DIALOGUE
     TEXT_TO_IMAGE
+    THREE_D_MODEL
 }
 
 model ApiKey {

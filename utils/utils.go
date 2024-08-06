@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"mime/multipart"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -201,12 +203,15 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	}
 	uploader := getS3Uploader(s3Client)
 
+	// Determine the content type
+	contentType := getContentType(file.Filename)
+
 	// Upload the file to S3
 	result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(file.Filename),
-		Body:   src,
-		// ContentType: aws.String(file.Header.Get("Content-Type")),
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(file.Filename),
+		Body:        src,
+		ContentType: aws.String(contentType),
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error uploading file")
@@ -214,4 +219,23 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	}
 
 	return result, nil
+}
+
+// Helper function to determine content type based on file extension
+func getContentType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".ply":
+		return "application/vnd.ply"
+	default:
+		return "application/octet-stream"
+	}
 }

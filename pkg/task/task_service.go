@@ -409,12 +409,12 @@ func ValidateTaskData(taskData TaskData) error {
 
 	task := taskData.Task
 	for _, taskresponse := range taskData.Responses {
-		switch task{
-		case db.TaskTypeTextToImage :
+		switch task {
+		case db.TaskTypeTextToImage:
 			if _, ok := taskresponse.Completion.(string); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
-		case db.TaskTypeCodeGeneration :
+		case db.TaskTypeCodeGeneration:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -432,17 +432,17 @@ func ValidateTaskData(taskData TaskData) error {
 			if !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
-		
+
 			for _, msg := range messages {
 				message, ok := msg.(map[string]interface{})
 				if !ok {
 					return fmt.Errorf("invalid message format: %v", msg)
 				}
-		
+
 				if _, ok := message["role"].(string); !ok {
 					return errors.New("role is required for each message")
 				}
-		
+
 				if _, ok := message["message"].(string); !ok {
 					return errors.New("message is required for each message")
 				}
@@ -637,7 +637,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
 	publicURL := utils.LoadDotEnv("S3_PUBLIC_URL")
 	for i, t := range requestBody.TaskData {
-		if t.Task == db.TaskTypeTextToImage {
+		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeThreeDModel {
 			for j, response := range t.Responses {
 				var fileHeader *multipart.FileHeader
 				// Find the file with the matching completion filename
