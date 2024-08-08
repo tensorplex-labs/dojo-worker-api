@@ -21,7 +21,6 @@ func NewMetricService() *MetricService {
 }
 
 func (metricService *MetricService) UpdateDojoWorkerCount(ctx context.Context) error {
-
 	workerORM := orm.NewDojoWorkerORM()
 	workerCounts, err := workerORM.GetDojoWorkers()
 	if err != nil {
@@ -38,7 +37,6 @@ func (metricService *MetricService) UpdateDojoWorkerCount(ctx context.Context) e
 }
 
 func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context) error {
-
 	taskORM := orm.NewTaskORM()
 	metricORM := orm.NewMetricsORM()
 
@@ -55,7 +53,6 @@ func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context
 }
 
 func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Context) error {
-
 	taskResultORM := orm.NewTaskResultORM()
 	metricORM := orm.NewMetricsORM()
 
@@ -72,7 +69,6 @@ func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Cont
 }
 
 func (metricService *MetricService) UpdateAvgTaskCompletionTime(ctx context.Context) error {
-
 	eventORM := orm.NewEventsORM()
 	metricORM := orm.NewMetricsORM()
 

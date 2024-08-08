@@ -383,7 +383,7 @@ func MinerLoginController(c *gin.Context) {
 	// c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
-func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (*db.MinerUserModel, error) {
+func handleNewMinerUser(hotkey string, emailAddress string, organisation string) (*db.MinerUserModel, error) { //nolint:unused
 	apiKey, expiry, err := generateRandomApiKey()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random api key")

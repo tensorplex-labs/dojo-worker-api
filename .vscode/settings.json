@@ -1,8 +1,23 @@
 {
-  "[go][go.mod]": {
-    "editor.defaultFormatter": "golang.go",
+  "[go]": {
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "always"
     }
   },
+
+  "[go.mod]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "always"
+    }
+  },
+  "go.formatTool": "gofumpt",
+  // gopls
+  "go.useLanguageServer": true,
+  "gopls": {
+    "formatting.gofumpt": true
+  },
+  // golangci-lint
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--fix"]
 }
