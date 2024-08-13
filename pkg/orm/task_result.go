@@ -2,11 +2,10 @@ package orm
 
 import (
 	"context"
+	"dojo-api/db"
 	"fmt"
 	"strconv"
 	"time"
-
-	"dojo-api/db"
 )
 
 type TaskResultORM struct {
@@ -71,7 +70,6 @@ func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskRes
 	).With(
 		db.TaskResult.Task.Fetch(),
 	).Exec(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +127,6 @@ func (t *TaskResultORM) GetCompletedTResultCount(ctx context.Context) (int, erro
 
 	query := "SELECT COUNT(*) as count FROM \"TaskResult\" WHERE status = 'COMPLETED';"
 	err := t.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
-
 	if err != nil {
 		return 0, err
 	}
@@ -140,7 +137,6 @@ func (t *TaskResultORM) GetCompletedTResultCount(ctx context.Context) (int, erro
 
 	taskResultCountStr := string(result[0].Count)
 	taskResultCountInt, err := strconv.Atoi(taskResultCountStr)
-
 	if err != nil {
 		return 0, err
 	}

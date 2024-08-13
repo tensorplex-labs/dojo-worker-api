@@ -2,16 +2,15 @@ package orm
 
 import (
 	"context"
+	"dojo-api/db"
+	"dojo-api/utils"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"sync"
-	"time"
-
-	"dojo-api/db"
-	"dojo-api/utils"
 	"sync/atomic"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -60,8 +59,10 @@ type ConnHandler struct {
 	mu             sync.Mutex
 }
 
-var connHandler *ConnHandler
-var once sync.Once
+var (
+	connHandler *ConnHandler
+	once        sync.Once
+)
 
 func GetConnHandler() *ConnHandler {
 	once.Do(func() {

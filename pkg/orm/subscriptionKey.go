@@ -63,7 +63,6 @@ func (a *SubscriptionKeyORM) CreateSubscriptionKeyByHotkey(hotkey string, subscr
 		),
 		db.SubscriptionKey.IsDelete.Set(false),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msgf("Error creating subscription key")
 		return nil, err
@@ -76,17 +75,16 @@ func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subsc
 	defer a.clientWrapper.AfterQuery()
 
 	ctx := context.Background()
-	disabledApiKey, err := a.dbClient.SubscriptionKey.FindUnique(
+	disabledAPIKey, err := a.dbClient.SubscriptionKey.FindUnique(
 		db.SubscriptionKey.Key.Equals(subscriptionKey),
 	).Update(
 		db.SubscriptionKey.IsDelete.Set(true),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msgf("Error disabling subscription key")
 		return nil, err
 	}
-	return disabledApiKey, nil
+	return disabledAPIKey, nil
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.SubscriptionKeyModel, error) {
@@ -100,7 +98,6 @@ func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.S
 	).With(
 		db.SubscriptionKey.MinerUser.Fetch(),
 	).Exec(ctx)
-
 	if err != nil {
 		if db.IsErrNotFound(err) {
 			log.Error().Err(err).Msgf("Subscription key not found")

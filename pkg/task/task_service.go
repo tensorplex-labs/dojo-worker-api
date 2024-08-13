@@ -2,6 +2,10 @@ package task
 
 import (
 	"context"
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,11 +14,6 @@ import (
 	"slices"
 	"strconv"
 	"time"
-
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
-	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -37,7 +36,6 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	taskORM := orm.NewTaskORM()
 
 	task, err := taskORM.GetById(ctx, id)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in getting task by Id")
 		return nil, err
@@ -389,6 +387,8 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 }
 
 // Validates a single task, reads the `type` field to determine different flows.
+//
+//nolint:gocyclo
 func ValidateTaskData(taskData TaskData) error {
 	if taskData.Task == "" {
 		return errors.New("task is required")
@@ -409,12 +409,12 @@ func ValidateTaskData(taskData TaskData) error {
 
 	task := taskData.Task
 	for _, taskresponse := range taskData.Responses {
-		switch task{
-		case db.TaskTypeTextToImage :
+		switch task {
+		case db.TaskTypeTextToImage:
 			if _, ok := taskresponse.Completion.(string); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
-		case db.TaskTypeCodeGeneration :
+		case db.TaskTypeCodeGeneration:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -432,17 +432,17 @@ func ValidateTaskData(taskData TaskData) error {
 			if !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
-		
+
 			for _, msg := range messages {
 				message, ok := msg.(map[string]interface{})
 				if !ok {
 					return fmt.Errorf("invalid message format: %v", msg)
 				}
-		
+
 				if _, ok := message["role"].(string); !ok {
 					return errors.New("role is required for each message")
 				}
-		
+
 				if _, ok := message["message"].(string); !ok {
 					return errors.New("message is required for each message")
 				}

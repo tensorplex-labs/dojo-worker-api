@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
-	"math/rand"
 	"time"
-	"io"
 
 	"github.com/playwright-community/playwright-go"
 	"github.com/rs/zerolog/log"
@@ -112,7 +112,7 @@ func getRequest(body map[string]interface{}) (Response, error) {
 			response.Error = "Failed to read response body"
 			return response, fmt.Errorf("failed to read response body: %w", err)
 		}
-	
+
 		// Log the response payload
 		log.Info().Msgf("Response payload (attempt %d): %s", i+1, string(body))
 		log.Info().Msgf("Response status code: %d", resp.StatusCode)
@@ -196,7 +196,7 @@ func GetCodesandbox(body map[string]interface{}) (Response, error) {
 			return response, errors.New("files object has no language key")
 		}
 
-		if strings.EqualFold(language.(string), "javascript") || strings.EqualFold(language.(string), "html"){
+		if strings.EqualFold(language.(string), "javascript") || strings.EqualFold(language.(string), "html") {
 			standard_language = true
 		} else if strings.ToLower(language.(string)) == "python" {
 			python = true
