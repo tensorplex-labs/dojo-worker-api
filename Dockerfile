@@ -34,7 +34,6 @@ FROM mcr.microsoft.com/playwright:v1.40.0-jammy
 WORKDIR /dojo-api
 
 COPY --from=builder /app/service .
-COPY --from=builder /app/.env .
 
 EXPOSE 8080
 
