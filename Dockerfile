@@ -33,8 +33,8 @@ FROM mcr.microsoft.com/playwright:v1.40.0-jammy
 
 WORKDIR /dojo-api
 
-COPY --from=builder /app/service .
+COPY --from=builder /app/service /app/entrypoint.sh .
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/dojo-api/entrypoint.sh"]
