@@ -38,4 +38,4 @@ COPY --from=builder /app/.env .
 
 EXPOSE 8080
 
-CMD ["./service"]
+ENTRYPOINT ["/app/entrypoint.sh"]
