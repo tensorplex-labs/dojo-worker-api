@@ -129,7 +129,7 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	AWS_REGION := LoadDotEnv("AWS_REGION")
+	AWS_REGION := os.Getenv("AWS_REGION")
 	if AWS_REGION == "" {
 		log.Warn().Msg("AWS_REGION not set. S3 functionality will be disabled.")
 		return nil, nil
@@ -189,7 +189,7 @@ func getS3Uploader(client *s3.Client) *manager.Uploader {
 
 func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	// Open the file
-	bucketName := LoadDotEnv("AWS_S3_BUCKET_NAME")
+	bucketName := os.Getenv("AWS_S3_BUCKET_NAME")
 	src, err := file.Open()
 	if err != nil {
 		return nil, err
