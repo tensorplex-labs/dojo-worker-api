@@ -38,8 +38,6 @@ func init() {
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
-		os.Getenv("AWS_ACCESS_KEY_ID")
-		os.Getenv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
@@ -48,8 +46,6 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
-	os.Getenv("AWS_S3_BUCKET_NAME")
-	os.Getenv("S3_PUBLIC_URL")
 
 	err = playwright.Install(
 		&playwright.RunOptions{
