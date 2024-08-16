@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"mime/multipart"
+	"os"
 	"slices"
 	"strconv"
 	"time"
@@ -635,7 +636,11 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 }
 
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
-	publicURL := utils.LoadDotEnv("S3_PUBLIC_URL")
+	publicURL := os.Getenv("S3_PUBLIC_URL")
+	if publicURL == "" {
+		log.Error().Msg("S3_PUBLIC_URL not set")
+		return CreateTaskRequest{}, errors.New("S3_PUBLIC_URL not set")
+	}
 	for i, t := range requestBody.TaskData {
 		if t.Task == db.TaskTypeTextToImage {
 			for j, response := range t.Responses {
