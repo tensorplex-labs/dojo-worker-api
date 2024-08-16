@@ -186,6 +186,10 @@ func getS3Uploader(client *s3.Client) *manager.Uploader {
 func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	// Open the file
 	bucketName := os.Getenv("AWS_S3_BUCKET_NAME")
+	if bucketName == "" {
+		log.Warn().Msg("AWS_S3_BUCKET_NAME not set. File upload skipped.")
+		return nil, nil
+	}
 	src, err := file.Open()
 	if err != nil {
 		return nil, err
