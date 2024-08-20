@@ -1,12 +1,11 @@
 package main
 
 import (
+	"dojo-api/pkg/blockchain"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"dojo-api/pkg/blockchain"
 
 	"github.com/rs/zerolog/log"
 )
@@ -26,7 +25,7 @@ func main() {
 	subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 
 	// Example usage of SubnetStateSubscriber
-	validatorHotkey := "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"
+	validatorHotkey := "***REMOVED***"
 	fmt.Println(subnetSubscriber.FindValidatorHotkeyIndex(validatorHotkey))
 
 	// Handling non-registered found case

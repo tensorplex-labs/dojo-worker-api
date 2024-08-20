@@ -2,8 +2,9 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -61,7 +62,6 @@ func (a *ApiKeyORM) CreateApiKeyByHotkey(hotkey string, apiKey string) (*db.APIK
 		),
 		db.APIKey.IsDelete.Set(false),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msgf("Error creating api key")
 		return nil, err
@@ -79,7 +79,6 @@ func (a *ApiKeyORM) DisableApiKeyByHotkey(hotkey string, apiKey string) (*db.API
 	).Update(
 		db.APIKey.IsDelete.Set(true),
 	).Exec(ctx)
-
 	if err != nil {
 		log.Error().Err(err).Msgf("Error disabling api key")
 		return nil, err
@@ -98,7 +97,6 @@ func (a *ApiKeyORM) GetByApiKey(apiKey string) (*db.APIKeyModel, error) {
 	).With(
 		db.APIKey.MinerUser.Fetch(),
 	).Exec(ctx)
-
 	if err != nil {
 		if db.IsErrNotFound(err) {
 			log.Error().Err(err).Msgf("API key not found")

@@ -2,11 +2,10 @@ package orm
 
 import (
 	"context"
+	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
-
-	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -62,7 +61,6 @@ func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
 
 	query := "SELECT COUNT(*) as count FROM \"DojoWorker\";"
 	err := s.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &result)
-
 	if err != nil {
 		return 0, err
 	}
@@ -73,7 +71,6 @@ func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
 
 	workerCountStr := string(result[0].Count)
 	workerCountInt, err := strconv.Atoi(workerCountStr)
-
 	if err != nil {
 		return 0, err
 	}

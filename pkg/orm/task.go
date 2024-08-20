@@ -2,13 +2,12 @@ package orm
 
 import (
 	"context"
+	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
-
-	"dojo-api/db"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -138,6 +137,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 		if !strings.HasPrefix(key, "sk-") || len(key[3:]) != 32 {
 			continue
 		}
+		// nolint:staticcheck
 		validSubscriptionKeys = append(validSubscriptionKeys, key)
 	}
 

@@ -28,7 +28,6 @@ func sshash(key []byte) []byte {
 
 // replicated from polkadot's util-crypto
 func checkAddressChecksum(decoded []byte) (bool, int, int, int) {
-
 	ss58Length := 1
 	if decoded[0]&0b0100_0000 != 0 {
 		ss58Length = 2
@@ -117,6 +116,8 @@ func SS58VerifySignature(siwsMessage, ss58address, signatureFromFrontend string)
 }
 
 // UNUSED for now, can't remember which was working
+//
+//lint:ignore U1000 Ignore unused function warning
 func publicKeyToPolkadotAddress(pubKeyBytes []byte, networkPrefix int) (string, error) {
 	// Prepend the network prefix
 	prefixedKey := append([]byte{byte(networkPrefix)}, pubKeyBytes...)
@@ -141,6 +142,8 @@ func publicKeyToPolkadotAddress(pubKeyBytes []byte, networkPrefix int) (string, 
 }
 
 // UNUSED for now, can't remember which was working
+//
+//lint:ignore U1000 Ignore unused function warning
 func pubkeyToPolkadot(chainId int, pubkeyBytes []byte) (string, error) {
 	var input []byte
 	if chainId < 64 {

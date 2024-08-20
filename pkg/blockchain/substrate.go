@@ -81,6 +81,7 @@ func DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close() // Ensure the response body is closed
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -309,6 +310,7 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close() // Ensure the response body is closed
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -359,6 +361,8 @@ func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
 		log.Error().Err(err).Msgf("Failed to fetch block ID: %d", blockId)
 		return nil, err
 	}
+	defer resp.Body.Close() // Ensure the response body is closed
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to read response body for block ID: %d", blockId)

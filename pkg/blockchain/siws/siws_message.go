@@ -11,19 +11,23 @@ import (
 )
 
 // regex is not a strict as siwe-go because who gives a fuck as long as we can verify
-const SiwsAccountExp = "(?P<account>.+?)\n\n"
-const SiwsNonceExp = "Nonce: (?P<nonce>.+?)\n"
-const SiwsIssuedAtExp = "Issued At: (?P<issuedAt>.+?)\n"
-const SiwsStatementExp = "((?P<statement>[^\\n]+)\\n)?\\n"
-const _RFC3986 = "(([^ :/?#]+):)?(//([^ /?#]*))?([^ ?#]*)(\\?([^ #]*))?(#(.*))?"
-const _SIWE_DATETIME = "([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+)?(([Zz])|([\\+|\\-]([01][0-9]|2[0-3]):[0-5][0-9]))"
+const (
+	SiwsAccountExp   = "(?P<account>.+?)\n\n"
+	SiwsNonceExp     = "Nonce: (?P<nonce>.+?)\n"
+	SiwsIssuedAtExp  = "Issued At: (?P<issuedAt>.+?)\n"
+	SiwsStatementExp = "((?P<statement>[^\\n]+)\\n)?\\n"
+	_RFC3986         = "(([^ :/?#]+):)?(//([^ /?#]*))?([^ ?#]*)(\\?([^ #]*))?(#(.*))?"
+	_SIWE_DATETIME   = "([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\\.[0-9]+)?(([Zz])|([\\+|\\-]([01][0-9]|2[0-3]):[0-5][0-9]))"
+)
 
 var SiwsExpireAtExp = fmt.Sprintf("Expiration Time: (?P<expireAt>%s)?", _SIWE_DATETIME)
 
 var SiwsUriExp = fmt.Sprintf("URI: (?P<uri>%s?)\n", _RFC3986)
 
-const SiwsVersionExp = "Version: (?P<version>.+?)\n"
-const SiwsDomainExp = "(?P<domain>.+?) wants you to sign in with your .+? account:\n"
+const (
+	SiwsVersionExp = "Version: (?P<version>.+?)\n"
+	SiwsDomainExp  = "(?P<domain>.+?) wants you to sign in with your .+? account:\n"
+)
 
 // use dotall as prefix
 var SiwsMessageExp = regexp.MustCompile(strings.Join([]string{SiwsDomainExp, SiwsAccountExp, SiwsStatementExp, SiwsUriExp, SiwsVersionExp, SiwsNonceExp, SiwsIssuedAtExp, SiwsExpireAtExp}, ".*?"))

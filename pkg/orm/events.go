@@ -6,8 +6,7 @@ import (
 	"encoding/json"
 )
 
-//import cycle not allowed
-
+// import cycle not allowed
 type EventsORM struct {
 	dbClient      *db.PrismaClient
 	clientWrapper *PrismaClientWrapper

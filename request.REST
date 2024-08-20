@@ -33,7 +33,7 @@ Content-Type: application/json
         "prompt": "Write me a program that visualized our solar system, you may use python, javascript or pure HTML.",
         "responses": [
             {
-                "model": "openai/gpt-4-turbo", 
+                "model": "openai/gpt-4-turbo",
                 "completion": {
                         "code": "print('\''Hello World'\'')",
                         "language": "python",
