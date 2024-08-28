@@ -556,6 +556,20 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 			return taskData, errors.New("invalid completion format")
 		}
 		if _, ok := completionMap["files"]; ok {
+			// Combine the files
+			combinedResponse, err := sandbox.CombineFiles(completionMap)
+			if err != nil {
+				log.Error().Msg("Error combining files")
+				return taskData, err
+			}
+			if combinedResponse.CombinedHTML != "" {
+				completionMap["combined_html"] = combinedResponse.CombinedHTML
+			} else {
+				fmt.Println(combinedResponse)
+				log.Error().Msg("Error combining files")
+				return taskData, errors.New("error combining files")
+			}
+
 			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
 			if err != nil {
 				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
