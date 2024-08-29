@@ -31,8 +31,15 @@ func CombineFiles(filesMap map[string]interface{}) (CombinedHTMLResponse, error)
 		response.Error = "Error getting index.html content"
 		return response, err
 	}
+	if htmlString == "" {
+		response.Error = "index.html content is empty"
+		return response, fmt.Errorf("%s", response.Error)
+	}
 
-	jsString, _ := getFileContent(files, "index.js")
+	jsString, err := getFileContent(files, "index.js")
+	if err != nil {
+		jsString = ""
+	}
 	cssString := getCSSContent(files)
 	response.CombinedHTML = injectContent(htmlString, cssString, jsString)
 	return response, nil
