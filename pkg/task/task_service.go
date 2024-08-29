@@ -565,7 +565,7 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 			if combinedResponse.CombinedHTML != "" {
 				completionMap["combined_html"] = combinedResponse.CombinedHTML
 			} else {
-				fmt.Println(combinedResponse)
+				log.Info().Interface("combinedResponse", combinedResponse).Msg("Combined Response")
 				log.Error().Msg("Error combining files")
 				return taskData, errors.New("error combining files")
 			}
