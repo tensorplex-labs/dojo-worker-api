@@ -32,20 +32,9 @@ func CombineFiles(filesMap map[string]interface{}) (CombinedHTMLResponse, error)
 		return response, err
 	}
 
-	jsString, err := getFileContent(files, "index.js")
-	if err != nil {
-		response.Error = "Error getting index.js content"
-		return response, err
-	}
-
-	cssContent, htmlWithoutCSS, err := extractCSS(htmlString)
-	if err != nil {
-		response.Error = "Error extracting CSS"
-		return response, err
-	}
-
-	response.CombinedHTML = injectContent(htmlWithoutCSS, cssContent, jsString)
-
+	jsString, _ := getFileContent(files, "index.js")
+	cssString := getCSSContent(files)
+	response.CombinedHTML = injectContent(htmlString, cssString, jsString)
 	return response, nil
 }
 
@@ -94,21 +83,23 @@ func getFileContent(files Files, filename string) (string, error) {
 	return contentString, nil
 }
 
-func extractCSS(htmlString string) (string, string, error) {
-	cssStart := strings.Index(htmlString, "<style>")
-	cssEnd := strings.Index(htmlString, "</style>")
-	if cssStart == -1 || cssEnd == -1 {
-		return "", "", fmt.Errorf("CSS not found in HTML")
+func getCSSContent(files Files) string {
+	for filename, content := range files.Files {
+		if strings.HasSuffix(filename, ".css") {
+			if cssString, ok := content.Content.(string); ok {
+				return cssString
+			}
+		}
 	}
-
-	cssContent := htmlString[cssStart+7 : cssEnd]
-	htmlWithoutCSS := htmlString[:cssStart] + htmlString[cssEnd+8:]
-
-	return cssContent, htmlWithoutCSS, nil
+	return ""
 }
 
 func injectContent(html, css, js string) string {
-	html = strings.Replace(html, "</head>", fmt.Sprintf("<style>%s</style></head>", css), 1)
-	html = strings.Replace(html, "</body>", fmt.Sprintf("<script>%s</script></body>", js), 1)
+	if css != "" {
+		html = strings.Replace(html, "</head>", fmt.Sprintf("<style>%s</style></head>", css), 1)
+	}
+	if js != "" {
+		html = strings.Replace(html, "</body>", fmt.Sprintf("<script>%s</script></body>", js), 1)
+	}
 	return html
 }
