@@ -637,7 +637,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
 	publicURL := utils.LoadDotEnv("S3_PUBLIC_URL")
 	for i, t := range requestBody.TaskData {
-		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeThreeDModel {
+		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeDeez {
 			for j, response := range t.Responses {
 				var fileHeader *multipart.FileHeader
 				// Find the file with the matching completion filename
