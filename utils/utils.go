@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -212,14 +213,18 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	uploader := getS3Uploader(s3Client)
 
 	// Determine the content type
-	contentType := getContentType(file.Filename)
+	contentType := getContentType(file.Filename, src)
+
+	// Generate a unique filename to prevent duplicates
+	uniqueFilename := generateUniqueFilename(file.Filename)
 
 	// Upload the file to S3
 	result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(file.Filename),
-		Body:        src,
-		ContentType: aws.String(contentType),
+		Bucket:             aws.String(bucketName),
+		Key:                aws.String(uniqueFilename),
+		Body:               src,
+		ContentType:        aws.String(contentType),
+		ContentDisposition: aws.String(fmt.Sprintf("attachment; filename=\"%s\"", file.Filename)),
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error uploading file")
@@ -229,21 +234,46 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	return result, nil
 }
 
-// Helper function to determine content type based on file extension
-func getContentType(filename string) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".ply":
-		return "application/vnd.ply"
-	default:
+func getContentType(filename string, file multipart.File) string {
+	// Detect content type based on file content
+	buffer := make([]byte, 512)
+	_, err := file.Read(buffer)
+	if err != nil {
+		log.Error().Err(err).Msg("Error reading file content for MIME type detection")
 		return "application/octet-stream"
 	}
+
+	// Reset the file pointer
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		log.Error().Err(err).Msg("Error resetting file pointer")
+		return "application/octet-stream"
+	}
+
+	// Detect content type
+	contentType := http.DetectContentType(buffer)
+
+	// validate against allowed types
+	allowedTypes := map[string]bool{
+		"image/jpeg":               true,
+		"image/png":                true,
+		"image/gif":                true,
+		"image/webp":               true,
+		"application/vnd.ply":      true,
+		"application/octet-stream": true,
+	}
+
+	if !allowedTypes[contentType] {
+		log.Warn().Str("contentType", contentType).Msg("Unsupported content type detected")
+		return "application/octet-stream"
+	}
+
+	return contentType
+}
+
+func generateUniqueFilename(originalFilename string) string {
+	ext := filepath.Ext(originalFilename)
+	name := strings.TrimSuffix(originalFilename, ext)
+	timestamp := time.Now().UnixNano()
+	return fmt.Sprintf("%s_%d%s", name, timestamp, ext)
 }
