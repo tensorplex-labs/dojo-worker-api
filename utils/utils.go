@@ -40,8 +40,6 @@ func init() {
 	} else {
 		LoadDotEnv("DB_USERNAME")
 		LoadDotEnv("DB_PASSWORD")
-		LoadDotEnv("AWS_ACCESS_KEY_ID")
-		LoadDotEnv("AWS_SECRET_ACCESS_KEY")
 	}
 
 	LoadDotEnv("SUBSTRATE_API_URL")
@@ -50,8 +48,6 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
-	LoadDotEnv("AWS_S3_BUCKET_NAME")
-	LoadDotEnv("S3_PUBLIC_URL")
 
 	err = playwright.Install(
 		&playwright.RunOptions{
@@ -131,7 +127,11 @@ func GenerateRandomMinerSubscriptionKey() (string, error) {
 
 // Initialize the S3 client
 func getS3Client() (*s3.Client, error) {
-	AWS_REGION := LoadDotEnv("AWS_REGION")
+	AWS_REGION := os.Getenv("AWS_REGION")
+	if AWS_REGION == "" {
+		log.Warn().Msg("AWS_REGION not set. S3 functionality will be disabled.")
+		return nil, nil
+	}
 	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(AWS_REGION))
 	if err != nil {
@@ -187,7 +187,11 @@ func getS3Uploader(client *s3.Client) *manager.Uploader {
 
 func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	// Open the file
-	bucketName := LoadDotEnv("AWS_S3_BUCKET_NAME")
+	bucketName := os.Getenv("AWS_S3_BUCKET_NAME")
+	if bucketName == "" {
+		log.Warn().Msg("AWS_S3_BUCKET_NAME not set. File upload skipped.")
+		return nil, nil
+	}
 	src, err := file.Open()
 	if err != nil {
 		return nil, err
@@ -200,6 +204,10 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	if err != nil {
 		log.Error().Err(err).Msg("Error creating S3 client")
 		return nil, err
+	}
+	if s3Client == nil {
+		log.Warn().Msg("S3 client is not available. File upload skipped.")
+		return nil, nil
 	}
 	uploader := getS3Uploader(s3Client)
 

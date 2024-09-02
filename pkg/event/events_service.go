@@ -18,7 +18,6 @@ func NewEventService() *EventService {
 }
 
 func (o *EventService) CreateTaskCompletionEvent(ctx context.Context, task db.TaskModel) error {
-
 	taskCompletionTime := int(time.Since(task.CreatedAt).Seconds())
 
 	eventData := EventTaskCompletionTime{TaskId: task.ID, TaskCompletionTime: taskCompletionTime}

@@ -8,6 +8,7 @@ on:
     branches:
       - dev
       - staging
+      - main
 
 jobs:
   docker_publish:
@@ -32,6 +33,7 @@ jobs:
       - name: Build image with env tag
         if: github.ref == 'refs/heads/dev'
           || github.ref == 'refs/heads/staging'
+          || github.ref == 'refs/heads/main'
         uses: macbre/push-to-ghcr@master
         with:
           image_name: ${{ github.repository }}

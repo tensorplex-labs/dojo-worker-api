@@ -2,19 +2,19 @@ package task
 
 import (
 	"context"
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"mime/multipart"
+	"os"
 	"slices"
 	"strconv"
 	"time"
-
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
-	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -37,7 +37,6 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	taskORM := orm.NewTaskORM()
 
 	task, err := taskORM.GetById(ctx, id)
-
 	if err != nil {
 		log.Error().Err(err).Msg("Error in getting task by Id")
 		return nil, err
@@ -389,6 +388,8 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 }
 
 // Validates a single task, reads the `type` field to determine different flows.
+//
+//nolint:gocyclo
 func ValidateTaskData(taskData TaskData) error {
 	if taskData.Task == "" {
 		return errors.New("task is required")
@@ -555,6 +556,20 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 			return taskData, errors.New("invalid completion format")
 		}
 		if _, ok := completionMap["files"]; ok {
+			// Combine the files
+			combinedResponse, err := sandbox.CombineFiles(completionMap)
+			if err != nil {
+				log.Error().Msg("Error combining files")
+				return taskData, err
+			}
+			if combinedResponse.CombinedHTML != "" {
+				completionMap["combined_html"] = combinedResponse.CombinedHTML
+			} else {
+				log.Info().Interface("combinedResponse", combinedResponse).Msg("Combined Response")
+				log.Error().Msg("Error combining files")
+				return taskData, errors.New("error combining files")
+			}
+
 			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
 			if err != nil {
 				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
@@ -635,7 +650,11 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 }
 
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
-	publicURL := utils.LoadDotEnv("S3_PUBLIC_URL")
+	publicURL := os.Getenv("S3_PUBLIC_URL")
+	if publicURL == "" {
+		log.Error().Msg("S3_PUBLIC_URL not set")
+		return CreateTaskRequest{}, errors.New("S3_PUBLIC_URL not set")
+	}
 	for i, t := range requestBody.TaskData {
 		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeDeez {
 			for j, response := range t.Responses {

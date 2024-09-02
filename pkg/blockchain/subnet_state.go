@@ -237,8 +237,8 @@ func (s *SubnetStateSubscriber) SubscribeSubnetState(subnetId int) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Error pretty printing subnet state")
 	} else {
-		log.Debug().Msgf("Subnet State:")
-		log.Debug().Msgf(string(prettySubnetState))
+		log.Debug().Msg("Subnet State:")
+		log.Debug().Msg(string(prettySubnetState))
 	}
 
 	go func() {

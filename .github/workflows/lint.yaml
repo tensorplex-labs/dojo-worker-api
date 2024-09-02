@@ -1,0 +1,62 @@
+name: Run Linter
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+
+jobs:
+  lint:
+    runs-on: self-hosted
+
+    services:
+      postgres:
+        image: postgres:14.0
+        env:
+          POSTGRES_DB: subnet_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5.0.2
+        with:
+          go-version: 1.22
+
+      - name: Wait for Postgres to be available
+        run: |
+          for i in `seq 1 30`; do
+            nc -z localhost 5432 && echo Success && exit 0
+            echo -n .
+            sleep 1
+          done
+          echo Failed waiting for Postgres && exit 1
+
+      - name: Tidy Go Modules
+        run: go mod tidy
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/subnet_db"
+        run: go run github.com/steebchen/prisma-client-go generate
+
+      - name: Build cmd/server/main.go
+        run: go build -v cmd/server/main.go
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 3m --config .golangci.yml
