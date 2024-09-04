@@ -213,7 +213,10 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	uploader := getS3Uploader(s3Client)
 
 	// Determine the content type
-	contentType := getContentType(file.Filename, src)
+	contentType, err := getContentType(src)
+	if err != nil {
+		return nil, fmt.Errorf("error determining content type: %w", err)
+	}
 
 	// Generate a unique filename to prevent duplicates
 	uniqueFilename := generateUniqueFilename(file.Filename)
@@ -234,20 +237,18 @@ func UploadFileToS3(file *multipart.FileHeader) (*manager.UploadOutput, error) {
 	return result, nil
 }
 
-func getContentType(filename string, file multipart.File) string {
+func getContentType(file multipart.File) (string, error) {
 	// Detect content type based on file content
 	buffer := make([]byte, 512)
 	_, err := file.Read(buffer)
 	if err != nil {
-		log.Error().Err(err).Msg("Error reading file content for MIME type detection")
-		return "application/octet-stream"
+		return "", fmt.Errorf("error reading file content for MIME type detection: %w", err)
 	}
 
 	// Reset the file pointer
 	_, err = file.Seek(0, 0)
 	if err != nil {
-		log.Error().Err(err).Msg("Error resetting file pointer")
-		return "application/octet-stream"
+		return "", fmt.Errorf("error resetting file pointer: %w", err)
 	}
 
 	// Detect content type
@@ -264,11 +265,10 @@ func getContentType(filename string, file multipart.File) string {
 	}
 
 	if !allowedTypes[contentType] {
-		log.Warn().Str("contentType", contentType).Msg("Unsupported content type detected")
-		return "application/octet-stream"
+		return "", fmt.Errorf("unsupported content type detected: %s", contentType)
 	}
 
-	return contentType
+	return contentType, nil
 }
 
 func generateUniqueFilename(originalFilename string) string {
