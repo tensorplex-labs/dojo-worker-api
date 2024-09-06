@@ -412,7 +412,7 @@ func ValidateTaskData(taskData TaskData) error {
 	for _, taskresponse := range taskData.Responses {
 		switch task {
 		case db.TaskTypeTextToImage:
-			if _, ok := taskresponse.Completion.(string); !ok {
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
 		case db.TaskTypeCodeGeneration:
@@ -448,7 +448,12 @@ func ValidateTaskData(taskData TaskData) error {
 					return errors.New("message is required for each message")
 				}
 			}
+		case db.TaskTypeTextToThreeDeez:
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
 		}
+
 	}
 
 	if len(taskData.Criteria) == 0 {
@@ -658,17 +663,29 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 	for i, t := range requestBody.TaskData {
 		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeDeez {
 			for j, response := range t.Responses {
+				completionMap, ok := response.Completion.(map[string]interface{})
+				if !ok {
+					return CreateTaskRequest{}, fmt.Errorf("unexpected type for response.Completion: %T", response.Completion)
+				}
+
+				filename, ok := completionMap["filename"].(string)
+				if !ok {
+					log.Error().Msg("Filename not found in completion map or not a string")
+					return CreateTaskRequest{}, errors.New("filename not found in completion map or not a string")
+				}
+
+				log.Info().Str("filename", filename).Interface("files", files).Msg("Debugging file matching")
 				var fileHeader *multipart.FileHeader
 				// Find the file with the matching completion filename
 				for _, file := range files {
-					if file.Filename == response.Completion {
+					if file.Filename == filename {
 						fileHeader = file
 						break
 					}
 				}
 
 				if fileHeader == nil {
-					log.Error().Interface("response", response.Completion).Msg("Failed to find file header for response")
+					log.Error().Str("filename", filename).Msg("Failed to find file header for response")
 					return CreateTaskRequest{}, errors.New("failed to find file header for response")
 				}
 
@@ -684,7 +701,8 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 				log.Info().Str("fileURL", fileURL).Msg("File URL")
 
 				// Update the response completion with the S3 URL
-				requestBody.TaskData[i].Responses[j].Completion = fileURL
+				completionMap["url"] = fileURL
+				requestBody.TaskData[i].Responses[j].Completion = completionMap
 			}
 		}
 	}
