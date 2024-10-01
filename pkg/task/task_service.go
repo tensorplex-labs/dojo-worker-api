@@ -474,7 +474,10 @@ func ValidateTaskData(taskData TaskData) error {
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-		case CriteriaTypeRanking, CriteriaMultiScore:
+		case CriteriaTypeRanking:
+			// Block ranking criteria
+			return fmt.Errorf("ranking criteria is not supported")
+		case CriteriaMultiScore:
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
