@@ -460,6 +460,11 @@ func ValidateTaskData(taskData TaskData) error {
 		return errors.New("criteria is required")
 	}
 
+	modelNames := make([]string, 0, len(taskData.Responses))
+	for _, response := range taskData.Responses {
+		modelNames = append(modelNames, response.Model)
+	}
+
 	for _, criteria := range taskData.Criteria {
 		if criteria.Type == "" {
 			return errors.New("type is required for criteria")
@@ -485,16 +490,19 @@ func ValidateTaskData(taskData TaskData) error {
 				if len(criteria.Options) != len(taskData.Responses) {
 					return fmt.Errorf("number of options should match number of responses: %v", len(taskData.Responses))
 				}
+
+				// Validate that options match model names
+				if !slices.Equal(criteria.Options, modelNames) {
+					return fmt.Errorf("multi-score options must match the model names in responses")
+				}
 			}
 
-			if criteria.Type == CriteriaMultiScore {
-				if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
-					return errors.New("valid min or max is required for numeric criteria")
-				}
+			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
+				return errors.New("valid min or max is required for numeric criteria")
+			}
 
-				if criteria.Min >= criteria.Max {
-					return errors.New("min must be less than max")
-				}
+			if criteria.Min >= criteria.Max {
+				return errors.New("min must be less than max")
 			}
 		case CriteriaTypeScore:
 			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
