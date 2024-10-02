@@ -266,14 +266,22 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
+// TODO: Update this function with the new Resultdata structure
 func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel, dojoWorkerId string, results []Result) (*db.TaskModel, error) {
-	_, err := ValidateResultData(results, task)
+	validatedResults, err := ValidateResultData(results, task)
 	if err != nil {
 		log.Error().Err(err).Msg("Error validating result data")
 		return nil, err
 	}
 
-	jsonResults, err := json.Marshal(results)
+	// Process and scale the scores
+	processedResults, err := ProcessScores(validatedResults, task)
+	if err != nil {
+		log.Error().Err(err).Msg("Error processing scores")
+		return nil, err
+	}
+
+	jsonResults, err := json.Marshal(processedResults)
 	if err != nil {
 		log.Error().Err(err).Msg("Error marshaling result items")
 		return nil, err
@@ -310,6 +318,11 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		return nil, err
 	}
 
+	modelNames := make([]string, 0, len(taskData.Responses))
+	for _, response := range taskData.Responses {
+		modelNames = append(modelNames, response.Model)
+	}
+
 	for _, item := range results {
 		itemType := CriteriaType(item.Type)
 		if !IsValidCriteriaType(itemType) {
@@ -319,17 +332,9 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		switch itemType {
 		case CriteriaTypeScore:
 			score, _ := item.Value.(ScoreValue)
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type != itemType {
-					continue
-				}
-				minScore, maxScore := criteria.Min, criteria.Max
-				if float64(score) < minScore || float64(score) > maxScore {
-					return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
-				}
-
+			if score < 1.0 || score > 10.0 {
+				return nil, fmt.Errorf("score %v is out of the valid range [1, 10]", score)
 			}
-
 		case CriteriaTypeRanking:
 			ranking, _ := item.Value.(RankingValue)
 			if len(ranking) == 0 {
@@ -367,10 +372,14 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 					return nil, fmt.Errorf("number of scores provided does not match number of options")
 				}
 
+				// Validate that options match model names
+				if !slices.Equal(criteria.Options, modelNames) {
+					return nil, fmt.Errorf("multi-score options does not match the model names in responses")
+				}
+
 				for option, score := range multiScore {
-					minScore, maxScore := criteria.Min, criteria.Max
-					if float64(score) < minScore || float64(score) > maxScore {
-						return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
+					if score < 1.0 || score > 10.0 {
+						return nil, fmt.Errorf("score %v for option %s is out of the valid range [1, 10]", score, option)
 					}
 
 					if !slices.Contains(criteria.Options, option) {
@@ -385,6 +394,49 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 
 	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
 	return results, nil
+}
+
+func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
+	var taskData TaskData
+	err := json.Unmarshal(task.TaskData, &taskData)
+	if err != nil {
+		log.Error().Err(err).Msg("Error unmarshaling task data")
+		return nil, err
+	}
+
+	for i, item := range results {
+		switch CriteriaType(item.Type) {
+		case CriteriaTypeScore:
+			score, _ := item.Value.(ScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type == CriteriaTypeScore {
+					scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
+					results[i].Value = ScoreValue(scaledScore)
+					break
+				}
+			}
+
+		case CriteriaMultiScore:
+			multiScore, _ := item.Value.(MultiScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type == CriteriaMultiScore {
+					scaledMultiScore := make(MultiScoreValue)
+					for option, score := range multiScore {
+						scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
+						scaledMultiScore[option] = float64(ScoreValue(scaledScore))
+					}
+					results[i].Value = scaledMultiScore
+					break
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func scaleScore(score, oldMin, oldMax, newMin, newMax float64) float64 {
+	return ((score-oldMin)/(oldMax-oldMin))*(newMax-newMin) + newMin
 }
 
 // Validates a single task, reads the `type` field to determine different flows.
