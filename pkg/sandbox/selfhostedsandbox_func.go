@@ -26,21 +26,19 @@ func CombineFiles(filesMap map[string]interface{}) (CombinedHTMLResponse, error)
 		return response, err
 	}
 
-	htmlString, err := getFileContent(files, "index.html")
+	htmlString, err := getFileContentBySuffix(files, ".html")
 	if err != nil {
-		response.Error = "Error getting index.html content"
+		response.Error = "Error getting HTML content"
 		return response, err
 	}
 	if htmlString == "" {
-		response.Error = "index.html content is empty"
+		response.Error = "HTML content is empty"
 		return response, fmt.Errorf("%s", response.Error)
 	}
 
-	jsString, err := getFileContent(files, "index.js")
-	if err != nil {
-		jsString = ""
-	}
-	cssString := getCSSContent(files)
+	jsString, _ := getFileContentBySuffix(files, ".js")
+	cssString, _ := getFileContentBySuffix(files, ".css")
+
 	response.CombinedHTML = injectContent(htmlString, cssString, jsString)
 	return response, nil
 }
@@ -76,29 +74,16 @@ func extractFiles(filesMap map[string]interface{}) (Files, error) {
 	return files, nil
 }
 
-func getFileContent(files Files, filename string) (string, error) {
-	content, ok := files.Files[filename]
-	if !ok {
-		return "", fmt.Errorf("%s not found in input", filename)
-	}
-
-	contentString, ok := content.Content.(string)
-	if !ok {
-		return "", fmt.Errorf("%s content is not a string", filename)
-	}
-
-	return contentString, nil
-}
-
-func getCSSContent(files Files) string {
+func getFileContentBySuffix(files Files, suffix string) (string, error) {
 	for filename, content := range files.Files {
-		if strings.HasSuffix(filename, ".css") {
-			if cssString, ok := content.Content.(string); ok {
-				return cssString
+		if strings.HasSuffix(filename, suffix) {
+			if contentString, ok := content.Content.(string); ok {
+				return contentString, nil
 			}
+			return "", fmt.Errorf("content for %s is not a string", filename)
 		}
 	}
-	return ""
+	return "", fmt.Errorf("no file with suffix %s found", suffix)
 }
 
 func injectContent(html, css, js string) string {

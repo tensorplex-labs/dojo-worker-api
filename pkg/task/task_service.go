@@ -637,19 +637,6 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 				log.Error().Msg("Error combining files")
 				return taskData, errors.New("error combining files")
 			}
-
-			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
-			if err != nil {
-				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
-				return taskData, err
-			}
-			if sandboxResponse.Url != "" {
-				completionMap["sandbox_url"] = sandboxResponse.Url
-			} else {
-				fmt.Println(sandboxResponse)
-				log.Error().Msg("Error getting sandbox response")
-				return taskData, errors.New("error getting sandbox response")
-			}
 		} else {
 			log.Error().Msg("Invalid completion format")
 			return taskData, errors.New("invalid completion format")
