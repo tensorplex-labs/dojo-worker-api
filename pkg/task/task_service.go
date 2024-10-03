@@ -500,7 +500,7 @@ func ValidateTaskData(taskData TaskData) error {
 					return errors.New("message is required for each message")
 				}
 			}
-		case db.TaskTypeTextToThreeDeez:
+		case db.TaskTypeTextToThreeD:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -711,7 +711,7 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 		return CreateTaskRequest{}, errors.New("S3_PUBLIC_URL not set")
 	}
 	for i, t := range requestBody.TaskData {
-		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeDeez {
+		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeD {
 			for j, response := range t.Responses {
 				completionMap, ok := response.Completion.(map[string]interface{})
 				if !ok {
