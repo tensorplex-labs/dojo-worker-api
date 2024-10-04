@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// regex is not a strict as siwe-go because who gives a fuck as long as we can verify
 const (
 	SiwsAccountExp   = "(?P<account>.+?)\n\n"
 	SiwsNonceExp     = "Nonce: (?P<nonce>.+?)\n"

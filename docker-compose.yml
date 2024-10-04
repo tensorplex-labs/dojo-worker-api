@@ -116,7 +116,6 @@ services:
     expose:
       - 8080
     healthcheck:
-      # jank as fuck since no curl
       test:
         [
           "CMD",

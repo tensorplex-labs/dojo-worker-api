@@ -534,7 +534,7 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	if len(taskTypes) == 1 && taskTypes[0] == "All" {
-		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE"}
+		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE", "TEXT_TO_THREE_D"}
 	}
 
 	// Parsing "page" and "limit" as integers with default values
