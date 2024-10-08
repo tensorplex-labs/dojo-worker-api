@@ -5,7 +5,6 @@ import (
 	"dojo-api/pkg/api"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
 	"dojo-api/utils"
 	"net/http"
 	"os"
@@ -98,8 +97,6 @@ func onShutdown() {
 	connHandler.OnShutdown()
 	cache := cache.GetCacheInstance()
 	cache.Shutdown()
-	browser := sandbox.GetBrowser()
-	browser.Close()
 }
 
 func loadEnvVars() {

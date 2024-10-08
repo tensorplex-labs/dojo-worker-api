@@ -266,14 +266,22 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	return task, nil
 }
 
+// TODO: Update this function with the new Resultdata structure
 func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel, dojoWorkerId string, results []Result) (*db.TaskModel, error) {
-	_, err := ValidateResultData(results, task)
+	validatedResults, err := ValidateResultData(results, task)
 	if err != nil {
 		log.Error().Err(err).Msg("Error validating result data")
 		return nil, err
 	}
 
-	jsonResults, err := json.Marshal(results)
+	// Process and scale the scores
+	processedResults, err := ProcessScores(validatedResults, task)
+	if err != nil {
+		log.Error().Err(err).Msg("Error processing scores")
+		return nil, err
+	}
+
+	jsonResults, err := json.Marshal(processedResults)
 	if err != nil {
 		log.Error().Err(err).Msg("Error marshaling result items")
 		return nil, err
@@ -310,6 +318,11 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		return nil, err
 	}
 
+	modelNames := make([]string, 0, len(taskData.Responses))
+	for _, response := range taskData.Responses {
+		modelNames = append(modelNames, response.Model)
+	}
+
 	for _, item := range results {
 		itemType := CriteriaType(item.Type)
 		if !IsValidCriteriaType(itemType) {
@@ -319,17 +332,9 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		switch itemType {
 		case CriteriaTypeScore:
 			score, _ := item.Value.(ScoreValue)
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type != itemType {
-					continue
-				}
-				minScore, maxScore := criteria.Min, criteria.Max
-				if float64(score) < minScore || float64(score) > maxScore {
-					return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
-				}
-
+			if score < 1.0 || score > 10.0 {
+				return nil, fmt.Errorf("score %v is out of the valid range [1, 10]", score)
 			}
-
 		case CriteriaTypeRanking:
 			ranking, _ := item.Value.(RankingValue)
 			if len(ranking) == 0 {
@@ -367,10 +372,14 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 					return nil, fmt.Errorf("number of scores provided does not match number of options")
 				}
 
+				// Validate that options match model names
+				if !slices.Equal(criteria.Options, modelNames) {
+					return nil, fmt.Errorf("multi-score options does not match the model names in responses")
+				}
+
 				for option, score := range multiScore {
-					minScore, maxScore := criteria.Min, criteria.Max
-					if float64(score) < minScore || float64(score) > maxScore {
-						return nil, fmt.Errorf("score %v is out of the valid range [%v, %v]", score, minScore, maxScore)
+					if score < 1.0 || score > 10.0 {
+						return nil, fmt.Errorf("score %v for option %s is out of the valid range [1, 10]", score, option)
 					}
 
 					if !slices.Contains(criteria.Options, option) {
@@ -385,6 +394,49 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 
 	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
 	return results, nil
+}
+
+func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
+	var taskData TaskData
+	err := json.Unmarshal(task.TaskData, &taskData)
+	if err != nil {
+		log.Error().Err(err).Msg("Error unmarshaling task data")
+		return nil, err
+	}
+
+	for i, item := range results {
+		switch CriteriaType(item.Type) {
+		case CriteriaTypeScore:
+			score, _ := item.Value.(ScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type == CriteriaTypeScore {
+					scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
+					results[i].Value = ScoreValue(scaledScore)
+					break
+				}
+			}
+
+		case CriteriaMultiScore:
+			multiScore, _ := item.Value.(MultiScoreValue)
+			for _, criteria := range taskData.Criteria {
+				if criteria.Type == CriteriaMultiScore {
+					scaledMultiScore := make(MultiScoreValue)
+					for option, score := range multiScore {
+						scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
+						scaledMultiScore[option] = float64(ScoreValue(scaledScore))
+					}
+					results[i].Value = scaledMultiScore
+					break
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func scaleScore(score, oldMin, oldMax, newMin, newMax float64) float64 {
+	return ((score-oldMin)/(oldMax-oldMin))*(newMax-newMin) + newMin
 }
 
 // Validates a single task, reads the `type` field to determine different flows.
@@ -412,7 +464,7 @@ func ValidateTaskData(taskData TaskData) error {
 	for _, taskresponse := range taskData.Responses {
 		switch task {
 		case db.TaskTypeTextToImage:
-			if _, ok := taskresponse.Completion.(string); !ok {
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
 		case db.TaskTypeCodeGeneration:
@@ -448,11 +500,21 @@ func ValidateTaskData(taskData TaskData) error {
 					return errors.New("message is required for each message")
 				}
 			}
+		case db.TaskTypeTextToThreeD:
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
 		}
+
 	}
 
 	if len(taskData.Criteria) == 0 {
 		return errors.New("criteria is required")
+	}
+
+	modelNames := make([]string, 0, len(taskData.Responses))
+	for _, response := range taskData.Responses {
+		modelNames = append(modelNames, response.Model)
 	}
 
 	for _, criteria := range taskData.Criteria {
@@ -469,7 +531,10 @@ func ValidateTaskData(taskData TaskData) error {
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
-		case CriteriaTypeRanking, CriteriaMultiScore:
+		case CriteriaTypeRanking:
+			// Block ranking criteria
+			return fmt.Errorf("ranking criteria is not supported")
+		case CriteriaMultiScore:
 			if len(criteria.Options) == 0 {
 				return errors.New("options is required for multiple choice criteria")
 			}
@@ -477,16 +542,19 @@ func ValidateTaskData(taskData TaskData) error {
 				if len(criteria.Options) != len(taskData.Responses) {
 					return fmt.Errorf("number of options should match number of responses: %v", len(taskData.Responses))
 				}
+
+				// Validate that options match model names
+				if !slices.Equal(criteria.Options, modelNames) {
+					return fmt.Errorf("multi-score options must match the model names in responses")
+				}
 			}
 
-			if criteria.Type == CriteriaMultiScore {
-				if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
-					return errors.New("valid min or max is required for numeric criteria")
-				}
+			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
+				return errors.New("valid min or max is required for numeric criteria")
+			}
 
-				if criteria.Min >= criteria.Max {
-					return errors.New("min must be less than max")
-				}
+			if criteria.Min >= criteria.Max {
+				return errors.New("min must be less than max")
 			}
 		case CriteriaTypeScore:
 			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
@@ -556,17 +624,18 @@ func ProcessCodeCompletion(taskData TaskData) (TaskData, error) {
 			return taskData, errors.New("invalid completion format")
 		}
 		if _, ok := completionMap["files"]; ok {
-			sandboxResponse, err := sandbox.GetCodesandbox(completionMap)
+			// Combine the files
+			combinedResponse, err := sandbox.CombineFiles(completionMap)
 			if err != nil {
-				log.Error().Msg(fmt.Sprintf("Error getting sandbox response: %v", err))
+				log.Error().Msg("Error combining files")
 				return taskData, err
 			}
-			if sandboxResponse.Url != "" {
-				completionMap["sandbox_url"] = sandboxResponse.Url
+			if combinedResponse.CombinedHTML != "" {
+				completionMap["combined_html"] = combinedResponse.CombinedHTML
 			} else {
-				fmt.Println(sandboxResponse)
-				log.Error().Msg("Error getting sandbox response")
-				return taskData, errors.New("error getting sandbox response")
+				log.Info().Interface("combinedResponse", combinedResponse).Msg("Combined Response")
+				log.Error().Msg("Error combining files")
+				return taskData, errors.New("error combining files")
 			}
 		} else {
 			log.Error().Msg("Invalid completion format")
@@ -642,19 +711,31 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 		return CreateTaskRequest{}, errors.New("S3_PUBLIC_URL not set")
 	}
 	for i, t := range requestBody.TaskData {
-		if t.Task == db.TaskTypeTextToImage {
+		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeD {
 			for j, response := range t.Responses {
+				completionMap, ok := response.Completion.(map[string]interface{})
+				if !ok {
+					return CreateTaskRequest{}, fmt.Errorf("unexpected type for response.Completion: %T", response.Completion)
+				}
+
+				filename, ok := completionMap["filename"].(string)
+				if !ok {
+					log.Error().Msg("Filename not found in completion map or not a string")
+					return CreateTaskRequest{}, errors.New("filename not found in completion map or not a string")
+				}
+
+				log.Info().Str("filename", filename).Interface("files", files).Msg("Debugging file matching")
 				var fileHeader *multipart.FileHeader
 				// Find the file with the matching completion filename
 				for _, file := range files {
-					if file.Filename == response.Completion {
+					if file.Filename == filename {
 						fileHeader = file
 						break
 					}
 				}
 
 				if fileHeader == nil {
-					log.Error().Interface("response", response.Completion).Msg("Failed to find file header for response")
+					log.Error().Str("filename", filename).Msg("Failed to find file header for response")
 					return CreateTaskRequest{}, errors.New("failed to find file header for response")
 				}
 
@@ -670,7 +751,8 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 				log.Info().Str("fileURL", fileURL).Msg("File URL")
 
 				// Update the response completion with the S3 URL
-				requestBody.TaskData[i].Responses[j].Completion = fileURL
+				completionMap["url"] = fileURL
+				requestBody.TaskData[i].Responses[j].Completion = completionMap
 			}
 		}
 	}

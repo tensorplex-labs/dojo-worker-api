@@ -37,7 +37,9 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue}
+var (
+	ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
+)
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
