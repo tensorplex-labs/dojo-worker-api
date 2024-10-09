@@ -96,7 +96,7 @@ func DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
 }
 
 func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
-	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/SubnetworkN", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/SubnetworkN", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	storageResponse, err := DoGetRequest(path, params)
@@ -114,7 +114,7 @@ func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
 }
 
 func (s *SubstrateService) GetHotkeyByUid(subnetId int, uid int) (string, error) {
-	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/Keys", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/Keys", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", strconv.Itoa(uid))
@@ -135,7 +135,7 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 		return nil, errors.New("hotkey is empty")
 	}
 
-	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/Axons", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/Axons", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", hotkey)
@@ -220,7 +220,7 @@ func (s *SubstrateService) GetAllParticipants(subnetId int) ([]Participant, erro
 }
 
 func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool, error) {
-	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/IsNetworkMember", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/IsNetworkMember", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
 	params.Add("keys[]", strconv.Itoa(subnetUid))
@@ -238,7 +238,7 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 }
 
 func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
-	path := fmt.Sprintf("http://%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
 	storageResponse, err := DoGetRequest(path, params)
@@ -301,7 +301,7 @@ type RuntimeSpec struct {
 }
 
 func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
-	path := fmt.Sprintf("http://%s/runtime/spec", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/runtime/spec", s.substrateApiUrl)
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -350,7 +350,7 @@ type BlockResponse struct {
 
 func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
 	log.Info().Msgf("Fetching block with ID: %d", blockId)
-	path := fmt.Sprintf("http://%s/blocks/%d", s.substrateApiUrl, blockId)
+	path := fmt.Sprintf("%s/blocks/%d", s.substrateApiUrl, blockId)
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to create request for block ID: %d", blockId)
@@ -416,7 +416,7 @@ func (s *SubstrateService) GetLatestUnFinalizedBlock(low int) (*BlockResponse, e
 }
 
 func (s *SubstrateService) GetLatestFinalizedBlock() (*BlockResponse, error) {
-	path := fmt.Sprintf("http://%s/blocks/head", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/blocks/head", s.substrateApiUrl)
 
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
