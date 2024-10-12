@@ -111,7 +111,9 @@ func ParseDate(date string) *time.Time {
 		log.Error().Stack().Err(err).Msg("Error parsing date")
 		return nil
 	}
-	return &parsedDate
+
+	utcDate := parsedDate.UTC()
+	return &utcDate
 }
 
 func GenerateRandomMinerSubscriptionKey() (string, error) {
