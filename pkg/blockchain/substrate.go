@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"dojo-api/pkg/cache"
 	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
@@ -21,7 +22,12 @@ import (
 )
 
 const (
-	BlockTimeInSeconds = 12
+	BlockTimeInSeconds                = 12
+	CacheKeyRuntimeSpec        string = "worker_api:runtime_spec"
+	CacheKeyMaxUID             string = "worker_api:max_uid"
+	CacheKeyHotkeyTemplate     string = "worker_api:sn%d_uid%d_hotkey"
+	CacheKeyAxonInfoTemplate   string = "worker_api:sn%d_hotkey%s_axon_info"
+	CacheKeyTotalStakeTemplate string = "worker_api:hotkey%s_total_stake"
 )
 
 type StorageResponse struct {
@@ -38,6 +44,7 @@ type StorageResponse struct {
 type SubstrateService struct {
 	substrateApiUrl string
 	httpClient      *http.Client
+	cache           *cache.Cache
 }
 
 type AxonInfo struct {
@@ -76,7 +83,38 @@ func NewSubstrateService() *SubstrateService {
 		Transport: &http.Transport{},
 	}
 
-	return &SubstrateService{substrateApiUrl: substrateApiHost, httpClient: httpClient}
+	return &SubstrateService{substrateApiUrl: substrateApiHost, httpClient: httpClient, cache: cache.GetCacheInstance()}
+}
+
+func getCachedData[T any](cache *cache.Cache, cacheKey string) (*T, error) {
+	if cache == nil {
+		return nil, errors.New("cache is nil")
+	}
+
+	cachedData, err := cache.Get(cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	if cachedData != "" {
+		var data T
+		if reflect.TypeOf(data) == reflect.TypeOf("") {
+			_, ok := interface{}(&data).(string)
+			if ok {
+				log.Debug().Msgf("Cache hit for %s", cacheKey)
+				return &data, nil
+			}
+		} else {
+			// For other types, use JSON unmarshaling
+			err = json.Unmarshal([]byte(cachedData), &data)
+			if err == nil {
+				log.Debug().Msgf("Cache hit for %s", cacheKey)
+				return &data, nil
+			} else {
+				log.Error().Err(err).Msgf("Error unmarshalling cached %s, querying again.", cacheKey)
+			}
+		}
+	}
+	return nil, err
 }
 
 func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
@@ -113,6 +151,11 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 }
 
 func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
+	cachedMaxUID, err := getCachedData[int](s.cache, CacheKeyMaxUID)
+	if err == nil && cachedMaxUID != nil {
+		return *cachedMaxUID, nil
+	}
+
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/SubnetworkN", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
@@ -127,10 +170,18 @@ func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
 		log.Error().Err(err).Msgf("Error converting max UID to int for subnet %d", subnetId)
 		return 0, err
 	}
+
+	s.cache.SetWithExpire(CacheKeyMaxUID, valueStr, 24*7*time.Hour)
 	return maxUID, nil
 }
 
 func (s *SubstrateService) GetHotkeyByUid(subnetId int, uid int) (string, error) {
+	cacheKey := fmt.Sprintf(CacheKeyHotkeyTemplate, subnetId, uid)
+	cachedHotkey, err := getCachedData[string](s.cache, cacheKey)
+	if err == nil && cachedHotkey != nil {
+		return *cachedHotkey, nil
+	}
+
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/Keys", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
@@ -144,12 +195,20 @@ func (s *SubstrateService) GetHotkeyByUid(subnetId int, uid int) (string, error)
 	valueStr := fmt.Sprintf("%v", storageResponse.Value)
 	log.Debug().Msgf("Hotkey for uid %d: %s", uid, valueStr)
 
+	// expire for every block
+	s.cache.SetWithExpire(cacheKey, string(valueStr), BlockTimeInSeconds*time.Second)
 	return valueStr, nil
 }
 
 func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, error) {
 	if hotkey == "" {
 		return nil, errors.New("hotkey is empty")
+	}
+
+	cacheKey := fmt.Sprintf(CacheKeyAxonInfoTemplate, subnetId, hotkey)
+	cachedAxonInfo, err := getCachedData[AxonInfo](s.cache, cacheKey)
+	if err == nil && cachedAxonInfo != nil {
+		return cachedAxonInfo, nil
 	}
 
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/Axons", s.substrateApiUrl)
@@ -180,6 +239,8 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	}
 
 	log.Debug().Msgf("Axon info for hotkey %s: %+v", hotkey, axonInfoValue)
+	// expire every minute
+	s.cache.SetWithExpire(cacheKey, string(valueBytes), 5*BlockTimeInSeconds*time.Second)
 	return &axonInfoValue, nil
 }
 
@@ -256,6 +317,12 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 }
 
 func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
+	cacheKey := fmt.Sprintf(CacheKeyTotalStakeTemplate, hotkey)
+	cachedTotalStake, err := getCachedData[float64](s.cache, cacheKey)
+	if err == nil && cachedTotalStake != nil {
+		return *cachedTotalStake, nil
+	}
+
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
@@ -285,6 +352,10 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 			}
 			parsedStake := float64(totalHotkeyStake) / math.Pow10(tokenDecimals)
 			log.Debug().Msgf("Hotkey: %+v, raw stake: %+v, parsed stake: %+v", hotkey, totalHotkeyStake, parsedStake)
+
+			// -1 == as many d.p. needed, 64 == float64, 'f' == format
+			parsedStakeStr := strconv.FormatFloat(parsedStake, 'f', -1, 64)
+			s.cache.SetWithExpire(cacheKey, parsedStakeStr, BlockTimeInSeconds*time.Second)
 			return parsedStake, nil
 		}
 	}
@@ -319,6 +390,11 @@ type RuntimeSpec struct {
 }
 
 func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
+	cachedSpec, err := getCachedData[RuntimeSpec](s.cache, CacheKeyRuntimeSpec)
+	if err == nil && cachedSpec != nil {
+		return cachedSpec, nil
+	}
+
 	path := fmt.Sprintf("%s/runtime/spec", s.substrateApiUrl)
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
@@ -342,6 +418,8 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 		log.Error().Err(err).Msg("Error unmarshalling runtime spec")
 		return nil, err
 	}
+
+	s.cache.SetWithExpire(CacheKeyRuntimeSpec, string(body), 12*time.Hour)
 	return &runtimeSpec, nil
 }
 
