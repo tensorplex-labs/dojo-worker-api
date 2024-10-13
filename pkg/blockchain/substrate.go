@@ -171,7 +171,7 @@ func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
 		return 0, err
 	}
 
-	s.cache.SetWithExpire(CacheKeyMaxUID, valueStr, 24*7*time.Hour)
+	s.cache.SetWithExpire(CacheKeyMaxUID, valueStr, 5*BlockTimeInSeconds*time.Second)
 	return maxUID, nil
 }
 
@@ -419,7 +419,7 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 		return nil, err
 	}
 
-	s.cache.SetWithExpire(CacheKeyRuntimeSpec, string(body), 12*time.Hour)
+	s.cache.SetWithExpire(CacheKeyRuntimeSpec, string(body), 24*time.Hour)
 	return &runtimeSpec, nil
 }
 
