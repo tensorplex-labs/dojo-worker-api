@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +12,9 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
+
+	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -35,6 +37,7 @@ type StorageResponse struct {
 
 type SubstrateService struct {
 	substrateApiUrl string
+	httpClient      *http.Client
 }
 
 type AxonInfo struct {
@@ -68,29 +71,43 @@ func NewSubstrateService() *SubstrateService {
 		log.Fatal().Msg("SUBSTRATE_API_URL must be set")
 	}
 
-	return &SubstrateService{substrateApiUrl: substrateApiHost}
+	httpClient := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &http.Transport{},
+	}
+
+	return &SubstrateService{substrateApiUrl: substrateApiHost, httpClient: httpClient}
 }
 
-func DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
+func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.URL.RawQuery = params.Encode()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close() // Ensure the response body is closed
+	// Ensure the response body is closed
+	defer resp.Body.Close()
+	// close connection after request
+	req.Close = true
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
+	// check if the body is empty
+	if len(body) == 0 {
+		log.Error().Msg("Empty response body")
+		return nil, fmt.Errorf("empty response body")
+	}
+
 	var storageResponse StorageResponse
 	err = json.Unmarshal(body, &storageResponse)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 	return &storageResponse, nil
 }
@@ -99,7 +116,7 @@ func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/SubnetworkN", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
-	storageResponse, err := DoGetRequest(path, params)
+	storageResponse, err := s.DoGetRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting max UID for subnet %d", subnetId)
 		return 0, err
@@ -118,14 +135,14 @@ func (s *SubstrateService) GetHotkeyByUid(subnetId int, uid int) (string, error)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", strconv.Itoa(uid))
-	storageResponse, err := DoGetRequest(path, params)
+	storageResponse, err := s.DoGetRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting hotkey for uid %d", uid)
 		return "", err
 	}
 
 	valueStr := fmt.Sprintf("%v", storageResponse.Value)
-	log.Info().Msgf("Hotkey for uid %d: %s", uid, valueStr)
+	log.Debug().Msgf("Hotkey for uid %d: %s", uid, valueStr)
 
 	return valueStr, nil
 }
@@ -139,14 +156,14 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", hotkey)
-	storageResponse, err := DoGetRequest(path, params)
+	storageResponse, err := s.DoGetRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting axon info for hotkey %s", hotkey)
 		return nil, err
 	}
 
 	if storageResponse.Value == nil {
-		log.Error().Msgf("Value is nil for hotkey %s, means they are not serving an axon", hotkey)
+		log.Warn().Msgf("Value is nil for hotkey %s, means they are not serving an axon", hotkey)
 		return nil, errors.New("value is nil")
 	}
 
@@ -169,6 +186,7 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 // TODO think about this, this is dependent on axons being served
 func (s *SubstrateService) GetAllParticipants(subnetId int) ([]Participant, error) {
 	maxUid, err := s.GetMaxUID(subnetId)
+	log.Info().Msgf("Max UID for subnet %d: %d", subnetId, maxUid)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +242,7 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
 	params.Add("keys[]", strconv.Itoa(subnetUid))
-	storageResponse, err := DoGetRequest(path, params)
+	storageResponse, err := s.DoGetRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error checking if hotkey %s is registered", hotkey)
 		return false, err
@@ -241,7 +259,7 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
-	storageResponse, err := DoGetRequest(path, params)
+	storageResponse, err := s.DoGetRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s", hotkey)
 		return 0, err
@@ -306,11 +324,14 @@ func (s *SubstrateService) RuntimeSpec() (*RuntimeSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close() // Ensure the response body is closed
+	// Ensure the response body is closed
+	defer resp.Body.Close()
+	// close connection after request
+	req.Close = true
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -356,13 +377,15 @@ func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
 		log.Error().Err(err).Msgf("Failed to create request for block ID: %d", blockId)
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to fetch block ID: %d", blockId)
 		return nil, err
 	}
-	defer resp.Body.Close() // Ensure the response body is closed
-
+	// Ensure the response body is closed
+	defer resp.Body.Close()
+	// close connection after request
+	req.Close = true
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to read response body for block ID: %d", blockId)
@@ -429,7 +452,10 @@ func (s *SubstrateService) GetLatestFinalizedBlock() (*BlockResponse, error) {
 		log.Error().Err(err).Msg("Failed to execute HTTP request")
 		return nil, err
 	}
+	// Ensure the response body is closed
 	defer resp.Body.Close()
+	// close connection after request
+	req.Close = true
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
