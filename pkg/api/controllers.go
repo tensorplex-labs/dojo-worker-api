@@ -173,7 +173,7 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	taskService := task.NewTaskService()
-	tasks, errors := taskService.CreateTasksWithTimeout(requestBody, minerUser.ID, 60*time.Second)
+	tasks, errors := taskService.CreateTasksWithTimeout(requestBody, minerUser.ID, 300*time.Second)
 
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
