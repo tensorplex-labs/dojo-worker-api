@@ -197,11 +197,41 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 	}
 }
 
-// create task
-func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (s *TaskService) CreateTasksWithTimeout(request CreateTaskRequest, minerUserId string, timeout time.Duration) ([]*db.TaskModel, []error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	type result struct {
+		tasks []*db.TaskModel
+		errs  []error
+	}
+
+	resultChan := make(chan result, 1)
+
+	go func() {
+		tasks, errs := s.CreateTasks(ctx, request, minerUserId)
+		resultChan <- result{tasks: tasks, errs: errs}
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Error().Dur("timeout", timeout).Msg("CreateTasks timed out due to deadline")
+			return nil, []error{fmt.Errorf("operation timed out after %v", timeout)}
+		}
+		log.Error().Err(ctx.Err()).Msg("Context canceled while creating tasks")
+		return nil, []error{ctx.Err()}
+	case res := <-resultChan:
+		if len(res.tasks) == 0 && len(res.errs) == 0 {
+			log.Warn().Msg("No tasks created and no errors reported")
+			return nil, []error{fmt.Errorf("no tasks were created and no errors were reported")}
+		}
+		return res.tasks, res.errs
+	}
+}
+
+// create task
+func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
 	tasks := make([]*db.TaskModel, 0)
 	errors := make([]error, 0)
 
@@ -245,7 +275,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
 
-		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
+		task, err := taskORM.CreateTask(ctx, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
 			errors = append(errors, err)
