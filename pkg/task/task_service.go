@@ -2,10 +2,6 @@ package task
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +11,11 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -198,7 +199,7 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 
 // create task
 func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	tasks := make([]*db.TaskModel, 0)
@@ -505,7 +506,6 @@ func ValidateTaskData(taskData TaskData) error {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
 		}
-
 	}
 
 	if len(taskData.Criteria) == 0 {
@@ -679,6 +679,12 @@ func (t *TaskService) GetCompletedTaskMap(ctx context.Context, workerId string) 
 }
 
 func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
+	// set max memory to 64 MB
+	if err := c.Request.ParseMultipartForm(64 << 20); err != nil {
+		log.Error().Err(err).Msg("Failed to parse multipart form")
+		return CreateTaskRequest{}, fmt.Errorf("failed to parse form: %w", err)
+	}
+
 	var reqbody CreateTaskRequest
 	title := c.PostForm("title")
 	body := c.PostForm("body")
