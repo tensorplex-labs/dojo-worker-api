@@ -2,8 +2,6 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/utils"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -11,6 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"

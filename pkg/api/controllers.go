@@ -181,14 +181,14 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	taskService := task.NewTaskService()
-	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
+	tasks, errors := taskService.CreateTasksWithTimeout(requestBody, minerUser.ID, 60*time.Second)
 
-	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return
 	}
 
+	log.Info().Msg("Tasks created successfully")
 	taskIds := make([]string, 0, len(tasks))
 	for _, task := range tasks {
 		taskIds = append(taskIds, task.ID)

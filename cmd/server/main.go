@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
-	"dojo-api/pkg/api"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/utils"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 
 	_ "dojo-api/docs"
 
@@ -23,9 +24,9 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-//	@title			Dojo Worker API
-//	@version		1.0
-//	@description	This is the worker API for the Dojo project.
+// @title			Dojo Worker API
+// @version		1.0
+// @description	This is the worker API for the Dojo project.
 
 func main() {
 	loadEnvVars()
@@ -35,7 +36,6 @@ func main() {
 	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
 	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
-	allowedOrigins = append(allowedOrigins, "http://localhost*")
 
 	log.Info().Msgf("Allowed origins: %v", allowedOrigins)
 	config := cors.Config{
