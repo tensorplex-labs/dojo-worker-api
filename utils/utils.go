@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/joho/godotenv"
-	"github.com/playwright-community/playwright-go"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
@@ -49,15 +48,6 @@ func init() {
 	LoadDotEnv("TOKEN_EXPIRY")
 	LoadDotEnv("SERVER_PORT")
 	LoadDotEnv("ETHEREUM_NODE")
-
-	err = playwright.Install(
-		&playwright.RunOptions{
-			Browsers: []string{"firefox"},
-		},
-	)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error installing playwright")
-	}
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
