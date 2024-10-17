@@ -219,7 +219,7 @@ func buildPostgresConnString(secrets *DbSecrets) string {
 	databaseUrl := "postgresql://" + secrets.username + ":" + safePassword + "@" + host + "/" + dbName
 	// add connection pooling etc.
 	maxConns := runtime.NumCPU()*2 + 1
-	databaseUrl += "connection_limit=" + strconv.Itoa(maxConns) + "&pool_timeout=20"
+	databaseUrl += "?connection_limit=" + strconv.Itoa(maxConns) + "&pool_timeout=20"
 
 	// hack this so Prisma can read it directly, handle complexities here
 	os.Setenv("DATABASE_URL", databaseUrl)
