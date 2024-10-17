@@ -11,14 +11,10 @@ RUN go run github.com/steebchen/prisma-client-go prefetch
 COPY . .
 
 RUN go run github.com/steebchen/prisma-client-go generate
-RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps firefox
 
 ARG PLATFORM=linux
 ARG ARCH=amd64
 RUN CGO_ENABLED=0 GOARCH=${ARCH} GOOS=${PLATFORM} go build -a -installsuffix cgo -o service ./cmd/server/main.go
-
-# FROM ubuntu:22.04
-FROM mcr.microsoft.com/playwright:v1.40.0-jammy
 
 # RUN apt-get update && \
 #     DEBIAN_FRONTEND=noninteractive \
