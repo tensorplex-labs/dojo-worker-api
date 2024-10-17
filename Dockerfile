@@ -31,7 +31,8 @@ FROM golang:1.22-alpine
 
 WORKDIR /dojo-api
 
-COPY --from=builder /app/service /app/entrypoint.sh .
+COPY --from=builder /app/service ./service
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 
 EXPOSE 8080
 
