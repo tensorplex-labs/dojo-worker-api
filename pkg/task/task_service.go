@@ -2,10 +2,6 @@ package task
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/sandbox"
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +11,11 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/sandbox"
+	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -201,11 +202,41 @@ func IsValidCriteriaType(criteriaType CriteriaType) bool {
 	}
 }
 
-// create task
-func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+func (s *TaskService) CreateTasksWithTimeout(request CreateTaskRequest, minerUserId string, timeout time.Duration) ([]*db.TaskModel, []error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	type result struct {
+		tasks []*db.TaskModel
+		errs  []error
+	}
+
+	resultChan := make(chan result, 1)
+
+	go func() {
+		tasks, errs := s.CreateTasks(ctx, request, minerUserId)
+		resultChan <- result{tasks: tasks, errs: errs}
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Error().Dur("timeout", timeout).Msg("CreateTasks timed out due to deadline")
+			return nil, []error{fmt.Errorf("operation timed out after %v", timeout)}
+		}
+		log.Error().Err(ctx.Err()).Msg("Context canceled while creating tasks")
+		return nil, []error{ctx.Err()}
+	case res := <-resultChan:
+		if len(res.tasks) == 0 && len(res.errs) == 0 {
+			log.Warn().Msg("No tasks created and no errors reported")
+			return nil, []error{fmt.Errorf("no tasks were created and no errors were reported")}
+		}
+		return res.tasks, res.errs
+	}
+}
+
+// create task
+func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest, minerUserId string) ([]*db.TaskModel, []error) {
 	tasks := make([]*db.TaskModel, 0)
 	errors := make([]error, 0)
 
@@ -249,7 +280,7 @@ func (s *TaskService) CreateTasks(request CreateTaskRequest, minerUserId string)
 			taskToCreate.TotalReward = &request.TotalRewards
 		}
 
-		task, err := taskORM.CreateTask(ctxWithTimeout, taskToCreate, minerUserId)
+		task, err := taskORM.CreateTask(ctx, taskToCreate, minerUserId)
 		if err != nil {
 			log.Error().Msgf("Error creating task: %v", err)
 			errors = append(errors, err)
@@ -510,7 +541,6 @@ func ValidateTaskData(taskData TaskData) error {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
 		}
-
 	}
 
 	if len(taskData.Criteria) == 0 {
@@ -684,6 +714,12 @@ func (t *TaskService) GetCompletedTaskMap(ctx context.Context, workerId string) 
 }
 
 func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
+	// set max memory to 64 MB
+	if err := c.Request.ParseMultipartForm(64 << 20); err != nil {
+		log.Error().Err(err).Msg("Failed to parse multipart form")
+		return CreateTaskRequest{}, fmt.Errorf("failed to parse form: %w", err)
+	}
+
 	var reqbody CreateTaskRequest
 	title := c.PostForm("title")
 	body := c.PostForm("body")
