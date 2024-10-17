@@ -34,7 +34,10 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 COPY --from=builder /app/service /app/service
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
+
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["./service"]
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 echo "Starting Dojo API"
-./service
+exec ./service
