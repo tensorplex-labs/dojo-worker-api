@@ -105,12 +105,17 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 	// Convert tasks to TaskResponse model
 	taskResponses := make([]TaskPaginationResponse, 0)
 	for _, task := range tasks {
-		var rawJSON json.RawMessage
-		err = json.Unmarshal([]byte(task.TaskData), &rawJSON)
+		var taskData TaskData
+		err = json.Unmarshal([]byte(task.TaskData), &taskData)
 		if err != nil {
 			log.Error().Err(err).Msg("Error parsing task data")
 			return nil, []error{err}
 		}
+
+		for i := range taskData.Responses {
+			taskData.Responses[i].Completion = nil
+		}
+
 		taskResponse := TaskPaginationResponse{
 			TaskResponse: TaskResponse{ // Fill the embedded TaskResponse structure.
 				ID:          task.ID,
@@ -118,7 +123,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 				Body:        task.Body,
 				ExpireAt:    task.ExpireAt,
 				Type:        task.Type,
-				TaskData:    rawJSON,
+				TaskData:    taskData,
 				Status:      task.Status,
 				NumResults:  task.NumResults,
 				MaxResults:  task.MaxResults,
