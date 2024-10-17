@@ -2,12 +2,13 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"dojo-api/db"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -108,11 +109,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
 		return nil, 0, err
 	}
-
-	// TODO commented out for now, testing raw query speed
-	// totalTasks, err := o.dbClient.Task.FindMany(
-	// 	filterParams...,
-	// ).Exec(ctx)
 
 	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {

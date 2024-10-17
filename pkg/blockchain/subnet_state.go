@@ -36,7 +36,6 @@ func GetValidatorMinStake() int {
 	return intValue
 }
 
-// TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
 	SubnetId               int
 	ActiveValidatorHotkeys map[int]string
@@ -261,7 +260,6 @@ func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) 
 }
 
 func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
-	// TODO fix why validator hotkey changes so quickly, should be a bug
 	for uid, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
 			return uid, true

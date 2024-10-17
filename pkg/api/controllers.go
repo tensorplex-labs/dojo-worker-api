@@ -25,7 +25,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
-	"github.com/redis/rueidis"
 	"github.com/rs/zerolog/log"
 	"github.com/spruceid/siwe-go"
 )
@@ -968,21 +967,18 @@ func GenerateCookieAuth(c *gin.Context) {
 			},
 		}
 
-		expirationTime := 5 * time.Minute
-		if err := cache.Redis.Do(
-			context.Background(),
-			cache.Redis.B().JsonSet().Key(encoded).Path("$").Value(rueidis.JSON(redisData)).Build(),
-		).Error(); err != nil {
-			log.Error().Err(err).Msg("Failed to store session in redis")
+		jsonData, err := json.Marshal(redisData)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal auth data...")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
 			return
 		}
 
-		if err := cache.Redis.Do(
-			context.Background(),
-			cache.Redis.B().Expire().Key(encoded).Seconds(int64(expirationTime.Seconds())).Build(),
-		).Error(); err != nil {
-			log.Error().Err(err).Msg("Failed to set expiration time for session")
+		expirationTime := 5 * time.Minute
+		// migrating from rueidis to go-redis
+
+		if _, err := cache.Redis.Set(context.Background(), encoded, jsonData, expirationTime).Result(); err != nil {
+			log.Error().Err(err).Msg("Failed to store session in redis")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
 			return
 		}

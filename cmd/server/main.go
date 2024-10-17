@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
-	"dojo-api/pkg/api"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/utils"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"dojo-api/pkg/api"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/utils"
 
 	_ "dojo-api/docs"
 
@@ -46,7 +47,13 @@ func main() {
 		MaxAge:           12 * time.Hour,
 		AllowWildcard:    true,
 	}
+
+	api.InitializeLimiters()
+	log.Info().Msg("Rate limiters initialized")
+
 	router.Use(cors.New(config))
+	router.Use(api.GenerousRateLimiter())
+	router.ForwardedByClientIP = true
 	api.LoginRoutes(router)
 
 	if os.Getenv("RUNTIME_ENV") == "local" {

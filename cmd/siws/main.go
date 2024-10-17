@@ -1,8 +1,9 @@
 package main
 
 import (
-	"dojo-api/pkg/blockchain/siws"
 	"fmt"
+
+	"dojo-api/pkg/blockchain/siws"
 )
 
 func main() {

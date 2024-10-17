@@ -244,7 +244,6 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	return &axonInfoValue, nil
 }
 
-// TODO think about this, this is dependent on axons being served
 func (s *SubstrateService) GetAllParticipants(subnetId int) ([]Participant, error) {
 	maxUid, err := s.GetMaxUID(subnetId)
 	log.Info().Msgf("Max UID for subnet %d: %d", subnetId, maxUid)
