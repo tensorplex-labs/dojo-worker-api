@@ -64,35 +64,40 @@ func main() {
 		Handler: router,
 	}
 
-	go func() {
-		// service connections
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("listen")
-		}
-	}()
+	done := make(chan bool, 1)
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-quit
-	log.Info().Msgf("Received signal: %s. Shutting down...", sig)
 
-	numSeconds := 2
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(numSeconds)*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal().Err(err).Msg("Server Shutdown:")
-		// shutdown tasks
+	go func() {
+		sig := <-quit
+		log.Info().Msgf("Received signal: %s. Shutting down...", sig)
+
+		numSeconds := 5 // Increased timeout for graceful shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(numSeconds)*time.Second)
+		defer cancel()
+
+		server.SetKeepAlivesEnabled(false)
+		if err := server.Shutdown(ctx); err != nil {
+			log.Error().Err(err).Msg("Server Shutdown:")
+		}
+
 		onShutdown()
+
+		close(done)
+	}()
+
+	log.Info().Msgf("Server starting on port %s", port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("Server startup failed")
 	}
-	// catching ctx.Done(). timeout of 5 seconds.
-	<-ctx.Done()
+
+	<-done
 	log.Info().Msg("Server exiting")
 }
 
 func onShutdown() {
-	log.Info().Msg("Shutting down server")
+	log.Info().Msg("Performing shutting down server")
 	connHandler := orm.GetConnHandler()
 	connHandler.OnShutdown()
 	cache := cache.GetCacheInstance()
