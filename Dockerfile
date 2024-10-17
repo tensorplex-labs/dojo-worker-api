@@ -31,13 +31,10 @@ RUN apk --no-cache add ca-certificates
 #     apt-get clean && \
 #     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /dojo-api
+WORKDIR /app
 
-COPY --from=builder /app/service /dojo-api/service
-COPY entrypoint.sh  .
-
-RUN chmod +x /dojo-api/entrypoint.sh
+COPY --from=builder /app/service /app/service
 
 EXPOSE 8080
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["./service"]
