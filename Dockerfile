@@ -22,7 +22,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
     ca-certificates \
-    build-essential \
+    build-essential && \
     #     xorg \
     #     gnome-core \
     #     libgtk-3-dev && \
