@@ -115,6 +115,14 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
+	// Log the headers of the request
+	headers := c.Request.Header
+	log.Info().Interface("headers", headers).Msg("Request headers")
+
+	// Log the size of the request
+	requestSize := c.Request.ContentLength
+	log.Info().Int64("requestSize", requestSize).Msg("Request size")
+
 	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
 
 	minerUserInterface, exists := c.Get("minerUser")
