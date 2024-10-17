@@ -32,10 +32,10 @@ FROM golang:1.22-alpine
 WORKDIR /dojo-api
 
 COPY --from=builder /app/service /dojo-api/service
-COPY entrypoint.sh /dojo-api/entrypoint.sh
+COPY entrypoint.sh  .
 
 RUN chmod +x /dojo-api/entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/dojo-api/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
