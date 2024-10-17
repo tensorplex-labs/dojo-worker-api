@@ -16,9 +16,7 @@ ARG PLATFORM=linux
 ARG ARCH=amd64
 RUN CGO_ENABLED=0 GOARCH=${ARCH} GOOS=${PLATFORM} go build -a -installsuffix cgo -o service ./cmd/server/main.go
 
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
+FROM ubuntu:22.04
 
 # RUN apt-get update && \
 #     DEBIAN_FRONTEND=noninteractive \
@@ -31,12 +29,11 @@ RUN apk --no-cache add ca-certificates
 #     apt-get clean && \
 #     rm -rf /var/lib/apt/lists/*
 
+
 WORKDIR /dojo-api
 
 COPY --from=builder /app/service /dojo-api/service
 COPY --from=builder /app/entrypoint.sh /dojo-api/entrypoint.sh
-
-RUN chmod +x /dojo-api/entrypoint.sh
 
 EXPOSE 8080
 
