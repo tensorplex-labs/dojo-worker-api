@@ -16,7 +16,9 @@ ARG PLATFORM=linux
 ARG ARCH=amd64
 RUN CGO_ENABLED=0 GOARCH=${ARCH} GOOS=${PLATFORM} go build -a -installsuffix cgo -o service ./cmd/server/main.go
 
-FROM golang:1.22-alpine
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
 
 # RUN apt-get update && \
 #     DEBIAN_FRONTEND=noninteractive \
