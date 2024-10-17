@@ -2,15 +2,18 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/utils"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -214,6 +217,10 @@ func buildPostgresConnString(secrets *DbSecrets) string {
 	dbName := utils.LoadDotEnv("DB_NAME")
 	safePassword := url.QueryEscape(secrets.password)
 	databaseUrl := "postgresql://" + secrets.username + ":" + safePassword + "@" + host + "/" + dbName
+	// add connection pooling etc.
+	maxConns := runtime.NumCPU()*2 + 1
+	databaseUrl += "connection_limit=" + strconv.Itoa(maxConns) + "&pool_timeout=20"
+
 	// hack this so Prisma can read it directly, handle complexities here
 	os.Setenv("DATABASE_URL", databaseUrl)
 	return databaseUrl
