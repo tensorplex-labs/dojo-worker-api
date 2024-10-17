@@ -36,7 +36,6 @@ func main() {
 	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
 	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
-	allowedOrigins = append(allowedOrigins, "http://localhost*")
 
 	log.Info().Msgf("Allowed origins: %v", allowedOrigins)
 	config := cors.Config{
