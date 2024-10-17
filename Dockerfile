@@ -23,9 +23,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     build-essential \
-    xorg \
-    gnome-core \
-    libgtk-3-dev && \
+    #     xorg \
+    #     gnome-core \
+    #     libgtk-3-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
