@@ -1,9 +1,11 @@
 package api
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
+	"dojo-api/pkg/blockchain"
 	"dojo-api/pkg/cache"
 	"dojo-api/utils"
 
@@ -133,6 +135,22 @@ func getRateLimiterMiddleware(key RateLimiterKey) gin.HandlerFunc {
 			return
 		}
 
+		c.Next()
+	}
+}
+
+// Middleware that checks if the caller is in the metagraph and aborts with
+// a 403 status if not. This is to prevent random people from being able to
+// hit our APIs.
+func InMetagraphOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := getCallerIP(c)
+		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
+		found := subnetSubscriber.FindMinerIpAddress(ip)
+		if !found {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
 		c.Next()
 	}
 }

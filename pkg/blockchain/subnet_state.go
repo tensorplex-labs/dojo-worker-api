@@ -267,3 +267,12 @@ func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bo
 	}
 	return -1, false
 }
+
+func (s *SubnetStateSubscriber) FindMinerIpAddress(ipAddress string) bool {
+	for _, participant := range s.SubnetState.ActiveParticipants {
+		if participant.Axon.IpAddress == ipAddress {
+			return true
+		}
+	}
+	return false
+}

@@ -22,8 +22,8 @@ func LoginRoutes(router *gin.Engine) {
 		apiV1.PUT("/partner/edit", GenerousRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
-			tasks.POST("/create-tasks", WriteTaskRateLimiter(), MinerAuthMiddleware(), CreateTasksController)
 			tasks.PUT("/submit-result/:task-id", WriteTaskRateLimiter(), WorkerAuthMiddleware(), SubmitTaskResultController)
+			tasks.POST("/create-tasks", InMetagraphOnly(), WriteTaskRateLimiter(), MinerAuthMiddleware(), CreateTasksController)
 			tasks.GET("/task-result/:task-id", ReadTaskRateLimiter(), GetTaskResultsController)
 			tasks.GET("/:task-id", ReadTaskRateLimiter(), GetTaskByIdController)
 			tasks.GET("/next-task/:task-id", ReadTaskRateLimiter(), GetNextInProgressTaskController)
