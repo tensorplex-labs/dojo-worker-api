@@ -3,12 +3,6 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"dojo-api/pkg/auth"
-	"dojo-api/pkg/blockchain"
-	"dojo-api/pkg/blockchain/siws"
-	"dojo-api/pkg/cache"
-	"dojo-api/pkg/orm"
-	"dojo-api/pkg/worker"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,8 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"dojo-api/pkg/auth"
+	"dojo-api/pkg/blockchain"
+	"dojo-api/pkg/blockchain/siws"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/orm"
+	"dojo-api/pkg/worker"
+
 	"github.com/gorilla/securecookie"
-	"github.com/redis/rueidis"
+	"github.com/redis/go-redis/v9"
 	"github.com/spruceid/siwe-go"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -378,30 +379,20 @@ func MinerCookieAuthMiddleware() gin.HandlerFunc {
 		}
 
 		cache := cache.GetCacheInstance()
-		result := cache.Redis.Do(
-			c.Request.Context(),
-			cache.Redis.B().JsonGet().Key(cookie).Build(),
-		)
-		if result.Error() != nil {
-			if rueidis.IsRedisNil(result.Error()) {
-				log.Error().Err(result.Error()).Msg("Cookie not found in cache")
+		result, err := cache.Redis.Get(c.Request.Context(), cookie).Result()
+		if err != nil {
+			if err == redis.Nil {
+				log.Error().Err(err).Msg("Cookie not found in cache")
 				c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 				return
 			}
-			log.Error().Err(result.Error()).Msg("Failed to retrieve cookie from cache")
+			log.Error().Err(err).Msg("Failed to retrieve cookie from cache")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
 			return
 		}
 
-		redisBytes, err := result.AsBytes()
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to convert result to bytes")
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
-			return
-		}
-
 		var session auth.SecureCookieSession
-		if err := json.Unmarshal(redisBytes, &session); err != nil {
+		if err := json.Unmarshal([]byte(result), &session); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal redis data from JSON")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
 			return

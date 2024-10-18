@@ -46,7 +46,13 @@ func main() {
 		MaxAge:           12 * time.Hour,
 		AllowWildcard:    true,
 	}
+
+	api.InitializeLimiters()
+	log.Info().Msg("Rate limiters initialized")
+
 	router.Use(cors.New(config))
+	router.Use(api.GenerousRateLimiter())
+	router.ForwardedByClientIP = true
 	api.LoginRoutes(router)
 
 	if os.Getenv("RUNTIME_ENV") == "local" {
