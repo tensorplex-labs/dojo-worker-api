@@ -57,6 +57,15 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 	return task, err
 }
 
+func (o *TaskORM) GetTasksByIDs(ctx context.Context, taskIDs []string) ([]db.TaskModel, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	return o.dbClient.Task.FindMany(
+		db.Task.ID.In(taskIDs),
+	).Exec(ctx)
+}
+
 // TODO: Optimization
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
 	o.clientWrapper.BeforeQuery()

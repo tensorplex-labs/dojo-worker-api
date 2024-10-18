@@ -139,6 +139,15 @@ type PaginationParams struct {
 	Order db.SortOrder `json:"order"`
 }
 
+type GetTasksResultsBatchRequest struct {
+	TaskIDs []string      `json:"task_ids" binding:"required"`
+	Status  db.TaskStatus `json:"status" binding:"required"`
+}
+
+type GetTasksResultsBatchResponse struct {
+	TaskResults map[string][]TaskResult `json:"task_results"`
+}
+
 func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
 	var floatStr string
 	err := json.Unmarshal(v, &floatStr)
