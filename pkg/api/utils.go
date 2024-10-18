@@ -110,10 +110,9 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 // Get the user's IP address from the gin request headers
 func getCallerIP(c *gin.Context) string {
 	if runtimeEnv := utils.LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
-		callerIp := c.Request.Header.Get("X-Forwarded-For")
-		log.Info().Msgf("Got caller IP from X-Forwarded-For header: %s", callerIp)
+		callerIp := c.Request.Header.Get("X-Original-Forwarded-For")
+		log.Info().Msgf("Got caller IP from X-Original-Forwarded-For header: %s", callerIp)
 		return callerIp
 	}
-	log.Info().Msgf("Using client IP: %s", c.ClientIP())
 	return c.ClientIP()
 }

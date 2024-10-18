@@ -145,6 +145,7 @@ func getRateLimiterMiddleware(key RateLimiterKey) gin.HandlerFunc {
 func InMetagraphOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := getCallerIP(c)
+		log.Info().Msgf("Checking if IP %s is in the metagraph", ip)
 		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		found := subnetSubscriber.FindMinerIpAddress(ip)
 		if !found {
