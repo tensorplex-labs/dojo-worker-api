@@ -10,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"dojo-api/db"
@@ -79,7 +80,7 @@ func (s *TaskService) GetTasksResultsBatch(ctx context.Context, taskIDs []string
 	results := make(map[string][]db.TaskResultModel)
 
 	for _, task := range tasks {
-		if task.Status == status {
+		if string(task.Status) == strings.ToUpper(string(status)) {
 			taskResults, err := taskResultORM.GetTaskResultsByTaskId(ctx, task.ID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch task results for task %s: %w", task.ID, err)

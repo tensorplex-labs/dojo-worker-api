@@ -558,12 +558,6 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	limit, err := strconv.Atoi(limitStr)
-	if limit > 10 {
-		log.Error().Msgf("Limit exceeds maximum allowed value: %d", limit)
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Limit cannot exceed 10"))
-		return
-	}
-
 	// Add validation to ensure limit does not exceed 10
 	if limit > 10 {
 		log.Error().Msgf("Limit exceeds maximum allowed value: %d", limit)
@@ -655,8 +649,6 @@ func GetTaskResultsController(c *gin.Context) {
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.TaskResultResponse{TaskResults: formattedTaskResults}))
 }
-
-// Add this new controller function
 
 // GetTasksResultsBatchController godoc
 //
