@@ -558,9 +558,16 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	limit, err := strconv.Atoi(limitStr)
-	if err != nil {
-		log.Error().Err(err).Msg("Error converting page to integer:")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid limit parameter"))
+	if limit > 10 {
+		log.Error().Msgf("Limit exceeds maximum allowed value: %d", limit)
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Limit cannot exceed 10"))
+		return
+	}
+
+	// Add validation to ensure limit does not exceed 10
+	if limit > 10 {
+		log.Error().Msgf("Limit exceeds maximum allowed value: %d", limit)
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Limit cannot exceed 10"))
 		return
 	}
 
@@ -647,6 +654,63 @@ func GetTaskResultsController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.TaskResultResponse{TaskResults: formattedTaskResults}))
+}
+
+// Add this new controller function
+
+// GetTasksResultsBatchController godoc
+//
+//	@Summary		Get tasks results in batch
+//	@Description	Retrieve tasks results for multiple task IDs with a specific status
+//	@Tags			Tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		task.GetTasksResultsBatchRequest	true	"Request body containing task IDs and status"
+//	@Success		200		{object}	ApiResponse{body=task.GetTasksResultsBatchResponse}
+//	@Failure		400		{object}	ApiResponse
+//	@Failure		500		{object}	ApiResponse
+//	@Router			/tasks/results/batch [post]
+func GetTasksResultsBatchController(c *gin.Context) {
+	var request task.GetTasksResultsBatchRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid request body"))
+		return
+	}
+
+	taskService := task.NewTaskService()
+	dbResults, err := taskService.GetTasksResultsBatch(c.Request.Context(), request.TaskIDs, request.Status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to fetch task results"))
+		return
+	}
+	log.Info().Interface("dbResults", dbResults).Msg("Fetched task results")
+
+	// Convert db.TaskResultModel to task.TaskResult
+	results := make(map[string][]task.TaskResult)
+	for taskID, dbTaskResults := range dbResults {
+		taskResults := make([]task.TaskResult, len(dbTaskResults))
+		for i, dbResult := range dbTaskResults {
+			var resultDataItem []task.Result
+			err = json.Unmarshal([]byte(dbResult.ResultData), &resultDataItem)
+			if err != nil {
+				log.Error().Err(err).Str("taskResult.ResultData", string(dbResult.ResultData)).Msg("failed to convert task results")
+				c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to process task results"))
+				return
+			}
+
+			taskResults[i] = task.TaskResult{
+				ResultData:      resultDataItem,
+				TaskResultModel: dbResult,
+			}
+		}
+		results[taskID] = taskResults
+	}
+
+	response := task.GetTasksResultsBatchResponse{
+		TaskResults: results,
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
 // UpdateWorkerPartnerController godoc

@@ -68,6 +68,30 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	}, nil
 }
 
+func (s *TaskService) GetTasksResultsBatch(ctx context.Context, taskIDs []string, status db.TaskStatus) (map[string][]db.TaskResultModel, error) {
+	taskORM := orm.NewTaskORM()
+	tasks, err := taskORM.GetTasksByIDs(ctx, taskIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tasks: %w", err)
+	}
+
+	taskResultORM := orm.NewTaskResultORM()
+	results := make(map[string][]db.TaskResultModel)
+
+	for _, task := range tasks {
+		if task.Status == status {
+			taskResults, err := taskResultORM.GetTaskResultsByTaskId(ctx, task.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch task results for task %s: %w", task.ID, err)
+			}
+
+			results[task.ID] = taskResults
+		}
+	}
+
+	return results, nil
+}
+
 // TODO: Implement yieldMin, yieldMax
 func (taskService *TaskService) GetTasksByPagination(ctx context.Context, workerId string, params PaginationParams) (*TaskPagination, []error) {
 	// Calculate offset based on the page and limit
