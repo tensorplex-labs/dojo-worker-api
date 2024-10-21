@@ -1,4 +1,4 @@
-FROM golang:1.22 as builder
+FROM golang:1.22 AS builder
 
 WORKDIR /app
 
@@ -22,7 +22,8 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
     ca-certificates \
-    build-essential && \
+    build-essential \
+    curl && \
     #     xorg \
     #     gnome-core \
     #     libgtk-3-dev && \
