@@ -1,4 +1,4 @@
-FROM golang:1.22 as builder
+FROM golang:1.22 AS builder
 
 WORKDIR /app
 
@@ -37,4 +37,3 @@ COPY --from=builder /app/entrypoint.sh /dojo-api/entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/dojo-api/entrypoint.sh"]
