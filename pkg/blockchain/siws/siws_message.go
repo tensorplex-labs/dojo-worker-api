@@ -67,7 +67,6 @@ func validateDomain(domain *string) (bool, error) {
 	return true, nil
 }
 
-// TODO read nonce outside of this function to validate nonce generated from our backend
 func ParseMessage(message string) (*SiwsMessage, error) {
 	match := SiwsMessageExp.FindStringSubmatch(message)
 
