@@ -32,8 +32,15 @@ func main() {
 	loadEnvVars()
 	go continuouslyReadEnv()
 	go orm.NewTaskORM().UpdateExpiredTasks(context.Background())
+
+	runtimeEnv := utils.LoadDotEnv("RUNTIME_ENV")
+	if runtimeEnv == "aws" {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
+
 	port := utils.LoadDotEnv("SERVER_PORT")
-	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
 	allowedOrigins := strings.Split(utils.LoadDotEnv("CORS_ALLOWED_ORIGINS"), ",")
 	allowedOrigins = append(allowedOrigins, "http://localhost*")
@@ -50,6 +57,10 @@ func main() {
 
 	api.InitializeLimiters()
 	log.Info().Msg("Rate limiters initialized")
+
+	router := gin.New()                          // empty engine
+	router.Use(gin.Recovery())                   // add recovery middleware
+	router.Use(api.CustomGinLogger(&log.Logger)) // add our custom gin logger
 
 	router.Use(cors.New(config))
 	router.Use(api.GenerousRateLimiter())

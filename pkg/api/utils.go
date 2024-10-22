@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/auth"
@@ -12,6 +15,7 @@ import (
 	"dojo-api/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -115,4 +119,70 @@ func getCallerIP(c *gin.Context) string {
 		return callerIp
 	}
 	return c.ClientIP()
+}
+
+// CustomGinLogger logs a gin HTTP request in format.
+// Allows to set the logger for testing purposes.
+func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now() // Start timer
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		// Read the request body
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			log.Printf("Error reading request body: %v", err)
+			c.AbortWithStatus(500)
+			return
+		}
+
+		// Log the size of the request body
+		requestSize := len(body)
+		log.Printf("Request size: %d bytes", requestSize)
+
+		// Restore the request body to the context
+		c.Request.Body = io.NopCloser(io.NopCloser(bytes.NewBuffer(body)))
+
+		// Process request
+		c.Next()
+
+		// Fill the params
+		param := gin.LogFormatterParams{}
+
+		param.TimeStamp = time.Now() // Stop timer
+		param.Latency = param.TimeStamp.Sub(start)
+		if param.Latency > time.Minute {
+			param.Latency = param.Latency.Truncate(time.Second)
+		}
+
+		param.ClientIP = getCallerIP(c)
+		param.Method = c.Request.Method
+		param.StatusCode = c.Writer.Status()
+		param.ErrorMessage = c.Errors.ByType(gin.ErrorTypePrivate).String()
+		param.BodySize = c.Writer.Size()
+		if raw != "" {
+			path = path + "?" + raw
+		}
+		param.Path = path
+
+		// Log using the params
+		var logEvent *zerolog.Event
+		if c.Writer.Status() >= 500 {
+			logEvent = logger.Error()
+		} else {
+			logEvent = logger.Info()
+		}
+
+		logEvent.Int("status_code", param.StatusCode).
+			Str("latency", param.Latency.String()). // processing time
+			Str("ip", param.ClientIP).              // ip addr, depending on runtime
+			Str("method", param.Method).
+			Str("path", param.Path).          // path with params
+			Int("resp_size", param.BodySize). // response size bytes
+			Msg(param.ErrorMessage)           // any error messages
+		if requestSize > 0 {
+			logEvent.Int("req_size", requestSize) // request size bytes
+		}
+	}
 }
