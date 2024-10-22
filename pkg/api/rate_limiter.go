@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -28,7 +29,6 @@ const (
 	WriteTaskRateLimiterKey RateLimiterKey = "dojo_worker_api:limiter:task_write"
 	ReadTaskRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:task_read"
 	MetricsRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:metrics"
-	MinerRateLimiterKey     RateLimiterKey = "dojo_miner_api:limiter:miner"
 )
 
 type LimiterConfig struct {
@@ -43,10 +43,6 @@ func init() {
 
 func GenerousRateLimiter() gin.HandlerFunc {
 	return getRateLimiterMiddleware(WorkerRateLimiterKey)
-}
-
-func MinerRateLimiter() gin.HandlerFunc {
-	return getRateLimiterMiddleware(MinerRateLimiterKey)
 }
 
 func WriteTaskRateLimiter() gin.HandlerFunc {
@@ -68,22 +64,17 @@ func InitializeLimiters() {
 		limiterConfigs := []LimiterConfig{
 			{
 				key:    WorkerRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 50},
+				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
 				prefix: string(WorkerRateLimiterKey),
 			},
 			{
-				key:    MinerRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 360},
-				prefix: string(MinerRateLimiterKey),
-			},
-			{
 				key:    WriteTaskRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 12},
+				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 60},
 				prefix: string(WriteTaskRateLimiterKey),
 			},
 			{
 				key:    ReadTaskRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 120},
+				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
 				prefix: string(ReadTaskRateLimiterKey),
 			},
 			{
@@ -117,7 +108,8 @@ func getRateLimiterMiddleware(key RateLimiterKey) gin.HandlerFunc {
 		limiterInstance, ok := limiters.Load(key)
 		if !ok {
 			log.Fatal().Str("key", string(key)).Msg("Rate limiters not initialized properly")
-			c.Next()
+			c.Error(errors.New("Internal Server Error"))
+			c.AbortWithStatusJSON(500, gin.H{"error": "Internal Server Error"})
 			return
 		}
 
@@ -126,12 +118,15 @@ func getRateLimiterMiddleware(key RateLimiterKey) gin.HandlerFunc {
 		limiterCtx, err := limiter.Get(c, ip)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get rate limiter")
-			c.AbortWithStatus(500)
+			c.Error(errors.New("Internal Server Error"))
+			c.AbortWithStatusJSON(500, gin.H{"error": "Internal Server Error"})
 			return
 		}
 
 		if limiterCtx.Reached {
-			c.AbortWithStatus(429) // Too Many Requests
+			log.Error().Msg("Too Many Requests")
+			c.Error(errors.New("Too many requests"))
+			c.AbortWithStatusJSON(429, gin.H{"error": "Too Many Requests"})
 			return
 		}
 

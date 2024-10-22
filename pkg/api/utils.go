@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"time"
 
 	"dojo-api/db"
@@ -159,7 +160,7 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 		param.ClientIP = getCallerIP(c)
 		param.Method = c.Request.Method
 		param.StatusCode = c.Writer.Status()
-		param.ErrorMessage = c.Errors.ByType(gin.ErrorTypePrivate).String()
+		// param.ErrorMessage = c.Errors.ByType(gin.ErrorTypePrivate).String()
 		param.BodySize = c.Writer.Size()
 		if raw != "" {
 			path = path + "?" + raw
@@ -167,22 +168,44 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 		param.Path = path
 
 		// Log using the params
-		var logEvent *zerolog.Event
-		if c.Writer.Status() >= 500 {
-			logEvent = logger.Error()
-		} else {
-			logEvent = logger.Info()
+		statusCode := c.Writer.Status()
+
+		consoleWriter := zerolog.ConsoleWriter{
+			Out:        os.Stderr,
+			NoColor:    true,
+			PartsOrder: []string{"time", "level", "status_code", "latency", "ip", "method", "path", "resp_size", "req_size", "message"},
+		}
+		consoleWriter.FormatLevel = func(i interface{}) string {
+			return "GIN"
+		}
+		customLogger := log.With().Logger().Output(consoleWriter)
+
+		var event *zerolog.Event
+		event = customLogger.Trace()
+		// switch {
+		// case statusCode >= 100 && statusCode < 200:
+		// 	event = customLogger.Debug()
+		// case statusCode >= 200 && statusCode < 400:
+		// 	event = customLogger.Info()
+		// case statusCode >= 400 && statusCode < 500:
+		// 	event = customLogger.Warn()
+		// case statusCode >= 500:
+		// 	event = customLogger.Error()
+		// }
+
+		if requestSize > 0 {
+			event.Int("req_size", requestSize) // request size bytes
 		}
 
-		logEvent.Int("status_code", param.StatusCode).
+		event.Int("status_code", param.StatusCode).
 			Str("latency", param.Latency.String()). // processing time
 			Str("ip", param.ClientIP).              // ip addr, depending on runtime
 			Str("method", param.Method).
-			Str("path", param.Path).          // path with params
-			Int("resp_size", param.BodySize). // response size bytes
-			Msg(param.ErrorMessage)           // any error messages
-		if requestSize > 0 {
-			logEvent.Int("req_size", requestSize) // request size bytes
-		}
+			Str("path", param.Path).         // path with params
+			Int("resp_size", param.BodySize) // response size bytes
+
+		// errorMessage := c.Errors.ByType(gin.ErrorTypePrivate).String()
+		// let error messages be printed by the actual error handler
+		event.Msgf("")
 	}
 }
