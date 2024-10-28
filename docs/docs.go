@@ -661,6 +661,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/api.ApiResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.ApiResponse"
+                        }
+                    },
                     "500": {
                         "description": "Failed to get next in-progress task",
                         "schema": {
@@ -1477,12 +1483,14 @@ const docTemplate = `{
             "enum": [
                 "CODE_GENERATION",
                 "DIALOGUE",
-                "TEXT_TO_IMAGE"
+                "TEXT_TO_IMAGE",
+                "TEXT_TO_THREE_D"
             ],
             "x-enum-varnames": [
                 "TaskTypeCodeGeneration",
                 "TaskTypeDialogue",
-                "TaskTypeTextToImage"
+                "TaskTypeTextToImage",
+                "TaskTypeTextToThreeD"
             ]
         },
         "metric.AvgTaskCompletionTimeResponse": {

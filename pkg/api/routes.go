@@ -26,7 +26,7 @@ func LoginRoutes(router *gin.Engine) {
 			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
 			tasks.GET("/task-result/:task-id", GetTaskResultsController)
 			tasks.GET("/:task-id", GetTaskByIdController)
-			tasks.GET("/next-task/:task-id", GetNextInProgressTaskController)
+			tasks.GET("/next-task/:task-id", WorkerAuthMiddleware(), GetNextInProgressTaskController)
 			tasks.GET("/", WorkerAuthMiddleware(), GetTasksByPageController)
 		}
 
