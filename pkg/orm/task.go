@@ -2,12 +2,13 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"dojo-api/db"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -270,9 +271,30 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	return taskCountInt, nil
 }
 
-func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db.TaskModel, error) {
+func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
+
+	partners, err := o.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.WorkerID.Equals(workerId),
+		db.WorkerPartner.IsDeleteByMiner.Equals(false),
+		db.WorkerPartner.IsDeleteByWorker.Equals(false),
+	).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
+		return nil, err
+	}
+
+	// Collect Subscription keys from the fetched WorkerPartner records
+	var subscriptionKeys []string
+	for _, partner := range partners {
+		subscriptionKeys = append(subscriptionKeys, partner.MinerSubscriptionKey)
+	}
+
+	if len(subscriptionKeys) == 0 {
+		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
+		return nil, err
+	}
 
 	// Fetch the current task to determine the ordering criteria
 	currentTask, err := o.dbClient.Task.FindFirst(
@@ -282,17 +304,28 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db
 		return nil, err
 	}
 
-	// Fetch the next task that is in-progress based on the created_at timestamp
-	nextTask, err := o.dbClient.Task.FindFirst(
-		db.Task.CreatedAt.Lt(currentTask.CreatedAt),
+	filterParams := []db.TaskWhereParam{
+		db.Task.MinerUser.Where(
+			db.MinerUser.SubscriptionKeys.Some(
+				db.SubscriptionKey.Key.In(subscriptionKeys),
+			),
+		),
+		db.Task.CreatedAt.Gt(currentTask.CreatedAt), // Fetch task created after the current task
 		db.Task.Status.Equals(db.TaskStatusInProgress),
-	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+	}
+
+	// Attempt to find the next in-progress task with a greater CreatedAt timestamp
+	nextTask, err := o.dbClient.Task.FindFirst(
+		filterParams...,
+	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderAsc)).Exec(ctx) // Ascending order to find the next task
 	if err != nil {
-		// If no next task is found, loop back to the first in-progress task
+		// If no next task is found, loop back to the earliest task
 		if errors.Is(err, db.ErrNotFound) {
 			nextTask, err = o.dbClient.Task.FindFirst(
+				db.Task.MinerUser.Where(db.MinerUser.SubscriptionKeys.Some(
+					db.SubscriptionKey.Key.In(subscriptionKeys))),
 				db.Task.Status.Equals(db.TaskStatusInProgress),
-			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderAsc)).Exec(ctx) // Fetch task with the earliest CreatedAt timestamp
 			if err != nil {
 				return nil, err
 			}
