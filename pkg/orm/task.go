@@ -268,6 +268,79 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	}
 }
 
+func (o *TaskORM) UpdateExpiredTasksInRaw(ctx context.Context) {
+	for range time.Tick(1 * time.Minute) {
+		log.Info().Msg("Checking for expired tasks")
+		o.clientWrapper.BeforeQuery()
+		defer o.clientWrapper.AfterQuery()
+
+		currentTime := time.Now()
+		batchSize := 100 // Adjust batch size based on database performance
+
+		// Format the status values with single quotes
+		// statusInProgress := fmt.Sprintf("'%v'", db.TaskStatusInProgress)
+		// statusExpired := fmt.Sprintf("'%v'", db.TaskStatusExpired)
+
+		// Step 1: Delete expired tasks without TaskResults in batches
+		for {
+			deleteQuery := `
+				DELETE FROM "Task"
+				WHERE "id" IN (
+					SELECT "id" FROM "Task"
+					WHERE "expire_at" <= $1
+					  AND "status" IN ($2::"TaskStatus", $3::"TaskStatus")
+					  AND "id" NOT IN (SELECT DISTINCT "task_id" FROM "TaskResult")
+					LIMIT $4
+				)
+			`
+
+			params := []interface{}{currentTime, db.TaskStatusInProgress, db.TaskStatusExpired, batchSize}
+
+			execResult, err := o.dbClient.Prisma.ExecuteRaw(deleteQuery, params...).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error deleting tasks without TaskResults")
+				break
+			}
+
+			if execResult.Count == 0 {
+				log.Info().Msg("No more expired tasks to delete without TaskResults")
+				break
+			}
+
+			log.Info().Msgf("Deleted %v expired tasks without associated TaskResults", execResult.Count)
+		}
+
+		// Step 2: Update expired tasks with TaskResults to 'expired' status in batches
+		for {
+			updateQuery := `
+				UPDATE "Task"
+				SET "status" = $1::"TaskStatus", "updated_at" = $2
+				WHERE "id" IN (
+					SELECT "id" FROM "Task"
+					WHERE "expire_at" <= $3
+					  AND "status" = $4::"TaskStatus"
+					  AND "id" IN (SELECT DISTINCT "task_id" FROM "TaskResult")
+					LIMIT $5
+				)
+			`
+			params := []interface{}{db.TaskStatusExpired, currentTime, currentTime, db.TaskStatusInProgress, batchSize}
+
+			execResult, err := o.dbClient.Prisma.ExecuteRaw(updateQuery, params...).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error updating tasks to expired status")
+				break
+			}
+
+			if execResult.Count == 0 {
+				log.Info().Msg("No more expired tasks with TaskResults to update")
+				break
+			}
+
+			log.Info().Msgf("Updated %v expired tasks with associated TaskResults to 'expired' status", execResult.Count)
+		}
+	}
+}
+
 func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
