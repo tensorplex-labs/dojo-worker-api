@@ -31,7 +31,7 @@ import (
 func main() {
 	loadEnvVars()
 	go continuouslyReadEnv()
-	go orm.NewTaskORM().UpdateExpiredTasksInRaw(context.Background())
+	go orm.NewTaskORM().UpdateExpiredTasks(context.Background())
 	port := utils.LoadDotEnv("SERVER_PORT")
 	router := gin.Default()
 	// read allowedOrigins from environment variable which is a comma separated string
