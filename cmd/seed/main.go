@@ -2,20 +2,44 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"os"
-	"path/filepath"
 	"time"
 
+	"dojo-api/cmd/seed/fixtures"
 	"dojo-api/db"
-	"dojo-api/pkg/orm"
 
 	"github.com/rs/zerolog/log"
-	"github.com/steebchen/prisma-client-go/runtime/types"
 )
 
+/*
+Usage:
+This script is used to manage and generate tasks in the database.
+Run the script with one of the following commands:
+
+go run cmd/seed/main.go reset
+  - Resets the MinerUser and creates a single default task.
+
+go run cmd/seed/main.go gen-task-expired
+  - Generates tasks that are already expired.
+
+go run cmd/seed/main.go gen-task-short
+  - Generates tasks with a short expiration time.
+
+go run cmd/seed/main.go gen-task-normal
+  - Generates tasks with a normal expiration time.
+*/
+
 func main() {
+	// Check if an action argument is provided
+	if len(os.Args) < 2 {
+		log.Error().Msg("No action provided. Use 'reset', 'gen-task-expired', 'gen-task-short', or 'gen-task-normal'")
+		return
+	}
+
+	// Get the action from command-line arguments
+	taskType := os.Args[1]
+
+	// Initialize the database client
 	client := db.NewClient()
 	if err := client.Prisma.Connect(); err != nil {
 		log.Error().Err(err).Msg("Failed to connect to database")
@@ -23,117 +47,89 @@ func main() {
 	}
 	defer client.Prisma.Disconnect()
 
-	seedData(client)
+	// Set up the context
+	ctx := context.Background()
+
+	// Execute the appropriate function based on the command-line argument
+	switch taskType {
+	case "reset":
+		resetMinerUserAndCreateTask(client, ctx)
+	case "gen-task-expired":
+		generateExpiredTasks(client, ctx)
+	case "gen-task-short":
+		generateShortExpireTasks(client, ctx)
+	case "gen-task-normal":
+		generateNormalExpireTasks(client, ctx)
+	default:
+		log.Error().Msg("Unknown task type. Use 'reset', 'gen-task-expired', 'gen-task-short', or 'gen-task-normal'")
+	}
 }
 
-func seedData(client *db.PrismaClient) {
-	mockHotKey := "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHb_123"
-	mockSubKey := "sk-456"
-	ctx := context.Background()
-	clientWrapper := orm.GetPrismaClient()
+// Function to reset MinerUser and create a single default task
+func resetMinerUserAndCreateTask(client *db.PrismaClient, ctx context.Context) {
+	fixtureService := fixtures.NewFixtureService(client)
 
-	clientWrapper.BeforeQuery()
-	defer clientWrapper.AfterQuery()
-
-	// Begin transaction
-	var txns []db.PrismaTransaction
-
-	// Check if MinerUser with hotkey mockHotKey  exists
-	existingMinerUser, err := client.MinerUser.FindUnique(
-		db.MinerUser.Hotkey.Equals(mockHotKey),
-	).Exec(ctx)
-	if err == nil && existingMinerUser != nil {
-		// Delete existing tasks linked to this MinerUser
-		txns = append(txns, client.Task.FindMany(
-			db.Task.MinerUserID.Equals(existingMinerUser.ID),
-		).Delete().Tx())
-
-		// Delete existing WorkerPartners linked to this MinerUser
-		txns = append(txns, client.WorkerPartner.FindMany(
-			db.WorkerPartner.MinerSubscriptionKey.Equals(mockSubKey),
-		).Delete().Tx())
-
-		// Delete existing SubscriptionKeys linked to this MinerUser
-		txns = append(txns, client.SubscriptionKey.FindMany(
-			db.SubscriptionKey.MinerUserID.Equals(existingMinerUser.ID),
-		).Delete().Tx())
-
-		// Add delete transaction for the existing MinerUser
-		txns = append(txns, client.MinerUser.FindUnique(
-			db.MinerUser.ID.Equals(existingMinerUser.ID),
-		).Delete().Tx())
-	}
-
-	// Add create transaction for the new MinerUser
-	txns = append(txns, client.MinerUser.CreateOne(
-		db.MinerUser.Hotkey.Set(mockHotKey),
-	).Tx())
-
-	txns = append(txns, client.SubscriptionKey.CreateOne(
-		db.SubscriptionKey.Key.Set(mockSubKey),
-		db.SubscriptionKey.MinerUser.Link(
-			db.MinerUser.Hotkey.Equals(mockHotKey),
-		),
-	).Tx())
-
-	// Print the current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get current working directory")
+	// Reset the MinerUser
+	if err := fixtureService.ResetMinerUser(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to reset MinerUser")
 		return
 	}
 
-	taskDataPath := filepath.Join(cwd, "cmd/seed", "task_data.json")
-	// Open the jsonFile
-	jsonFile, err := os.Open(taskDataPath)
-	if err != nil {
-		log.Error().Err(err).Msg("Error opening task_data.json")
-		return
-	}
-	defer jsonFile.Close()
-
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		log.Error().Err(err).Msg("Error reading task_data.json")
+	// Create a single default task
+	title := "Default Mock Task"
+	expireDuration := 6 * time.Hour
+	if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
+		log.Error().Err(err).Msg("Failed to create default task")
 		return
 	}
 
-	var taskData map[string]interface{}
-	err = json.Unmarshal(byteValue, &taskData)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal task data")
-		return
+	log.Info().Msg("Reset MinerUser and created a single default task successfully")
+}
+
+// Function to generate expired tasks
+func generateExpiredTasks(client *db.PrismaClient, ctx context.Context) {
+	fixtureService := fixtures.NewFixtureService(client)
+
+	for i := 0; i < 3; i++ {
+		title := "Expired Task"
+		expireDuration := -6 * time.Hour
+		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
+			log.Error().Err(err).Msg("Failed to create expired task")
+			return
+		}
 	}
 
-	// Convert taskData to types.JSON
-	taskDataJSON, err := json.Marshal(taskData)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal task data")
-		return
+	log.Info().Msg("Expired tasks created successfully")
+}
+
+// Function to generate tasks with short expiration
+func generateShortExpireTasks(client *db.PrismaClient, ctx context.Context) {
+	fixtureService := fixtures.NewFixtureService(client)
+
+	for i := 0; i < 3; i++ {
+		title := "Task with Short Expiration"
+		expireDuration := 5 * time.Minute
+		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
+			log.Error().Err(err).Msg("Failed to create short expiration task")
+			return
+		}
 	}
 
-	// Add create transaction for the new task
-	txns = append(txns, client.Task.CreateOne(
-		db.Task.ExpireAt.Set(time.Now().Add(24*7*time.Hour)),
-		db.Task.Title.Set("Mock Task1"),
-		db.Task.Body.Set("This is a sample task body"),
-		db.Task.Type.Set(db.TaskTypeCodeGeneration),
-		db.Task.TaskData.Set(types.JSON(taskDataJSON)),
-		db.Task.Status.Set(db.TaskStatusInProgress),
-		db.Task.MaxResults.Set(10),
-		db.Task.NumResults.Set(0),
-		db.Task.NumCriteria.Set(0),
-		db.Task.TotalReward.Set(101.0),
-		db.Task.MinerUser.Link(
-			db.MinerUser.Hotkey.Equals(mockHotKey),
-		),
-	).Tx())
+	log.Info().Msg("Short expiration tasks created successfully")
+}
 
-	// Execute all transactions
-	if err := client.Prisma.Transaction(txns...).Exec(ctx); err != nil {
-		log.Error().Err(err).Msg("Error executing transaction")
-		return
+// Function to generate tasks with normal expiration
+func generateNormalExpireTasks(client *db.PrismaClient, ctx context.Context) {
+	fixtureService := fixtures.NewFixtureService(client)
+
+	for i := 0; i < 3; i++ {
+		title := "Task with Normal Expiration"
+		expireDuration := 6 * time.Hour
+		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
+			log.Error().Err(err).Msg("Failed to create normal expiration task")
+			return
+		}
 	}
 
-	log.Info().Msg("Successfully seeded data !!!")
+	log.Info().Msg("Normal expiration tasks created successfully")
 }
