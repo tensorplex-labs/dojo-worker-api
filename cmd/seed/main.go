@@ -55,11 +55,11 @@ func main() {
 	case "reset":
 		resetMinerUserAndCreateTask(client, ctx)
 	case "gen-task-expired":
-		generateExpiredTasks(client, ctx)
+		generateTasks(ctx, client, "Expired Task", 3, -6*time.Hour)
 	case "gen-task-short":
-		generateShortExpireTasks(client, ctx)
+		generateTasks(ctx, client, "Task with Short Expiration", 3, 5*time.Minute)
 	case "gen-task-normal":
-		generateNormalExpireTasks(client, ctx)
+		generateTasks(ctx, client, "Task with Normal Expiration", 3, 6*time.Hour)
 	default:
 		log.Error().Msg("Unknown task type. Use 'reset', 'gen-task-expired', 'gen-task-short', or 'gen-task-normal'")
 	}
@@ -86,50 +86,16 @@ func resetMinerUserAndCreateTask(client *db.PrismaClient, ctx context.Context) {
 	log.Info().Msg("Reset MinerUser and created a single default task successfully")
 }
 
-// Function to generate expired tasks
-func generateExpiredTasks(client *db.PrismaClient, ctx context.Context) {
+// Function to generate tasks with a specified number and expiration duration
+func generateTasks(ctx context.Context, client *db.PrismaClient, title string, numTasks int, expireDuration time.Duration) {
 	fixtureService := fixtures.NewFixtureService(client)
 
-	for i := 0; i < 3; i++ {
-		title := "Expired Task"
-		expireDuration := -6 * time.Hour
+	for i := 0; i < numTasks; i++ {
 		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
-			log.Error().Err(err).Msg("Failed to create expired task")
+			log.Error().Err(err).Msgf("Failed to create task: %s", title)
 			return
 		}
 	}
 
-	log.Info().Msg("Expired tasks created successfully")
-}
-
-// Function to generate tasks with short expiration
-func generateShortExpireTasks(client *db.PrismaClient, ctx context.Context) {
-	fixtureService := fixtures.NewFixtureService(client)
-
-	for i := 0; i < 3; i++ {
-		title := "Task with Short Expiration"
-		expireDuration := 5 * time.Minute
-		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
-			log.Error().Err(err).Msg("Failed to create short expiration task")
-			return
-		}
-	}
-
-	log.Info().Msg("Short expiration tasks created successfully")
-}
-
-// Function to generate tasks with normal expiration
-func generateNormalExpireTasks(client *db.PrismaClient, ctx context.Context) {
-	fixtureService := fixtures.NewFixtureService(client)
-
-	for i := 0; i < 3; i++ {
-		title := "Task with Normal Expiration"
-		expireDuration := 6 * time.Hour
-		if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
-			log.Error().Err(err).Msg("Failed to create normal expiration task")
-			return
-		}
-	}
-
-	log.Info().Msg("Normal expiration tasks created successfully")
+	log.Info().Msgf("%d tasks with title '%s' created successfully", numTasks, title)
 }
