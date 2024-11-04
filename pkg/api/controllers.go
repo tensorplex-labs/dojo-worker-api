@@ -1368,8 +1368,13 @@ func GetNextInProgressTaskController(c *gin.Context) {
 	}
 	taskData, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId, worker.ID)
 	if err != nil {
-		log.Error().Err(err).Msg("Filed to get next in progress task")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in progress task"))
+		if errors.Is(err, db.ErrNotFound) {
+			log.Info().Msg("No in progress tasks found")
+			c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: ""}))
+			return
+		}
+		log.Error().Err(err).Msg("Failed to get next in-progress task")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in-progress task"))
 		return
 	}
 
