@@ -304,12 +304,22 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 		return nil, err
 	}
 
-	filterParams := []db.TaskWhereParam{
-		db.Task.MinerUser.Where(
-			db.MinerUser.SubscriptionKeys.Some(
-				db.SubscriptionKey.Key.In(subscriptionKeys),
-			),
+	// Define a filter to exclude tasks already completed by the worker
+	noCompletedTaskResults := db.Task.TaskResults.None(
+		db.TaskResult.WorkerID.Equals(workerId),
+		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
+	)
+
+	// Define a filter for tasks associated with the worker's subscription keys
+	subscriptionKeyFilter := db.Task.MinerUser.Where(
+		db.MinerUser.SubscriptionKeys.Some(
+			db.SubscriptionKey.Key.In(subscriptionKeys),
 		),
+	)
+
+	filterParams := []db.TaskWhereParam{
+		noCompletedTaskResults,
+		subscriptionKeyFilter,
 		db.Task.CreatedAt.Gt(currentTask.CreatedAt), // Fetch task created after the current task
 		db.Task.Status.Equals(db.TaskStatusInProgress),
 	}
@@ -322,8 +332,8 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 		// If no next task is found, loop back to the earliest task
 		if errors.Is(err, db.ErrNotFound) {
 			nextTask, err = o.dbClient.Task.FindFirst(
-				db.Task.MinerUser.Where(db.MinerUser.SubscriptionKeys.Some(
-					db.SubscriptionKey.Key.In(subscriptionKeys))),
+				noCompletedTaskResults,
+				subscriptionKeyFilter,
 				db.Task.Status.Equals(db.TaskStatusInProgress),
 			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderAsc)).Exec(ctx) // Fetch task with the earliest CreatedAt timestamp
 			if err != nil {
