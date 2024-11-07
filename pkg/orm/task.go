@@ -197,7 +197,7 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	return totalTasks, nil
 }
 
-// check every three mins for expired tasks
+// check every 10 mins for expired tasks
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	for range time.Tick(3 * time.Minute) {
 		log.Info().Msg("Checking for expired tasks")
@@ -209,6 +209,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 
 		// Step 1: Delete expired tasks without TaskResults in batches
 		batchNumber := 0
+		startTime := time.Now() // Start timing for delete operation
 		for {
 			batchNumber++
 			deleteQuery := `
@@ -222,6 +223,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 				)
 			`
 
+			// has to include TaskStatusInProgress, to handle Task with in-progress with no results
 			params := []interface{}{currentTime, db.TaskStatusInProgress, db.TaskStatusExpired, batchSize}
 
 			execResult, err := o.dbClient.Prisma.ExecuteRaw(deleteQuery, params...).Exec(ctx)
@@ -236,11 +238,13 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 			}
 
 			log.Info().Msgf("Deleted %v expired tasks without associated TaskResults in batch %d", execResult.Count, batchNumber)
-
 		}
+		deleteDuration := time.Since(startTime) // Calculate total duration for delete operation
+		log.Info().Msgf("Total time taken to delete expired tasks without TaskResults: %s", deleteDuration)
 
 		// Step 2: Update expired tasks with TaskResults to 'expired' status in batches
 		batchNumber = 0
+		startTime = time.Now() // Start timing for update operation
 		for {
 			batchNumber++
 			updateQuery := `
@@ -248,13 +252,13 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 				SET "status" = $1::"TaskStatus", "updated_at" = $2
 				WHERE "id" IN (
 					SELECT "id" FROM "Task"
-					WHERE "expire_at" <= $3
-					  AND "status" = $4::"TaskStatus"
+					WHERE "expire_at" <= $2
+					  AND "status" = $3::"TaskStatus"
 					  AND "id" IN (SELECT DISTINCT "task_id" FROM "TaskResult")
-					LIMIT $5
+					LIMIT $4
 				)
 			`
-			params := []interface{}{db.TaskStatusExpired, currentTime, currentTime, db.TaskStatusInProgress, batchSize}
+			params := []interface{}{db.TaskStatusExpired, currentTime, db.TaskStatusInProgress, batchSize}
 
 			execResult, err := o.dbClient.Prisma.ExecuteRaw(updateQuery, params...).Exec(ctx)
 			if err != nil {
@@ -267,8 +271,10 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 				break
 			}
 
-			log.Info().Msgf("Updated %v expired tasks with associated TaskResults to 'expired' status in batch %d", execResult.Count, batchNumber)
+			log.Info().Msgf("Updated %v expired tasks with associated TaskResults in batch %d", execResult.Count, batchNumber)
 		}
+		updateDuration := time.Since(startTime) // Calculate total duration for update operation
+		log.Info().Msgf("Total time taken to update expired tasks with TaskResults: %s", updateDuration)
 	}
 }
 
