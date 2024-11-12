@@ -16,7 +16,7 @@ linters:
     - staticcheck # go vet on steroids
     - unused # Detect unused constants, variables, functions, and types
     - gocyclo # Detect cyclomatic complexity
-    - gofumpt
+    - gofmt
     - goimports
     - misspell # Fix spelling errors
     - bodyclose # Check whether HTTP response bodies are closed

@@ -1,4 +1,4 @@
-# Dojo Subnet API
+# Dojo Worker API
 
 Repository for our Dojo Subnet APIs. Check request.REST file for developed APIs to test out.(make sure that REST client extension is already installed)
 Extension ID: humao.rest-client

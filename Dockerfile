@@ -1,4 +1,4 @@
-FROM golang:1.22 as builder
+FROM golang:1.22 AS builder
 
 WORKDIR /app
 
@@ -16,20 +16,25 @@ ARG PLATFORM=linux
 ARG ARCH=amd64
 RUN CGO_ENABLED=0 GOARCH=${ARCH} GOOS=${PLATFORM} go build -a -installsuffix cgo -o service ./cmd/server/main.go
 
-# RUN apt-get update && \
-#     DEBIAN_FRONTEND=noninteractive \
-#     apt-get install -y --no-install-recommends \
-#     ca-certificates \
-#     build-essential \
-#     xorg \
-#     gnome-core \
-#     libgtk-3-dev && \
-#     apt-get clean && \
-#     rm -rf /var/lib/apt/lists/*
+FROM ubuntu:22.04
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    build-essential \
+    curl && \
+    #     xorg \
+    #     gnome-core \
+    #     libgtk-3-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /dojo-api
 
-COPY --from=builder /app/service /app/entrypoint.sh .
+COPY --from=builder /app/service /dojo-api/service
+COPY --from=builder /app/entrypoint.sh /dojo-api/entrypoint.sh
 
 EXPOSE 8080
 

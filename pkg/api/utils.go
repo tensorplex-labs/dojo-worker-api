@@ -168,7 +168,7 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 		param.Path = path
 
 		// Log using the params
-		statusCode := c.Writer.Status()
+		// statusCode := c.Writer.Status()
 
 		consoleWriter := zerolog.ConsoleWriter{
 			Out:        os.Stderr,
@@ -180,8 +180,8 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 		}
 		customLogger := log.With().Logger().Output(consoleWriter)
 
-		var event *zerolog.Event
-		event = customLogger.Trace()
+		// var event *zerolog.Event
+		event := customLogger.Trace()
 		// switch {
 		// case statusCode >= 100 && statusCode < 200:
 		// 	event = customLogger.Debug()

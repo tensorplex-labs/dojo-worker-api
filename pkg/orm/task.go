@@ -192,50 +192,84 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	return totalTasks, nil
 }
 
-// check every three mins for expired tasks
+// check every 10 mins for expired tasks
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	for range time.Tick(3 * time.Minute) {
 		log.Info().Msg("Checking for expired tasks")
 		o.clientWrapper.BeforeQuery()
-		// Fetch all expired tasks
-		tasks, err := o.dbClient.Task.
-			FindMany(
-				db.Task.ExpireAt.Lte(time.Now()),
-				db.Task.Status.Equals(db.TaskStatusInProgress),
-			).
-			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
-			Exec(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Error in fetching expired tasks")
-		}
+		defer o.clientWrapper.AfterQuery()
 
-		if len(tasks) == 0 {
-			log.Info().Msg("No newly expired tasks to update skipping...")
-			continue
-		} else {
-			log.Info().Msgf("Fetched %v newly expired tasks", len(tasks))
-		}
+		currentTime := time.Now()
+		batchSize := 100 // Adjust batch size based on database performance
 
-		var txns []db.PrismaTransaction
-		for i, taskModel := range tasks {
-			transaction := o.dbClient.Task.FindUnique(
-				db.Task.ID.Equals(taskModel.ID),
-			).Update(
-				db.Task.Status.Set(db.TaskStatusExpired),
-				db.Task.UpdatedAt.Set(time.Now()),
-			).Tx()
+		// Step 1: Delete expired tasks without TaskResults in batches
+		batchNumber := 0
+		startTime := time.Now() // Start timing for delete operation
+		for {
+			batchNumber++
+			deleteQuery := `
+				DELETE FROM "Task"
+				WHERE "id" IN (
+					SELECT "id" FROM "Task"
+					WHERE "expire_at" <= $1
+					  AND "status" IN ($2::"TaskStatus", $3::"TaskStatus")
+					  AND "id" NOT IN (SELECT DISTINCT "task_id" FROM "TaskResult")
+					LIMIT $4
+				)
+			`
 
-			txns = append(txns, transaction)
+			// has to include TaskStatusInProgress, to handle Task with in-progress with no results
+			params := []interface{}{currentTime, db.TaskStatusInProgress, db.TaskStatusExpired, batchSize}
 
-			if len(txns) == 100 || (i == len(tasks)-1 && len(txns) > 0) {
-				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
-					log.Error().Err(err).Msg("Error in updating batch of task status to expired")
-				}
-				txns = []db.PrismaTransaction{}
+			execResult, err := o.dbClient.Prisma.ExecuteRaw(deleteQuery, params...).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error deleting tasks without TaskResults")
+				break
 			}
-		}
 
-		o.clientWrapper.AfterQuery()
+			if execResult.Count == 0 {
+				log.Info().Msg("No more expired tasks to delete without TaskResults")
+				break
+			}
+
+			log.Info().Msgf("Deleted %v expired tasks without associated TaskResults in batch %d", execResult.Count, batchNumber)
+		}
+		deleteDuration := time.Since(startTime) // Calculate total duration for delete operation
+		log.Info().Msgf("Total time taken to delete expired tasks without TaskResults: %s", deleteDuration)
+
+		// Step 2: Update expired tasks with TaskResults to 'expired' status in batches
+		batchNumber = 0
+		startTime = time.Now() // Start timing for update operation
+		for {
+			batchNumber++
+			updateQuery := `
+				UPDATE "Task"
+				SET "status" = $1::"TaskStatus", "updated_at" = $2
+				WHERE "id" IN (
+					SELECT "id" FROM "Task"
+					WHERE "expire_at" <= $2
+					  AND "status" = $3::"TaskStatus"
+					  AND "id" IN (SELECT DISTINCT "task_id" FROM "TaskResult")
+					LIMIT $4
+				)
+			`
+			params := []interface{}{db.TaskStatusExpired, currentTime, db.TaskStatusInProgress, batchSize}
+
+			execResult, err := o.dbClient.Prisma.ExecuteRaw(updateQuery, params...).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error updating tasks to expired status")
+				break
+			}
+
+			if execResult.Count == 0 {
+				log.Info().Msg("No more expired tasks with TaskResults to update")
+				break
+			}
+
+			log.Info().Msgf("Updated %v expired tasks with associated TaskResults in batch %d", execResult.Count, batchNumber)
+		}
+		updateDuration := time.Since(startTime) // Calculate total duration for update operation
+		log.Info().Msgf("Total time taken to update expired tasks with TaskResults: %s", updateDuration)
 	}
 }
 
@@ -266,9 +300,30 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	return taskCountInt, nil
 }
 
-func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db.TaskModel, error) {
+func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
+
+	partners, err := o.dbClient.WorkerPartner.FindMany(
+		db.WorkerPartner.WorkerID.Equals(workerId),
+		db.WorkerPartner.IsDeleteByMiner.Equals(false),
+		db.WorkerPartner.IsDeleteByWorker.Equals(false),
+	).Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
+		return nil, err
+	}
+
+	// Collect Subscription keys from the fetched WorkerPartner records
+	var subscriptionKeys []string
+	for _, partner := range partners {
+		subscriptionKeys = append(subscriptionKeys, partner.MinerSubscriptionKey)
+	}
+
+	if len(subscriptionKeys) == 0 {
+		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
+		return nil, err
+	}
 
 	// Fetch the current task to determine the ordering criteria
 	currentTask, err := o.dbClient.Task.FindFirst(
@@ -278,17 +333,38 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string) (*db
 		return nil, err
 	}
 
-	// Fetch the next task that is in-progress based on the created_at timestamp
-	nextTask, err := o.dbClient.Task.FindFirst(
-		db.Task.CreatedAt.Lt(currentTask.CreatedAt),
+	// Define a filter to exclude tasks already completed by the worker
+	noCompletedTaskResults := db.Task.TaskResults.None(
+		db.TaskResult.WorkerID.Equals(workerId),
+		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
+	)
+
+	// Define a filter for tasks associated with the worker's subscription keys
+	subscriptionKeyFilter := db.Task.MinerUser.Where(
+		db.MinerUser.SubscriptionKeys.Some(
+			db.SubscriptionKey.Key.In(subscriptionKeys),
+		),
+	)
+
+	filterParams := []db.TaskWhereParam{
+		noCompletedTaskResults,
+		subscriptionKeyFilter,
+		db.Task.CreatedAt.Gt(currentTask.CreatedAt), // Fetch task created after the current task
 		db.Task.Status.Equals(db.TaskStatusInProgress),
-	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+	}
+
+	// Attempt to find the next in-progress task with a greater CreatedAt timestamp
+	nextTask, err := o.dbClient.Task.FindFirst(
+		filterParams...,
+	).OrderBy(db.Task.CreatedAt.Order(db.SortOrderAsc)).Exec(ctx) // Ascending order to find the next task
 	if err != nil {
-		// If no next task is found, loop back to the first in-progress task
+		// If no next task is found, loop back to the earliest task
 		if errors.Is(err, db.ErrNotFound) {
 			nextTask, err = o.dbClient.Task.FindFirst(
+				noCompletedTaskResults,
+				subscriptionKeyFilter,
 				db.Task.Status.Equals(db.TaskStatusInProgress),
-			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).Exec(ctx)
+			).OrderBy(db.Task.CreatedAt.Order(db.SortOrderAsc)).Exec(ctx) // Fetch task with the earliest CreatedAt timestamp
 			if err != nil {
 				return nil, err
 			}

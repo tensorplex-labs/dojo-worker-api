@@ -114,6 +114,14 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
+	// Log the headers of the request
+	headers := c.Request.Header
+	log.Info().Interface("headers", headers).Msg("Request headers")
+
+	// Log the size of the request
+	requestSize := c.Request.ContentLength
+	log.Info().Int64("requestSize", requestSize).Msg("Request size")
+
 	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
 
 	minerUserInterface, exists := c.Get("minerUser")
@@ -172,14 +180,14 @@ func CreateTasksController(c *gin.Context) {
 	}
 
 	taskService := task.NewTaskService()
-	tasks, errors := taskService.CreateTasks(requestBody, minerUser.ID)
+	tasks, errors := taskService.CreateTasksWithTimeout(requestBody, minerUser.ID, 60*time.Second)
 
-	log.Info().Msg("Tasks created successfully")
 	if len(tasks) == 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse(errors))
 		return
 	}
 
+	log.Info().Msg("Tasks created successfully")
 	taskIds := make([]string, 0, len(tasks))
 	for _, task := range tasks {
 		taskIds = append(taskIds, task.ID)
@@ -1325,25 +1333,50 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 //	@Param			task-id	path		string									true	"Task ID"
 //	@Success		200		{object}	ApiResponse{body=task.NextTaskResponse}	"Successful operation"
 //	@Failure		400		{object}	ApiResponse								"Invalid request, task id is required"
+//	@Failure		401		{object}	ApiResponse								"Unauthorized"
 //	@Failure		500		{object}	ApiResponse								"Failed to get next in-progress task"
 //	@Router			/next-in-progress-task/{task-id} [get]
 func GetNextInProgressTaskController(c *gin.Context) {
 	// session, err := handleCurrentSession(c)
+	jwtClaims, ok := c.Get("userInfo")
+	if !ok {
+		log.Error().Str("userInfo", fmt.Sprintf("%+v", jwtClaims)).Msg("No user info found in context")
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	userInfo, ok := jwtClaims.(*jwt.RegisteredClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
+		return
+	}
+
+	worker, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(userInfo.Subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
+		return
+	}
+
 	taskId := c.Param("task-id")
 	if taskId == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("task id is required"))
 		return
 	}
-	taskData, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId)
+	taskData, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId, worker.ID)
 	if err != nil {
-		log.Error().Err(err).Msg("Filed to get next in progress task")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in progress task"))
+		if errors.Is(err, db.ErrNotFound) {
+			log.Info().Msg("No in progress tasks found")
+			c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: ""}))
+			return
+		}
+		log.Error().Err(err).Msg("Failed to get next in-progress task")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in-progress task"))
 		return
 	}
 
 	if taskData == nil {
 		log.Info().Msg("No in progress tasks found")
-		c.JSON(http.StatusOK, defaultSuccessResponse("No in progress tasks found"))
+		c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: ""}))
 		return
 	}
 

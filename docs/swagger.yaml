@@ -30,11 +30,13 @@ definitions:
     - CODE_GENERATION
     - DIALOGUE
     - TEXT_TO_IMAGE
+    - TEXT_TO_THREE_D
     type: string
     x-enum-varnames:
     - TaskTypeCodeGeneration
     - TaskTypeDialogue
     - TaskTypeTextToImage
+    - TaskTypeTextToThreeD
   metric.AvgTaskCompletionTimeResponse:
     properties:
       averageTaskCompletionTime:
@@ -656,6 +658,10 @@ paths:
               type: object
         "400":
           description: Invalid request, task id is required
+          schema:
+            $ref: '#/definitions/api.ApiResponse'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/api.ApiResponse'
         "500":
