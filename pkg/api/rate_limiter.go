@@ -29,6 +29,7 @@ const (
 	WriteTaskRateLimiterKey RateLimiterKey = "dojo_worker_api:limiter:task_write"
 	ReadTaskRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:task_read"
 	MetricsRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:metrics"
+	GenerousRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:general"
 )
 
 type LimiterConfig struct {
@@ -42,7 +43,7 @@ func init() {
 }
 
 func GenerousRateLimiter() gin.HandlerFunc {
-	return getRateLimiterMiddleware(WorkerRateLimiterKey)
+	return getRateLimiterMiddleware(GenerousRateLimiterKey)
 }
 
 func WriteTaskRateLimiter() gin.HandlerFunc {
@@ -57,6 +58,10 @@ func MetricsRateLimiter() gin.HandlerFunc {
 	return getRateLimiterMiddleware(MetricsRateLimiterKey)
 }
 
+func WorkerRateLimiter() gin.HandlerFunc {
+	return getRateLimiterMiddleware(WorkerRateLimiterKey)
+}
+
 func InitializeLimiters() {
 	once.Do(func() {
 		cache := cache.GetCacheInstance()
@@ -64,7 +69,7 @@ func InitializeLimiters() {
 		limiterConfigs := []LimiterConfig{
 			{
 				key:    WorkerRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
+				rate:   limiter.Rate{Period: 1 * time.Minute, Limit: 60},
 				prefix: string(WorkerRateLimiterKey),
 			},
 			{
@@ -74,13 +79,18 @@ func InitializeLimiters() {
 			},
 			{
 				key:    ReadTaskRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
+				rate:   limiter.Rate{Period: 1 * time.Minute, Limit: 60},
 				prefix: string(ReadTaskRateLimiterKey),
 			},
 			{
 				key:    MetricsRateLimiterKey,
 				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 1800},
 				prefix: string(MetricsRateLimiterKey),
+			},
+			{
+				key:    GenerousRateLimiterKey,
+				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
+				prefix: string(GenerousRateLimiterKey),
 			},
 		}
 
@@ -114,7 +124,9 @@ func getRateLimiterMiddleware(key RateLimiterKey) gin.HandlerFunc {
 		}
 
 		limiter := limiterInstance.(*limiter.Limiter)
-		ip := c.ClientIP()
+		ip := getCallerIP(c)
+		log.Debug().Msgf("Rate limiting for IP %s", ip)
+
 		limiterCtx, err := limiter.Get(c, ip)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get rate limiter")
@@ -147,6 +159,7 @@ func InMetagraphOnly() gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
+		log.Debug().Msgf("IP %s is in the metagraph", ip)
 		c.Next()
 	}
 }

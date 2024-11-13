@@ -12,7 +12,7 @@ func LoginRoutes(router *gin.Engine) {
 	{
 		worker := apiV1.Group("/worker")
 		{
-			worker.Use(GenerousRateLimiter())
+			worker.Use(WorkerRateLimiter())
 			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.PUT("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
