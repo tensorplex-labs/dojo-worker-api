@@ -29,7 +29,7 @@ const (
 	WriteTaskRateLimiterKey RateLimiterKey = "dojo_worker_api:limiter:task_write"
 	ReadTaskRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:task_read"
 	MetricsRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:metrics"
-	GenerousRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:general"
+	GeneralRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:general"
 )
 
 type LimiterConfig struct {
@@ -42,8 +42,8 @@ func init() {
 	InitializeLimiters()
 }
 
-func GenerousRateLimiter() gin.HandlerFunc {
-	return getRateLimiterMiddleware(GenerousRateLimiterKey)
+func GeneralRateLimiter() gin.HandlerFunc {
+	return getRateLimiterMiddleware(GeneralRateLimiterKey)
 }
 
 func WriteTaskRateLimiter() gin.HandlerFunc {
@@ -88,9 +88,9 @@ func InitializeLimiters() {
 				prefix: string(MetricsRateLimiterKey),
 			},
 			{
-				key:    GenerousRateLimiterKey,
+				key:    GeneralRateLimiterKey,
 				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
-				prefix: string(GenerousRateLimiterKey),
+				prefix: string(GeneralRateLimiterKey),
 			},
 		}
 
