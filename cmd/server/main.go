@@ -62,7 +62,6 @@ func main() {
 	router.Use(api.CustomGinLogger(&log.Logger)) // add our custom gin logger
 
 	router.Use(cors.New(config))
-	router.Use(api.GenerousRateLimiter())
 	router.ForwardedByClientIP = true
 	api.LoginRoutes(router)
 

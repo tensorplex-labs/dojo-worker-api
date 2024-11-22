@@ -12,14 +12,14 @@ func LoginRoutes(router *gin.Engine) {
 	{
 		worker := apiV1.Group("/worker")
 		{
-			worker.Use(GenerousRateLimiter())
+			worker.Use(WorkerRateLimiter())
 			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.PUT("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 			worker.GET("/partner/list", WorkerAuthMiddleware(), GetWorkerPartnerListController)
 		}
-		apiV1.GET("/auth/:address", GenerousRateLimiter(), GenerateNonceController)
-		apiV1.PUT("/partner/edit", GenerousRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
+		apiV1.GET("/auth/:address", GeneralRateLimiter(), GenerateNonceController)
+		apiV1.PUT("/partner/edit", GeneralRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
 			tasks.PUT("/submit-result/:task-id", WriteTaskRateLimiter(), WorkerAuthMiddleware(), SubmitTaskResultController)
@@ -32,10 +32,10 @@ func LoginRoutes(router *gin.Engine) {
 
 		miner := apiV1.Group("/miner")
 		{
-			miner.POST("/session/auth", GenerousRateLimiter(), GenerateCookieAuth)
+			miner.POST("/session/auth", GeneralRateLimiter(), GenerateCookieAuth)
 
 			apiKeyGroup := miner.Group("/api-key")
-			apiKeyGroup.Use(GenerousRateLimiter())
+			apiKeyGroup.Use(GeneralRateLimiter())
 			{
 				apiKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerApiKeyListController)
 				apiKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerApiKeyGenerateController)
@@ -43,7 +43,7 @@ func LoginRoutes(router *gin.Engine) {
 			}
 
 			subScriptionKeyGroup := miner.Group("/subscription-key")
-			subScriptionKeyGroup.Use(GenerousRateLimiter())
+			subScriptionKeyGroup.Use(GeneralRateLimiter())
 			{
 				subScriptionKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerSubscriptionKeyListController)
 				subScriptionKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerSubscriptionKeyGenerateController)
