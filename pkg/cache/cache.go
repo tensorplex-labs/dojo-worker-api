@@ -3,13 +3,14 @@ package cache
 import (
 	"context"
 	"crypto/tls"
-	"dojo-api/utils"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/redis/rueidis"
+	"dojo-api/utils"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,24 +22,27 @@ type RedisConfig struct {
 }
 
 type Cache struct {
-	Redis rueidis.Client
+	Redis redis.Client
 }
 
 var (
 	instance *Cache
 	once     sync.Once
+	mu       sync.Mutex
 )
 
 func GetCacheInstance() *Cache {
 	once.Do(func() {
+		mu.Lock()
+		defer mu.Unlock()
 		host := utils.LoadDotEnv("REDIS_HOST")
 		port := utils.LoadDotEnv("REDIS_PORT")
 
 		redis_url := host + ":" + port
-		clientOpts := rueidis.ClientOption{
-			InitAddress:  []string{redis_url},
-			DisableCache: true,
+		clientOpts := &redis.Options{
+			Addr: redis_url,
 		}
+
 		if runtime_env := utils.LoadDotEnv("RUNTIME_ENV"); runtime_env == "aws" {
 			clientOpts.TLSConfig = &tls.Config{
 				MinVersion: tls.VersionTLS12,
@@ -51,12 +55,20 @@ func GetCacheInstance() *Cache {
 		if password, passwordSet := os.LookupEnv("REDIS_PASSWORD"); passwordSet {
 			clientOpts.Password = password
 		}
-		redisClient, err := rueidis.NewClient(clientOpts)
+		redisClient := redis.NewClient(clientOpts)
+
+		// Ping Redis to check the connection
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		res, err := redisClient.Ping(ctx).Result()
+		log.Info().Msgf("Redis ping result: %v", res)
 		if err != nil {
-			log.Panic().Err(err).Msg("Failed to initialise Redis connection!")
+			log.Fatal().Err(err).Msg("Failed to ping Redis using default client")
 		}
-		log.Info().Msgf("Successfully connected to Redis")
-		instance = &Cache{Redis: redisClient}
+
+		log.Info().Msgf("Successfully connected to Redis and ping succeeded")
+		instance = &Cache{Redis: *redisClient}
 	})
 	return instance
 }
@@ -72,10 +84,7 @@ func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Dur
 	}
 
 	ctx := context.Background()
-	err := c.Redis.Do(
-		ctx,
-		c.Redis.B().Set().Key(key).Value(value.(string)).Ex(expiration).Build(),
-	).Error()
+	err := c.Redis.Set(ctx, key, value.(string), expiration).Err()
 	if err != nil {
 		log.Error().Err(err).Str("key", key).Interface("value", value).Msg("Failed to write to Redis ...")
 		return err
@@ -83,10 +92,12 @@ func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Dur
 	return nil
 }
 
-func (rc *Cache) Get(key string) (string, error) {
+func (c *Cache) Get(key string) (string, error) {
 	ctx := context.Background()
-	val, err := rc.Redis.Do(ctx, rc.Redis.B().Get().Key(key).Build()).AsBytes()
-	if err == rueidis.Nil {
+	// val, err := rc.Redis.Do(ctx, rc.Redis.B().Get().Key(key).Build()).AsBytes()
+	val, err := c.Redis.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		log.Error().Err(err).Str("key", key).Msg("Key not found in Redis")
 		return "", err
 	} else if err != nil {
 		log.Panic().Err(err).Msg("Failed to get from Redis ...")

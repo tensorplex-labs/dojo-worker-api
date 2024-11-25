@@ -110,11 +110,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, 0, err
 	}
 
-	// TODO commented out for now, testing raw query speed
-	// totalTasks, err := o.dbClient.Task.FindMany(
-	// 	filterParams...,
-	// ).Exec(ctx)
-
 	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
