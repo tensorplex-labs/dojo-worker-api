@@ -73,51 +73,6 @@ func GetCacheInstance() *Cache {
 	return instance
 }
 
-// func GetCacheInstance() *Cache {
-// 	once.Do(func() {
-// 		mu.Lock()
-// 		defer mu.Unlock()
-
-// 		host := utils.LoadDotEnv("REDIS_HOST")
-// 		port := utils.LoadDotEnv("REDIS_PORT")
-
-// 		redis_url := host + ":" + port
-// 		clientOpts := rueidis.ClientOption{
-// 			InitAddress:  []string{redis_url},
-// 			DisableCache: true,
-// 		}
-// 		if runtime_env := utils.LoadDotEnv("RUNTIME_ENV"); runtime_env == "aws" {
-// 			clientOpts.TLSConfig = &tls.Config{
-// 				MinVersion: tls.VersionTLS12,
-// 			}
-// 		}
-
-// 		if username, usernameSet := os.LookupEnv("REDIS_USERNAME"); usernameSet {
-// 			clientOpts.Username = username
-// 		}
-// 		if password, passwordSet := os.LookupEnv("REDIS_PASSWORD"); passwordSet {
-// 			clientOpts.Password = password
-// 		}
-// 		redisClient, err := rueidis.NewClient(clientOpts)
-// 		if err != nil {
-// 			log.Fatal().Err(err).Msg("Failed to initialize Redis connection!")
-// 		}
-
-// 		// Ping Redis to test the connection
-// 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 		defer cancel()
-
-// 		err = redisClient.Do(ctx, redisClient.B().Ping().Build()).Error()
-// 		if err != nil {
-// 			log.Fatal().Err(err).Msg("Failed to ping Redis using rueidis client")
-// 		}
-
-// 		log.Info().Msgf("Successfully connected to Redis and ping succeeded")
-// 		instance = &Cache{Redis: redisClient}
-// 	})
-// 	return instance
-// }
-
 func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Duration) error {
 	switch v := value.(type) {
 	case string:
