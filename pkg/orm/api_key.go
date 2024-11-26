@@ -20,9 +20,6 @@ func NewApiKeyORM() *ApiKeyORM {
 }
 
 func (a *ApiKeyORM) GetApiKeysByMinerHotkey(hotkey string) ([]db.APIKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	minerUser, err := NewMinerUserORM().GetUserByHotkey(hotkey)
@@ -44,9 +41,6 @@ func (a *ApiKeyORM) GetApiKeysByMinerHotkey(hotkey string) ([]db.APIKeyModel, er
 }
 
 func (a *ApiKeyORM) CreateApiKeyByHotkey(hotkey string, apiKey string) (*db.APIKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	minerUser, err := NewMinerUserORM().GetUserByHotkey(hotkey)
@@ -70,9 +64,6 @@ func (a *ApiKeyORM) CreateApiKeyByHotkey(hotkey string, apiKey string) (*db.APIK
 }
 
 func (a *ApiKeyORM) DisableApiKeyByHotkey(hotkey string, apiKey string) (*db.APIKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	disabledApiKey, err := a.dbClient.APIKey.FindUnique(
 		db.APIKey.Key.Equals(apiKey),
@@ -87,9 +78,6 @@ func (a *ApiKeyORM) DisableApiKeyByHotkey(hotkey string, apiKey string) (*db.API
 }
 
 func (a *ApiKeyORM) GetByApiKey(apiKey string) (*db.APIKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	foundApiKey, err := a.dbClient.APIKey.FindFirst(

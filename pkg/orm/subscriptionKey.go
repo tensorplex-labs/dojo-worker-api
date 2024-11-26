@@ -2,8 +2,9 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -19,9 +20,6 @@ func NewSubscriptionKeyORM() *SubscriptionKeyORM {
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]db.SubscriptionKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	minerUser, err := NewMinerUserORM().GetUserByHotkey(hotkey)
@@ -45,9 +43,6 @@ func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]
 }
 
 func (a *SubscriptionKeyORM) CreateSubscriptionKeyByHotkey(hotkey string, subscriptionKey string) (*db.SubscriptionKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	minerUser, err := NewMinerUserORM().GetUserByHotkey(hotkey)
@@ -71,9 +66,6 @@ func (a *SubscriptionKeyORM) CreateSubscriptionKeyByHotkey(hotkey string, subscr
 }
 
 func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subscriptionKey string) (*db.SubscriptionKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	disabledAPIKey, err := a.dbClient.SubscriptionKey.FindUnique(
 		db.SubscriptionKey.Key.Equals(subscriptionKey),
@@ -88,9 +80,6 @@ func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subsc
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.SubscriptionKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	foundSubscriptionKey, err := a.dbClient.SubscriptionKey.FindFirst(

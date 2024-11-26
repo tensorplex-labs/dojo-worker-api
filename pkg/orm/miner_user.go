@@ -2,9 +2,10 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"fmt"
 	"time"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -23,9 +24,6 @@ func NewMinerUserORM() *MinerUserORM {
 }
 
 func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string, organisation string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
@@ -41,9 +39,6 @@ func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, 
 }
 
 func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	createdUser, err := s.dbClient.MinerUser.CreateOne(
 		db.MinerUser.Hotkey.Set(hotkey),
@@ -58,8 +53,6 @@ func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time
 }
 
 func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
 	if hotkey == "" {
 		return nil, fmt.Errorf("hotkey cannot be an empty string")
 	}
@@ -75,9 +68,6 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 }
 
 func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	_, err := s.dbClient.MinerUser.FindUnique(
 		db.MinerUser.Hotkey.Equals(hotkey),
@@ -98,9 +88,6 @@ func (s *MinerUserORM) DeregisterMiner(hotkey string) error {
 }
 
 func (s *MinerUserORM) CreateNewMiner(hotkey string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	createdMiner, err := s.dbClient.MinerUser.CreateOne(db.MinerUser.Hotkey.Set(hotkey)).Exec(ctx)
 	if err != nil {

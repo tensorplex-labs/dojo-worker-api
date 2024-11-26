@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"dojo-api/db"
-	"dojo-api/pkg/orm"
 
 	"github.com/rs/zerolog/log"
 	"github.com/steebchen/prisma-client-go/runtime/types"
@@ -94,11 +93,6 @@ func (o *FixtureService) CreateDefaultTask(ctx context.Context, title string, ex
 		log.Error().Err(err).Msg("Error loading task data")
 		return nil, err
 	}
-
-	clientWrapper := orm.GetPrismaClient()
-
-	clientWrapper.BeforeQuery()
-	defer clientWrapper.AfterQuery()
 
 	expireAt := time.Now().Add(expireDuration)
 

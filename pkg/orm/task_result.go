@@ -2,10 +2,11 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"fmt"
 	"strconv"
 	"time"
+
+	"dojo-api/db"
 )
 
 type TaskResultORM struct {
@@ -34,8 +35,6 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 }
 
 func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId string) ([]db.TaskResultModel, error) {
-	t.clientWrapper.BeforeQuery()
-	defer t.clientWrapper.AfterQuery()
 	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
 }
 
@@ -55,9 +54,6 @@ func (orm *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, worke
 }
 
 func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
-	t.clientWrapper.BeforeQuery()
-	defer t.clientWrapper.AfterQuery()
-
 	createdTaskResult, err := t.client.TaskResult.CreateOne(
 		db.TaskResult.Status.Set(db.TaskResultStatusInvalid),
 		db.TaskResult.ResultData.Set(taskResult.ResultData),
@@ -77,9 +73,6 @@ func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskRes
 }
 
 func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
-	t.clientWrapper.BeforeQuery()
-	defer t.clientWrapper.AfterQuery()
-
 	// Retrieve the task object from the appropriate source
 	task, err := t.client.Task.FindUnique(db.Task.ID.Equals(taskResult.TaskID)).Exec(ctx)
 	if err != nil {
@@ -118,9 +111,6 @@ func (t *TaskResultORM) CreateTaskResultWithCompleted(ctx context.Context, taskR
 }
 
 func (t *TaskResultORM) GetCompletedTResultCount(ctx context.Context) (int, error) {
-	t.clientWrapper.BeforeQuery()
-	defer t.clientWrapper.AfterQuery()
-
 	var result []struct {
 		Count db.RawString `json:"count"`
 	}

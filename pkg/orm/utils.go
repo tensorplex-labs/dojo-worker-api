@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"dojo-api/db"
@@ -25,34 +24,7 @@ type AwsSecret struct {
 }
 
 type PrismaClientWrapper struct {
-	QueryTracker *QueryTracker
-	Client       *db.PrismaClient
-}
-
-func (p *PrismaClientWrapper) BeforeQuery() {
-	p.QueryTracker.BeforeQuery()
-}
-
-func (p *PrismaClientWrapper) AfterQuery() {
-	p.QueryTracker.AfterQuery()
-}
-
-type QueryTracker struct {
-	activeQueries int32
-}
-
-func (qt *QueryTracker) BeforeQuery() {
-	atomic.AddInt32(&qt.activeQueries, 1)
-}
-
-func (qt *QueryTracker) AfterQuery() {
-	atomic.AddInt32(&qt.activeQueries, -1)
-}
-
-func (qt *QueryTracker) WaitForAllQueries() {
-	for atomic.LoadInt32(&qt.activeQueries) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	Client *db.PrismaClient
 }
 
 type ConnHandler struct {
@@ -139,8 +111,7 @@ func GetPrismaClient() *PrismaClientWrapper {
 	}
 
 	clientWrapper := PrismaClientWrapper{
-		QueryTracker: &QueryTracker{},
-		Client:       db.NewClient(getPrismaConfig()),
+		Client: db.NewClient(getPrismaConfig()),
 	}
 
 	defer func() {

@@ -2,10 +2,11 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strings"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,9 +22,6 @@ func NewWorkerPartnerORM() *WorkerPartnerORM {
 }
 
 func (m *WorkerPartnerORM) CreateWorkerPartner(workerId string, subscriptionId string, optionalName string) (*db.WorkerPartnerModel, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	dojoWorker, err := m.dbClient.DojoWorker.FindUnique(
@@ -49,8 +47,6 @@ func (m *WorkerPartnerORM) CreateWorkerPartner(workerId string, subscriptionId s
 }
 
 func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscriptionKey string, newMinerSubscriptionKey string, name string) (*db.WorkerPartnerModel, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
 	ctx := context.Background()
 
 	type RawQueryParams struct {
@@ -126,9 +122,6 @@ func (m *WorkerPartnerORM) UpdateSubscriptionKey(workerId string, minerSubscript
 }
 
 func (m *WorkerPartnerORM) DisablePartnerByWorker(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	updateParams := []db.WorkerPartnerSetParam{
@@ -151,9 +144,6 @@ func (m *WorkerPartnerORM) DisablePartnerByWorker(workerId string, minerSubscrip
 }
 
 func (m *WorkerPartnerORM) DisablePartnerByMiner(workerId string, minerSubscriptionKey string, toDisable bool) (int, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	filterParams := []db.WorkerPartnerWhereParam{
@@ -176,9 +166,6 @@ func (m *WorkerPartnerORM) DisablePartnerByMiner(workerId string, minerSubscript
 }
 
 func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerId(workerId string) ([]db.WorkerPartnerModel, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 
 	workerPartners, err := m.dbClient.WorkerPartner.FindMany(
@@ -191,9 +178,6 @@ func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerId(workerId string) ([]db.Wor
 }
 
 func (m *WorkerPartnerORM) GetWorkerPartnerByWorkerIdAndSubscriptionKey(workerId string, minerSubscriptionKey string) (*db.WorkerPartnerModel, error) {
-	m.clientWrapper.BeforeQuery()
-	defer m.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	workerPartner, err := m.dbClient.WorkerPartner.FindFirst(
 		db.WorkerPartner.MinerSubscriptionKey.Equals(minerSubscriptionKey),

@@ -2,10 +2,11 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,9 +22,6 @@ func NewDojoWorkerORM() *DojoWorkerORM {
 }
 
 func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (*db.DojoWorkerModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	worker, err := s.dbClient.DojoWorker.CreateOne(
 		db.DojoWorker.WalletAddress.Set(walletAddress),
@@ -33,9 +31,6 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 }
 
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	worker, err := s.dbClient.DojoWorker.FindFirst(
 		db.DojoWorker.WalletAddress.Equals(walletAddress),
@@ -51,9 +46,6 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 }
 
 func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
 	ctx := context.Background()
 	var result []struct {
 		Count db.RawString `json:"count"`

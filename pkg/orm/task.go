@@ -29,9 +29,6 @@ func NewTaskORM() *TaskORM {
 // CreateTask creates a new task in the database with the provided details.
 // Ignores `Status` and `NumResults` fields as they are set to default values.
 func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId string) (*db.TaskModel, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-
 	createdTask, err := o.dbClient.Task.CreateOne(
 		db.Task.ExpireAt.Set(task.ExpireAt),
 		db.Task.Title.Set(task.Title),
@@ -50,8 +47,6 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 }
 
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).Exec(ctx)
@@ -60,8 +55,6 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 
 // TODO: Optimization
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
 	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),
@@ -201,8 +194,6 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	for range time.Tick(3 * time.Minute) {
 		log.Info().Msg("Checking for expired tasks")
-		o.clientWrapper.BeforeQuery()
-		defer o.clientWrapper.AfterQuery()
 
 		currentTime := time.Now()
 		batchSize := 100 // Adjust batch size based on database performance
@@ -279,9 +270,6 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 }
 
 func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-
 	var result []struct {
 		Count db.RawString `json:"count"`
 	}
@@ -306,9 +294,6 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 }
 
 func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),

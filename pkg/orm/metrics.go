@@ -2,9 +2,10 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"encoding/json"
 	"time"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -23,9 +24,6 @@ func NewMetricsORM() *MetricsORM {
 }
 
 func (orm *MetricsORM) GetMetricsDataByMetricType(ctx context.Context, metricType db.MetricsType) (*db.MetricsModel, error) {
-	orm.clientWrapper.BeforeQuery()
-	defer orm.clientWrapper.AfterQuery()
-
 	metrics, err := orm.dbClient.Metrics.FindUnique(
 		db.Metrics.Type.Equals(metricType),
 	).Exec(ctx)
@@ -37,9 +35,6 @@ func (orm *MetricsORM) GetMetricsDataByMetricType(ctx context.Context, metricTyp
 }
 
 func (orm *MetricsORM) CreateNewMetric(ctx context.Context, metricType db.MetricsType, data interface{}) error {
-	orm.clientWrapper.BeforeQuery()
-	defer orm.clientWrapper.AfterQuery()
-
 	metrics, err := orm.dbClient.Metrics.FindUnique(
 		db.Metrics.Type.Equals(metricType),
 	).Exec(ctx)

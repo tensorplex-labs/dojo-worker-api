@@ -2,8 +2,9 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"encoding/json"
+
+	"dojo-api/db"
 )
 
 // import cycle not allowed
@@ -21,9 +22,6 @@ func NewEventsORM() *EventsORM {
 }
 
 func (o *EventsORM) CreateEventByType(ctx context.Context, eventType db.EventsType, data interface{}) error {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-
 	eventData, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -38,9 +36,6 @@ func (o *EventsORM) CreateEventByType(ctx context.Context, eventType db.EventsTy
 }
 
 func (o *EventsORM) GetEventsByType(ctx context.Context, eventType db.EventsType) ([]db.EventsModel, error) {
-	o.clientWrapper.BeforeQuery()
-	defer o.clientWrapper.AfterQuery()
-
 	events, err := o.dbClient.Events.FindMany(db.Events.Type.Equals(eventType)).Exec(ctx)
 	if err != nil {
 		return nil, err
