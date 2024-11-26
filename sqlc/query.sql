@@ -35,12 +35,12 @@ WHERE id IN (
             public."Task"
         WHERE
             public."Task".expire_at <= $1
-            AND status IN ($2::"TaskStatus", $3::"TaskStatus")
+            AND status = ANY ($2::"TaskStatus"[])
             AND id NOT IN ( SELECT DISTINCT
                     task_id
                 FROM
                     public."TaskResult")
-            LIMIT $4);
+            LIMIT $3);
 
 -- name: SetTaskStatusToExpired :exec
 UPDATE
