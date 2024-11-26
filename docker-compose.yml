@@ -6,21 +6,16 @@ volumes:
 
 services:
   redis-service:
-    env_file:
-      - .env
     image: redis/redis-stack-server:7.4.0-v0
-    environment:
-      # CHANGE THE PASSWORD TO A PASSWORD YOU WANT TO USE
-      REDIS_ARGS: "--requirepass ${REDIS_PASSWORD} --user ${REDIS_USERNAME} on >${REDIS_PASSWORD} ~* allcommands"
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-volume:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    expose:
-      - 6379
-    volumes:
-      - redis-volume:/data
 
   postgres-service:
     env_file:
