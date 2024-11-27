@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -23,6 +24,12 @@ type RedisConfig struct {
 
 type Cache struct {
 	Redis redis.Client
+}
+
+// CacheableData interface for any data that can be cached
+type CacheableData interface {
+	GetCacheKey() string
+	GetExpiration() time.Duration
 }
 
 var (
@@ -108,4 +115,30 @@ func (c *Cache) Get(key string) (string, error) {
 func (c *Cache) Shutdown() {
 	c.Redis.Close()
 	log.Info().Msg("Successfully closed Redis connection")
+}
+
+// GetCache attempts to retrieve and unmarshal data from cache
+func (c *Cache) GetCache(data CacheableData, value interface{}) error {
+	cachedData, err := c.Get(data.GetCacheKey())
+	if err != nil || cachedData == "" {
+		return fmt.Errorf("cache miss for key: %s", data.GetCacheKey())
+	}
+
+	log.Info().Msgf("Cache hit for key: %s", data.GetCacheKey())
+	return json.Unmarshal([]byte(cachedData), value)
+}
+
+// SetCache marshals and stores data in cache
+func (c *Cache) SetCache(data CacheableData, value interface{}) error {
+	dataJSON, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	if err := c.SetWithExpire(data.GetCacheKey(), dataJSON, data.GetExpiration()); err != nil {
+		return fmt.Errorf("failed to set cache: %w", err)
+	}
+
+	log.Info().Msgf("Successfully set cache for key: %s", data.GetCacheKey())
+	return nil
 }

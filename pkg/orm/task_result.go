@@ -2,11 +2,57 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"fmt"
 	"strconv"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/cache"
+
+	"github.com/rs/zerolog/log"
 )
+
+type TaskResultCacheKey string
+
+const (
+	TrByTaskAndWorkerCacheKey TaskResultCacheKey = "task_result_by_task_and_worker" // Short key for task result by worker
+	TrByWorkerCacheKey        TaskResultCacheKey = "task_result_by_worker"          // Short key for task result by worker
+)
+
+type TaskResultCache struct {
+	key      TaskResultCacheKey
+	taskId   string
+	workerId string
+}
+
+func NewTaskResultCache(key TaskResultCacheKey) *TaskResultCache {
+	return &TaskResultCache{
+		key: key,
+	}
+}
+
+func (tc *TaskResultCache) GetCacheKey() string {
+	switch tc.key {
+	case TrByTaskAndWorkerCacheKey:
+		return fmt.Sprintf("%s:%s:%s", tc.key, tc.taskId, tc.workerId)
+	case TrByWorkerCacheKey:
+		return fmt.Sprintf("%s:%s", tc.key, tc.workerId)
+
+	default:
+		return fmt.Sprintf("task_result:%s", tc.taskId)
+	}
+}
+
+func (tc *TaskResultCache) GetExpiration() time.Duration {
+	switch tc.key {
+	case TrByTaskAndWorkerCacheKey:
+		return 10 * time.Minute
+	case TrByWorkerCacheKey:
+		return 10 * time.Minute
+	default:
+		return 1 * time.Minute
+	}
+}
 
 type TaskResultORM struct {
 	client        *db.PrismaClient
@@ -36,22 +82,76 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId string) ([]db.TaskResultModel, error) {
 	t.clientWrapper.BeforeQuery()
 	defer t.clientWrapper.AfterQuery()
+
 	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
 }
 
-func (orm *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
-	return orm.client.TaskResult.FindMany(
+func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
+	// Initialize cache
+	resultCache := NewTaskResultCache(TrByTaskAndWorkerCacheKey)
+	resultCache.taskId = taskId
+	resultCache.workerId = workerId
+
+	var results []db.TaskResultModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCache(resultCache, &results); err == nil {
+		return results, nil
+	}
+
+	// Cache miss, fetch from database
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	results, err := t.client.TaskResult.FindMany(
 		db.TaskResult.TaskID.Equals(taskId),
 		db.TaskResult.WorkerID.Equals(workerId),
 		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
 	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if err := cache.SetCache(resultCache, results); err != nil {
+		log.Warn().Err(err).Msg("Failed to set task result cache")
+	}
+
+	return results, nil
 }
 
-func (orm *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
-	return orm.client.TaskResult.FindMany(
+func (t *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
+	// Initialize cache
+	resultCache := NewTaskResultCache(TrByWorkerCacheKey)
+	resultCache.workerId = workerId
+
+	var results []db.TaskResultModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCache(resultCache, &results); err == nil {
+		return results, nil
+	}
+
+	// Cache miss, fetch from database
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	results, err := t.client.TaskResult.FindMany(
 		db.TaskResult.WorkerID.Equals(workerId),
 		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
 	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if err := cache.SetCache(resultCache, results); err != nil {
+		log.Warn().Err(err).Msg("Failed to set task result cache")
+	}
+
+	return results, nil
 }
 
 func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
