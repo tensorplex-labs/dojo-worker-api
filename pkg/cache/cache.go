@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"dojo-api/utils"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/rs/zerolog/log"
 )
@@ -117,7 +117,7 @@ func (c *Cache) Shutdown() {
 	log.Info().Msg("Successfully closed Redis connection")
 }
 
-// GetCache attempts to retrieve and unmarshal data from cache
+// GetCache retrieves and unmarshals data from cache using MessagePack
 func (c *Cache) GetCache(data CacheableData, value interface{}) error {
 	cachedData, err := c.Get(data.GetCacheKey())
 	if err != nil || cachedData == "" {
@@ -125,17 +125,17 @@ func (c *Cache) GetCache(data CacheableData, value interface{}) error {
 	}
 
 	log.Info().Msgf("Cache hit for key: %s", data.GetCacheKey())
-	return json.Unmarshal([]byte(cachedData), value)
+	return msgpack.Unmarshal([]byte(cachedData), value)
 }
 
-// SetCache marshals and stores data in cache
+// SetCache marshals and stores data in cache using MessagePack
 func (c *Cache) SetCache(data CacheableData, value interface{}) error {
-	dataJSON, err := json.Marshal(value)
+	dataBytes, err := msgpack.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	if err := c.SetWithExpire(data.GetCacheKey(), dataJSON, data.GetExpiration()); err != nil {
+	if err := c.SetWithExpire(data.GetCacheKey(), dataBytes, data.GetExpiration()); err != nil {
 		return fmt.Errorf("failed to set cache: %w", err)
 	}
 
