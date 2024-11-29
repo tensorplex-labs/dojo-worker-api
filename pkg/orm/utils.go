@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 )
 
@@ -23,6 +24,35 @@ type AwsSecret struct {
 	Password string `json:"password"`
 }
 
+var (
+	connStringToPool map[string]*pgxpool.Pool
+	mu               sync.Mutex
+)
+
+func init() {
+	secrets := getPostgresCredentials()
+	if secrets == nil {
+		log.Fatal().Msg("Failed to get database credentials")
+		return
+	}
+
+	connString := buildPostgresConnString(secrets)
+	if connString == "" {
+		log.Fatal().Msg("Failed to build connection string")
+		return
+	}
+
+	pool, err := pgxpool.New(context.Background(), connString)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create connection pool")
+		return
+	}
+
+	// initialize pool for the current connection string
+	connStringToPool[connString] = pool
+}
+
+// TODO @dev remove this from our codebase once prisma is gone
 type PrismaClientWrapper struct {
 	Client *db.PrismaClient
 }
@@ -53,7 +83,6 @@ func GetAwsSecret(secretId string, region string) (AwsSecret, error) {
 	retryDelay := time.Second
 
 	for i := 0; i < maxRetries; i++ {
-		// TODO try without region on staging first
 		config, err := config.LoadDefaultConfig(context.TODO())
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to load SDK config")
@@ -195,4 +224,30 @@ func getPrismaConfig() func(*db.PrismaConfig) {
 	secrets := getPostgresCredentials()
 	prismaConfig := db.WithDatasourceURL(buildPostgresConnString(secrets))
 	return prismaConfig
+}
+
+func GetDbClient() *db.PrismaClient {
+	connString := buildPostgresConnString(getPostgresCredentials())
+	mu.Lock()
+
+	defer mu.Unlock()
+
+	// Check if we already have a pool for this connection string
+	if pool, exists := connStringToPool[connString]; exists {
+		// Verify the pool is still healthy
+		if err := pool.Ping(context.Background()); err == nil {
+			return db.NewClient(getPrismaConfig())
+		}
+		// If ping failed, remove the dead pool
+		delete(connStringToPool, connString)
+	}
+
+	// Create new pool if none exists or previous one was unhealthy
+	pool, err := pgxpool.New(context.Background(), connString)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create connection pool")
+		return nil
+	}
+
+	connStringToPool[connString] = pool
 }
