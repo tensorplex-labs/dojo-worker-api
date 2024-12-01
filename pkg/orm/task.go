@@ -26,65 +26,6 @@ func NewTaskORM() *TaskORM {
 	return &TaskORM{dbClient: clientWrapper.Client, clientWrapper: clientWrapper}
 }
 
-// Define cache keys as constants similar to rate limiter pattern
-type TaskCacheKey string
-
-const (
-	TaskByIdCacheKey      TaskCacheKey = "task"
-	TasksByWorkerCacheKey TaskCacheKey = "tasks_by_worker"
-)
-
-type TaskCache struct {
-	key      TaskCacheKey
-	id       string
-	workerId string
-	offset   int
-	limit    int
-	types    []db.TaskType
-}
-
-func NewTaskCache(key TaskCacheKey) *TaskCache {
-	return &TaskCache{
-		key: key,
-	}
-}
-
-func (tc *TaskCache) GetCacheKey() string {
-	switch tc.key {
-	case TaskByIdCacheKey:
-		return fmt.Sprintf("%s:%s", tc.key, tc.id)
-	case TasksByWorkerCacheKey:
-		// Create a shorter hash for task types
-		typeHash := ""
-		if len(tc.types) > 0 {
-			typeStrs := make([]string, len(tc.types))
-			for i, t := range tc.types {
-				typeStrs[i] = string(t)[0:2] // Take first 2 chars of each type
-			}
-			typeHash = strings.Join(typeStrs, "")
-		}
-		return fmt.Sprintf("%s:%s:%d:%d:%s",
-			tc.key,      // "tasks_by_worker"
-			tc.workerId, // worker id
-			tc.offset,   // offset number
-			tc.limit,    // limit number
-			typeHash)    // shortened type hash
-	default:
-		return fmt.Sprintf("task:%s", tc.id)
-	}
-}
-
-func (tc *TaskCache) GetExpiration() time.Duration {
-	switch tc.key {
-	case TaskByIdCacheKey:
-		return 5 * time.Minute
-	case TasksByWorkerCacheKey:
-		return 2 * time.Minute
-	default:
-		return 3 * time.Minute
-	}
-}
-
 // DOES NOT USE ANY DEFAULT VALUES, SO REMEMBER TO SET THE RIGHT STATUS
 // CreateTask creates a new task in the database with the provided details.
 // Ignores `Status` and `NumResults` fields as they are set to default values.
@@ -111,14 +52,13 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 
 // GetById with caching
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
-	taskCache := NewTaskCache(TaskByIdCacheKey)
-	taskCache.id = taskId
+	cacheKey := cache.BuildCacheKey(cache.TaskById, taskId)
 
 	var task *db.TaskModel
 	cache := cache.GetCacheInstance()
 
 	// Try to get from cache first
-	if err := cache.GetCache(taskCache, &task); err == nil {
+	if err := cache.GetCacheValue(cacheKey, &task); err == nil {
 		return task, nil
 	}
 
@@ -134,7 +74,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 	}
 
 	// Store in cache
-	if err := cache.SetCache(taskCache, task); err != nil {
+	if err := cache.SetCacheValue(cacheKey, task); err != nil {
 		log.Warn().Err(err).Msg("Failed to set cache")
 	}
 
@@ -143,20 +83,21 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 
 // Modified GetTasksByWorkerSubscription with caching
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
-	// Initialize cache
-	taskCache := NewTaskCache(TasksByWorkerCacheKey)
-	taskCache.workerId = workerId
-	taskCache.offset = offset
-	taskCache.limit = limit
-	taskCache.types = taskTypes
+	// Convert TaskTypes to strings
+	typeStrs := make([]string, len(taskTypes))
+	for i, t := range taskTypes {
+		typeStrs[i] = string(t)
+	}
+	cacheKey := cache.BuildCacheKey(cache.TasksByWorker, workerId, strconv.Itoa(offset), strconv.Itoa(limit), strings.Join(typeStrs, ","))
 
 	var tasks []db.TaskModel
 	cache := cache.GetCacheInstance()
 
 	// Try to get from cache first
-	if err := cache.GetCache(taskCache, &tasks); err == nil {
+	if err := cache.GetCacheValue(cacheKey, &tasks); err == nil {
 		totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, nil)
 		if err != nil {
+			log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 			return tasks, 0, err
 		}
 		return tasks, totalTasks, nil
@@ -173,6 +114,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
 	if err != nil {
+		log.Error().Err(err).Msgf("Error fetching WorkerPartner by WorkerID for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
@@ -182,6 +124,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	}
 
 	if len(subscriptionKeys) == 0 {
+		log.Error().Msgf("No subscription keys found for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
@@ -204,16 +147,20 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		Take(limit).
 		Exec(ctx)
 	if err != nil {
+		log.Error().Err(err).Msgf("Error fetching tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
+		log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
+	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
+
 	// Store in cache
-	if err := cache.SetCache(taskCache, tasks); err != nil {
+	if err := cache.SetCacheValue(cacheKey, tasks); err != nil {
 		log.Warn().Err(err).Msg("Failed to set cache")
 	}
 

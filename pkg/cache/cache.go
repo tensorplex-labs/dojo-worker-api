@@ -26,17 +26,61 @@ type Cache struct {
 	Redis redis.Client
 }
 
-// CacheableData interface for any data that can be cached
-type CacheableData interface {
-	GetCacheKey() string
-	GetExpiration() time.Duration
-}
-
 var (
 	instance *Cache
 	once     sync.Once
 	mu       sync.Mutex
 )
+
+// CacheKey type for type-safe cache keys
+type CacheKey string
+
+const (
+	// Task cache keys
+	TaskById      CacheKey = "task"        // Single task by ID
+	TasksByWorker CacheKey = "task:worker" // List of tasks by worker
+
+	// Task Result cache keys
+	TaskResultByTaskAndWorker CacheKey = "tr:task:worker" // Task result by task ID and worker ID
+	TaskResultByWorker        CacheKey = "tr:worker"      // Task results by worker ID
+
+	// Worker cache keys
+	WorkerByWallet CacheKey = "worker:wallet" // Worker by wallet address
+	WorkerCount    CacheKey = "worker:count"  // Total worker count
+
+	// Subscription cache keys
+	SubByHotkey CacheKey = "sub:hotkey" // Subscription by hotkey
+	SubByKey    CacheKey = "sub:key"    // Subscription by key
+)
+
+// CacheConfig defines cache keys and their expiration times
+var CacheConfig = map[CacheKey]time.Duration{
+	TaskById:                  5 * time.Minute,
+	TasksByWorker:             2 * time.Minute,
+	TaskResultByTaskAndWorker: 10 * time.Minute,
+	TaskResultByWorker:        10 * time.Minute,
+	WorkerByWallet:            5 * time.Minute,
+	WorkerCount:               1 * time.Minute,
+	SubByHotkey:               5 * time.Minute,
+	SubByKey:                  5 * time.Minute,
+}
+
+// GetCacheExpiration returns the expiration time for a given cache key
+func GetCacheExpiration(key CacheKey) time.Duration {
+	if duration, exists := CacheConfig[key]; exists {
+		return duration
+	}
+	return 5 * time.Minute // default expiration
+}
+
+// BuildCacheKey builds a cache key with the given prefix and components
+func BuildCacheKey(prefix CacheKey, components ...string) string {
+	key := string(prefix)
+	for _, component := range components {
+		key += ":" + component
+	}
+	return key
+}
 
 func GetCacheInstance() *Cache {
 	once.Do(func() {
@@ -117,28 +161,29 @@ func (c *Cache) Shutdown() {
 	log.Info().Msg("Successfully closed Redis connection")
 }
 
-// GetCache retrieves and unmarshals data from cache using MessagePack
-func (c *Cache) GetCache(data CacheableData, value interface{}) error {
-	cachedData, err := c.Get(data.GetCacheKey())
+// GetCacheValue retrieves and unmarshals data from cache using MessagePack
+func (c *Cache) GetCacheValue(key string, value interface{}) error {
+	cachedData, err := c.Get(key)
 	if err != nil || cachedData == "" {
-		return fmt.Errorf("cache miss for key: %s", data.GetCacheKey())
+		return fmt.Errorf("cache miss for key: %s", key)
 	}
 
-	log.Info().Msgf("Cache hit for key: %s", data.GetCacheKey())
+	log.Info().Msgf("Cache hit for key: %s", key)
 	return msgpack.Unmarshal([]byte(cachedData), value)
 }
 
-// SetCache marshals and stores data in cache using MessagePack
-func (c *Cache) SetCache(data CacheableData, value interface{}) error {
+// SetCacheValue marshals and stores data in cache using MessagePack
+func (c *Cache) SetCacheValue(key string, value interface{}) error {
 	dataBytes, err := msgpack.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	if err := c.SetWithExpire(data.GetCacheKey(), dataBytes, data.GetExpiration()); err != nil {
+	expiration := GetCacheExpiration(CacheKey(key))
+	if err := c.SetWithExpire(key, dataBytes, expiration); err != nil {
 		return fmt.Errorf("failed to set cache: %w", err)
 	}
 
-	log.Info().Msgf("Successfully set cache for key: %s", data.GetCacheKey())
+	log.Info().Msgf("Successfully set cache for key: %s", key)
 	return nil
 }

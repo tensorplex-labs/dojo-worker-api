@@ -12,48 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type TaskResultCacheKey string
-
-const (
-	TrByTaskAndWorkerCacheKey TaskResultCacheKey = "task_result_by_task_and_worker" // Short key for task result by worker
-	TrByWorkerCacheKey        TaskResultCacheKey = "task_result_by_worker"          // Short key for task result by worker
-)
-
-type TaskResultCache struct {
-	key      TaskResultCacheKey
-	taskId   string
-	workerId string
-}
-
-func NewTaskResultCache(key TaskResultCacheKey) *TaskResultCache {
-	return &TaskResultCache{
-		key: key,
-	}
-}
-
-func (tc *TaskResultCache) GetCacheKey() string {
-	switch tc.key {
-	case TrByTaskAndWorkerCacheKey:
-		return fmt.Sprintf("%s:%s:%s", tc.key, tc.taskId, tc.workerId)
-	case TrByWorkerCacheKey:
-		return fmt.Sprintf("%s:%s", tc.key, tc.workerId)
-
-	default:
-		return fmt.Sprintf("task_result:%s", tc.taskId)
-	}
-}
-
-func (tc *TaskResultCache) GetExpiration() time.Duration {
-	switch tc.key {
-	case TrByTaskAndWorkerCacheKey:
-		return 10 * time.Minute
-	case TrByWorkerCacheKey:
-		return 10 * time.Minute
-	default:
-		return 1 * time.Minute
-	}
-}
-
 type TaskResultORM struct {
 	client        *db.PrismaClient
 	clientWrapper *PrismaClientWrapper
@@ -87,16 +45,13 @@ func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId strin
 }
 
 func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
-	// Initialize cache
-	resultCache := NewTaskResultCache(TrByTaskAndWorkerCacheKey)
-	resultCache.taskId = taskId
-	resultCache.workerId = workerId
+	cacheKey := cache.BuildCacheKey(cache.TaskResultByTaskAndWorker, taskId, workerId)
 
 	var results []db.TaskResultModel
-	cache := cache.GetCacheInstance()
+	cacheInstance := cache.GetCacheInstance()
 
-	// Try to get from cache first
-	if err := cache.GetCache(resultCache, &results); err == nil {
+	// Try to get from cache
+	if err := cacheInstance.GetCacheValue(cacheKey, &results); err == nil {
 		return results, nil
 	}
 
@@ -113,24 +68,22 @@ func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, 
 		return nil, err
 	}
 
-	// Store in cache
-	if err := cache.SetCache(resultCache, results); err != nil {
-		log.Warn().Err(err).Msg("Failed to set task result cache")
+	// Set cache
+	if err := cacheInstance.SetCacheValue(cacheKey, results); err != nil {
+		log.Warn().Err(err).Msg("Failed to set cache")
 	}
 
 	return results, nil
 }
 
 func (t *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
-	// Initialize cache
-	resultCache := NewTaskResultCache(TrByWorkerCacheKey)
-	resultCache.workerId = workerId
+	cacheKey := cache.BuildCacheKey(cache.TaskResultByWorker, workerId)
 
 	var results []db.TaskResultModel
 	cache := cache.GetCacheInstance()
 
 	// Try to get from cache first
-	if err := cache.GetCache(resultCache, &results); err == nil {
+	if err := cache.GetCacheValue(cacheKey, &results); err == nil {
 		return results, nil
 	}
 
@@ -147,7 +100,7 @@ func (t *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerI
 	}
 
 	// Store in cache
-	if err := cache.SetCache(resultCache, results); err != nil {
+	if err := cache.SetCacheValue(cacheKey, results); err != nil {
 		log.Warn().Err(err).Msg("Failed to set task result cache")
 	}
 

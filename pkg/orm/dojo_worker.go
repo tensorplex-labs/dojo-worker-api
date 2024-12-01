@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"dojo-api/db"
 
@@ -13,46 +12,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 )
-
-type DojoWorkerCacheKey string
-
-const (
-	WorkerByWalletCacheKey DojoWorkerCacheKey = "worker_by_wallet" // Short key for worker by wallet
-	WorkerCountCacheKey    DojoWorkerCacheKey = "worker_count"     // Short key for worker count
-)
-
-type DojoWorkerCache struct {
-	key           DojoWorkerCacheKey
-	walletAddress string
-}
-
-func NewDojoWorkerCache(key DojoWorkerCacheKey) *DojoWorkerCache {
-	return &DojoWorkerCache{
-		key: key,
-	}
-}
-
-func (dc *DojoWorkerCache) GetCacheKey() string {
-	switch dc.key {
-	case WorkerByWalletCacheKey:
-		return fmt.Sprintf("%s:%s", dc.key, dc.walletAddress)
-	case WorkerCountCacheKey:
-		return string(dc.key)
-	default:
-		return fmt.Sprintf("dw:%s", dc.walletAddress)
-	}
-}
-
-func (dc *DojoWorkerCache) GetExpiration() time.Duration {
-	switch dc.key {
-	case WorkerByWalletCacheKey:
-		return 5 * time.Minute
-	case WorkerCountCacheKey:
-		return 1 * time.Minute
-	default:
-		return 3 * time.Minute
-	}
-}
 
 type DojoWorkerORM struct {
 	dbClient      *db.PrismaClient
@@ -77,14 +36,13 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 }
 
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
-	workerCache := NewDojoWorkerCache(WorkerByWalletCacheKey)
-	workerCache.walletAddress = walletAddress
+	cacheKey := cache.BuildCacheKey(cache.WorkerByWallet, walletAddress)
 
 	var worker *db.DojoWorkerModel
 	cache := cache.GetCacheInstance()
 
 	// Try to get from cache first
-	if err := cache.GetCache(workerCache, &worker); err == nil {
+	if err := cache.GetCacheValue(cacheKey, &worker); err == nil {
 		return worker, nil
 	}
 
@@ -105,7 +63,7 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 	}
 
 	// Store in cache
-	if err := cache.SetCache(workerCache, worker); err != nil {
+	if err := cache.SetCacheValue(cacheKey, worker); err != nil {
 		log.Warn().Err(err).Msg("Failed to set worker cache")
 	}
 
@@ -113,12 +71,12 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 }
 
 func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
-	workerCache := NewDojoWorkerCache(WorkerCountCacheKey)
+	cacheKey := cache.BuildCacheKey(cache.WorkerCount, "")
 	var count int
 	cache := cache.GetCacheInstance()
 
 	// Try to get from cache first
-	if err := cache.GetCache(workerCache, &count); err == nil {
+	if err := cache.GetCacheValue(cacheKey, &count); err == nil {
 		return count, nil
 	}
 
@@ -148,7 +106,7 @@ func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
 	}
 
 	// Store in cache
-	if err := cache.SetCache(workerCache, count); err != nil {
+	if err := cache.SetCacheValue(cacheKey, count); err != nil {
 		log.Warn().Err(err).Msg("Failed to set worker count cache")
 	}
 
