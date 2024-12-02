@@ -117,11 +117,11 @@ func getCallerIP(c *gin.Context) string {
 	// TODO - Need to check if this is the correct way without getting spoofing
 	if runtimeEnv := utils.LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
 		callerIp := c.Request.Header.Get("X-Original-Forwarded-For")
-		log.Info().Msgf("Got caller IP from X-Original-Forwarded-For header: %s", callerIp)
+		log.Trace().Msgf("Got caller IP from X-Original-Forwarded-For header: %s", callerIp)
 		return callerIp
 	}
 	callerIp := c.ClientIP()
-	log.Info().Msgf("Got caller IP from ClientIP: %s", callerIp)
+	log.Trace().Msgf("Got caller IP from ClientIP: %s", callerIp)
 	return callerIp
 }
 

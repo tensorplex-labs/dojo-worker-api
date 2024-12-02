@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/cache"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -49,45 +50,88 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 	return createdTask, err
 }
 
+// GetById with caching
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	cacheKey := cache.BuildCacheKey(cache.TaskById, taskId)
+
+	var task *db.TaskModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &task); err == nil {
+		return task, nil
+	}
+
+	// Cache miss, fetch from database
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
+
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).Exec(ctx)
-	return task, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, task); err != nil {
+		log.Warn().Err(err).Msg("Failed to set cache")
+	}
+
+	return task, nil
 }
 
-// TODO: Optimization
+// Modified GetTasksByWorkerSubscription with caching
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+	// Convert TaskTypes to strings
+	typeStrs := make([]string, len(taskTypes))
+	for i, t := range taskTypes {
+		typeStrs[i] = string(t)
+	}
+	cacheKey := cache.BuildCacheKey(cache.TasksByWorker, workerId, strconv.Itoa(offset), strconv.Itoa(limit), strings.Join(typeStrs, ","))
+
+	var tasks []db.TaskModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &tasks); err == nil {
+		totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, nil)
+		if err != nil {
+			log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
+			return tasks, 0, err
+		}
+		return tasks, totalTasks, nil
+	}
+
+	// Cache miss, proceed with database query
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
-	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
+
+	// Rest of the existing implementation...
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
 		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
+		log.Error().Err(err).Msgf("Error fetching WorkerPartner by WorkerID for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
-	// Collect Subscription keys from the fetched WorkerPartner records
 	var subscriptionKeys []string
 	for _, partner := range partners {
 		subscriptionKeys = append(subscriptionKeys, partner.MinerSubscriptionKey)
 	}
 
 	if len(subscriptionKeys) == 0 {
-		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
+		log.Error().Msgf("No subscription keys found for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	filterParams := []db.TaskWhereParam{
 		db.Task.MinerUser.Where(
 			db.MinerUser.SubscriptionKeys.Some(
-				db.SubscriptionKey.Key.In(subscriptionKeys), // SubscriptionKey should be one of the keys in the subscriptionKeys slice.
+				db.SubscriptionKey.Key.In(subscriptionKeys),
 			),
 		),
 	}
@@ -96,27 +140,30 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
 	}
 
-	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
-
-	// Fetch tasks associated with these subscription keys
-	tasks, err := o.dbClient.Task.FindMany(
+	tasks, err = o.dbClient.Task.FindMany(
 		filterParams...,
 	).OrderBy(sortQuery).
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
+		log.Error().Err(err).Msgf("Error fetching tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
+		log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
+
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, tasks); err != nil {
+		log.Warn().Err(err).Msg("Failed to set cache")
+	}
+
 	return tasks, totalTasks, nil
 }
 
@@ -273,6 +320,7 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 	}
 }
 
+// Modify GetCompletedTaskCount to use the new pattern
 func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
@@ -292,12 +340,12 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	}
 
 	taskCountStr := string(result[0].Count)
-	taskCountInt, err := strconv.Atoi(taskCountStr)
+	count, err := strconv.Atoi(taskCountStr)
 	if err != nil {
 		return 0, err
 	}
 
-	return taskCountInt, nil
+	return count, nil
 }
 
 func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {

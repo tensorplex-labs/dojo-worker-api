@@ -2,10 +2,13 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"dojo-api/db"
+
+	"dojo-api/pkg/cache"
 
 	"github.com/rs/zerolog/log"
 )
@@ -33,6 +36,17 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 }
 
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
+	cacheKey := cache.BuildCacheKey(cache.WorkerByWallet, walletAddress)
+
+	var worker *db.DojoWorkerModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &worker); err == nil {
+		return worker, nil
+	}
+
+	// Cache miss, fetch from database
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
 
@@ -47,10 +61,26 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 		}
 		return nil, err
 	}
+
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, worker); err != nil {
+		log.Warn().Err(err).Msg("Failed to set worker cache")
+	}
+
 	return worker, nil
 }
 
 func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
+	cacheKey := cache.BuildCacheKey(cache.WorkerCount, "")
+	var count int
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &count); err == nil {
+		return count, nil
+	}
+
+	// Cache miss, fetch from database
 	s.clientWrapper.BeforeQuery()
 	defer s.clientWrapper.AfterQuery()
 
@@ -70,10 +100,15 @@ func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
 	}
 
 	workerCountStr := string(result[0].Count)
-	workerCountInt, err := strconv.Atoi(workerCountStr)
+	count, err = strconv.Atoi(workerCountStr)
 	if err != nil {
 		return 0, err
 	}
 
-	return workerCountInt, nil
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, count); err != nil {
+		log.Warn().Err(err).Msg("Failed to set worker count cache")
+	}
+
+	return count, nil
 }
