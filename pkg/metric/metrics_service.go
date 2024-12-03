@@ -2,11 +2,14 @@ package metric
 
 import (
 	"context"
-	"dojo-api/db"
-	"dojo-api/pkg/event"
-	"dojo-api/pkg/orm"
 	"encoding/json"
 
+	"dojo-api/db"
+	"dojo-api/pkg/cache"
+	"dojo-api/pkg/event"
+	"dojo-api/pkg/orm"
+
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
 
@@ -53,19 +56,48 @@ func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context
 }
 
 func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Context) error {
-	taskResultORM := orm.NewTaskResultORM()
+	cache := cache.GetCacheInstance()
 	metricORM := orm.NewMetricsORM()
 
-	completedTResultCount, err := taskResultORM.GetCompletedTResultCount(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get completed task result count")
+	cacheKey := "metrics:task_results:total"
+
+	// Try to get current count from Redis
+	_, err := cache.Redis.Get(ctx, cacheKey).Int64()
+	if err == redis.Nil { // Key doesn't exist (e.g., after Redis restart)
+		// Get the last metric from database
+		lastMetric, err := metricORM.GetMetricsDataByMetricType(ctx, db.MetricsTypeTotalNumTaskResults)
+		if err != nil && !db.IsErrNotFound(err) {
+			return err
+		}
+
+		// Initialize Redis with the last known count from database
+		if lastMetric != nil {
+			var lastMetricData MetricTaskResultsCount
+			if err := json.Unmarshal(lastMetric.MetricsData, &lastMetricData); err != nil {
+				return err
+			}
+			currentCount := int64(lastMetricData.TotalNumTasksResults)
+			// Set the Redis counter to last known value
+			if err := cache.Redis.Set(ctx, cacheKey, currentCount, 0).Err(); err != nil {
+				return err
+			}
+		}
+	} else if err != nil {
 		return err
 	}
-	newMetricData := MetricTaskResultsCount{TotalNumTasksResults: completedTResultCount}
+
+	// Increment the counter
+	count, err := cache.Redis.Incr(ctx, cacheKey).Result()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to increment task results count")
+		return err
+	}
+
+	// Store in database
+	newMetricData := MetricTaskResultsCount{TotalNumTasksResults: int(count)}
 	log.Info().Interface("TotalTaskResultsCount", newMetricData).Msg("Updating total task results count metric")
 
-	err = metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumTaskResults, newMetricData)
-	return err
+	return metricORM.CreateNewMetric(ctx, db.MetricsTypeTotalNumTaskResults, newMetricData)
 }
 
 func (metricService *MetricService) UpdateAvgTaskCompletionTime(ctx context.Context) error {
