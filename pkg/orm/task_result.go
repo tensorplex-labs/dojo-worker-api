@@ -45,17 +45,6 @@ func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId strin
 }
 
 func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.TaskResultByTaskAndWorker, taskId, workerId)
-
-	var results []db.TaskResultModel
-	cacheInstance := cache.GetCacheInstance()
-
-	// Try to get from cache
-	if err := cacheInstance.GetCacheValue(cacheKey, &results); err == nil {
-		return results, nil
-	}
-
-	// Cache miss, fetch from database
 	t.clientWrapper.BeforeQuery()
 	defer t.clientWrapper.AfterQuery()
 
@@ -66,11 +55,6 @@ func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, 
 	).Exec(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	// Set cache
-	if err := cacheInstance.SetCacheValue(cacheKey, results); err != nil {
-		log.Warn().Err(err).Msg("Failed to set cache")
 	}
 
 	return results, nil

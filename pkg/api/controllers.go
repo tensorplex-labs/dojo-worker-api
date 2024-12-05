@@ -305,6 +305,10 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
+	// Remove from cache
+	cacheInstance := cache.GetCacheInstance()
+	cacheInstance.Redis.Del(ctx, cache.BuildCacheKey(cache.TaskResultByWorker, worker.ID))
+
 	// Update the metric data with goroutine
 	handleMetricData(taskData, updatedTask)
 

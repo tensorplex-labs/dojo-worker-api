@@ -41,8 +41,9 @@ const (
 	TasksByWorker CacheKey = "task:worker" // List of tasks by worker
 
 	// Task Result cache keys
-	TaskResultByTaskAndWorker CacheKey = "tr:task:worker" // Task result by task ID and worker ID
-	TaskResultByWorker        CacheKey = "tr:worker"      // Task results by worker ID
+	TaskResultByTaskAndWorker CacheKey = "tr:task:worker"             // Task result by task ID and worker ID
+	TaskResultByWorker        CacheKey = "tr:worker"                  // Task results by worker ID
+	TaskResultsTotal          CacheKey = "metrics:task_results:total" // Total task results count
 
 	// Worker cache keys
 	WorkerByWallet CacheKey = "worker:wallet" // Worker by wallet address

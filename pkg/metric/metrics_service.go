@@ -56,16 +56,18 @@ func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context
 }
 
 func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Context) error {
-	cache := cache.GetCacheInstance()
+	cacheInstance := cache.GetCacheInstance()
 	metricORM := orm.NewMetricsORM()
 
-	cacheKey := "metrics:task_results:total"
+	cacheKey := string(cache.TaskResultsTotal)
 
 	// Try to get current count from Redis
-	_, err := cache.Redis.Get(ctx, cacheKey).Int64()
+	currentCount, err := cacheInstance.Redis.Get(ctx, cacheKey).Int64()
+	log.Info().Int64("CurrentCount", currentCount).Msg("Current count")
 	if err == redis.Nil { // Key doesn't exist (e.g., after Redis restart)
 		// Get the last metric from database
 		lastMetric, err := metricORM.GetMetricsDataByMetricType(ctx, db.MetricsTypeTotalNumTaskResults)
+		log.Info().Interface("LastMetric", lastMetric).Msg("Last metric")
 		if err != nil && !db.IsErrNotFound(err) {
 			return err
 		}
@@ -78,7 +80,7 @@ func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Cont
 			}
 			currentCount := int64(lastMetricData.TotalNumTasksResults)
 			// Set the Redis counter to last known value
-			if err := cache.Redis.Set(ctx, cacheKey, currentCount, 0).Err(); err != nil {
+			if err := cacheInstance.Redis.Set(ctx, cacheKey, currentCount, 0).Err(); err != nil {
 				return err
 			}
 		}
@@ -87,7 +89,7 @@ func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Cont
 	}
 
 	// Increment the counter
-	count, err := cache.Redis.Incr(ctx, cacheKey).Result()
+	count, err := cacheInstance.Redis.Incr(ctx, cacheKey).Result()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to increment task results count")
 		return err
