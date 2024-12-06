@@ -485,6 +485,9 @@ func GetTaskByIdController(c *gin.Context) {
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
 
+	// TODO: Remove this after testing
+	log.Info().Interface("Headers", c.Request.Header).Msg("Request Headers")
+
 	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Internal server error"))

@@ -172,7 +172,7 @@ func (c *Cache) Get(key string) (string, error) {
 	// val, err := rc.Redis.Do(ctx, rc.Redis.B().Get().Key(key).Build()).AsBytes()
 	val, err := c.Redis.Get(ctx, key).Bytes()
 	if err == redis.Nil {
-		log.Error().Err(err).Str("key", key).Msg("Key not found in Redis")
+		log.Debug().Str("key", key).Msg("Key not found in Redis")
 		return "", err
 	} else if err != nil {
 		log.Panic().Err(err).Msg("Failed to get from Redis ...")
