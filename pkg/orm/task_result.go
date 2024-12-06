@@ -61,10 +61,9 @@ func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, 
 }
 
 func (t *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.TaskResultByWorker, workerId)
-
 	var results []db.TaskResultModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.TaskResultByWorker, workerId)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &results); err == nil {

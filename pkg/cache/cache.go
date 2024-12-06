@@ -24,6 +24,7 @@ type RedisConfig struct {
 
 type Cache struct {
 	Redis redis.Client
+	Keys  CacheKeys
 }
 
 var (
@@ -32,55 +33,57 @@ var (
 	mu       sync.Mutex
 )
 
-// CacheKey type for type-safe cache keys
 type CacheKey string
 
-const (
+// CacheKeys holds all cache key constants
+type CacheKeys struct {
 	// Task cache keys
-	TaskById      CacheKey = "task"        // Single task by ID
-	TasksByWorker CacheKey = "task:worker" // List of tasks by worker
+	TaskById      CacheKey
+	TasksByWorker CacheKey
 
 	// Task Result cache keys
-	TaskResultByTaskAndWorker CacheKey = "tr:task:worker"             // Task result by task ID and worker ID
-	TaskResultByWorker        CacheKey = "tr:worker"                  // Task results by worker ID
-	TaskResultsTotal          CacheKey = "metrics:task_results:total" // Total task results count
+	TaskResultByTaskAndWorker CacheKey
+	TaskResultByWorker        CacheKey
+	TaskResultsTotal          CacheKey
 
 	// Worker cache keys
-	WorkerByWallet CacheKey = "worker:wallet" // Worker by wallet address
-	WorkerCount    CacheKey = "worker:count"  // Total worker count
+	WorkerByWallet CacheKey
+	WorkerCount    CacheKey
 
 	// Subscription cache keys
-	SubByHotkey CacheKey = "sub:hotkey" // Subscription by hotkey
-	SubByKey    CacheKey = "sub:key"    // Subscription by key
-)
-
-// CacheConfig defines cache keys and their expiration times
-var CacheConfig = map[CacheKey]time.Duration{
-	TaskById:                  5 * time.Minute,
-	TasksByWorker:             2 * time.Minute,
-	TaskResultByTaskAndWorker: 10 * time.Minute,
-	TaskResultByWorker:        10 * time.Minute,
-	WorkerByWallet:            5 * time.Minute,
-	WorkerCount:               1 * time.Minute,
-	SubByHotkey:               5 * time.Minute,
-	SubByKey:                  5 * time.Minute,
+	SubByHotkey CacheKey
+	SubByKey    CacheKey
 }
 
-// GetCacheExpiration returns the expiration time for a given cache key
-func GetCacheExpiration(key CacheKey) time.Duration {
-	if duration, exists := CacheConfig[key]; exists {
-		return duration
-	}
-	return 5 * time.Minute // default expiration
+// Default cache keys
+var cacheKeys = CacheKeys{
+	// Task cache keys
+	TaskById:      "task",
+	TasksByWorker: "task:worker",
+
+	// Task Result cache keys
+	TaskResultByTaskAndWorker: "tr:task:worker",
+	TaskResultByWorker:        "tr:worker",
+	TaskResultsTotal:          "metrics:tr:total",
+
+	// Worker cache keys
+	WorkerByWallet: "worker:wallet",
+	WorkerCount:    "worker:count",
+
+	// Subscription cache keys
+	SubByHotkey: "sub:hotkey",
+	SubByKey:    "sub:key",
 }
 
-// BuildCacheKey builds a cache key with the given prefix and components
-func BuildCacheKey(prefix CacheKey, components ...string) string {
-	key := string(prefix)
-	for _, component := range components {
-		key += ":" + component
-	}
-	return key
+var cacheExpirations = map[CacheKey]time.Duration{
+	cacheKeys.TaskById:                  5 * time.Minute,
+	cacheKeys.TasksByWorker:             2 * time.Minute,
+	cacheKeys.TaskResultByTaskAndWorker: 10 * time.Minute,
+	cacheKeys.TaskResultByWorker:        10 * time.Minute,
+	cacheKeys.WorkerByWallet:            5 * time.Minute,
+	cacheKeys.WorkerCount:               1 * time.Minute,
+	cacheKeys.SubByHotkey:               5 * time.Minute,
+	cacheKeys.SubByKey:                  5 * time.Minute,
 }
 
 func GetCacheInstance() *Cache {
@@ -120,9 +123,29 @@ func GetCacheInstance() *Cache {
 		}
 
 		log.Info().Msgf("Successfully connected to Redis and ping succeeded")
-		instance = &Cache{Redis: *redisClient}
+		instance = &Cache{
+			Redis: *redisClient,
+			Keys:  cacheKeys,
+		}
 	})
 	return instance
+}
+
+// GetCacheExpiration returns the expiration time for a given cache key
+func (c *Cache) GetCacheExpiration(key CacheKey) time.Duration {
+	if duration, exists := cacheExpirations[key]; exists {
+		return duration
+	}
+	return 5 * time.Minute // default expiration
+}
+
+// BuildCacheKey builds a cache key with the given prefix and components
+func (c *Cache) BuildCacheKey(prefix CacheKey, components ...string) string {
+	key := string(prefix)
+	for _, component := range components {
+		key += ":" + component
+	}
+	return key
 }
 
 func (c *Cache) SetWithExpire(key string, value interface{}, expiration time.Duration) error {
@@ -180,11 +203,58 @@ func (c *Cache) SetCacheValue(key string, value interface{}) error {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	expiration := GetCacheExpiration(CacheKey(key))
+	expiration := c.GetCacheExpiration(CacheKey(key))
 	if err := c.SetWithExpire(key, dataBytes, expiration); err != nil {
 		return fmt.Errorf("failed to set cache: %w", err)
 	}
 
 	log.Info().Msgf("Successfully set cache for key: %s", key)
 	return nil
+}
+
+// Delete removes a single specific cache key
+// Example: cache.Delete("task:worker:123")
+func (c *Cache) Delete(key string) error {
+	ctx := context.Background()
+	deleted, err := c.Redis.Del(ctx, key).Result()
+	if err != nil {
+		log.Error().Err(err).Str("key", key).Msg("Failed to clean cache key")
+		return fmt.Errorf("failed to delete key: %w", err)
+	}
+
+	if deleted > 0 {
+		log.Info().Str("key", key).Msg("Clean up Cache")
+	} else {
+		log.Debug().Str("key", key).Msg("Cache key not found")
+	}
+	return nil
+}
+
+// DeleteByPattern removes all cache entries matching the given pattern
+// Example: cache.DeleteByPattern("task:worker:*") - deletes all worker task caches
+// Example: cache.DeleteByPattern("user:123:*") - deletes all user 123's caches
+func (c *Cache) DeleteByPattern(pattern string) error {
+	ctx := context.Background()
+	keys, err := c.Redis.Keys(ctx, pattern).Result()
+	if err != nil {
+		log.Error().Err(err).Str("pattern", pattern).Msg("Failed to get keys")
+		return fmt.Errorf("failed to get keys: %w", err)
+	}
+
+	if len(keys) > 0 {
+		deleted, err := c.Redis.Del(ctx, keys...).Result()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to delete keys")
+			return err
+		}
+		log.Info().Int64("deleted", deleted).Str("pattern", pattern).Msg("Clean up Cache")
+	}
+	return nil
+}
+
+// DeleteWithSuffix removes a single cache key built with prefix and suffix components
+// Example: cache.DeleteWithSuffix(cache.TasksByWorker, "123") -> deletes "task:worker:123"
+func (c *Cache) DeleteWithSuffix(prefix CacheKey, suffixes ...string) error {
+	key := c.BuildCacheKey(prefix, suffixes...)
+	return c.Delete(key)
 }

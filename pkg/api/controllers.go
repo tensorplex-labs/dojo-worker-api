@@ -193,6 +193,10 @@ func CreateTasksController(c *gin.Context) {
 		taskIds = append(taskIds, task.ID)
 	}
 
+	// Clean up the cache
+	cache := cache.GetCacheInstance()
+	cache.DeleteByPattern(string(cache.Keys.TasksByWorker) + ":*")
+
 	c.JSON(http.StatusOK, defaultSuccessResponse(taskIds))
 }
 
@@ -306,8 +310,13 @@ func SubmitTaskResultController(c *gin.Context) {
 	}
 
 	// Remove from cache
-	cacheInstance := cache.GetCacheInstance()
-	cacheInstance.Redis.Del(ctx, cache.BuildCacheKey(cache.TaskResultByWorker, worker.ID))
+	cache := cache.GetCacheInstance()
+	cache.DeleteWithSuffix(cache.Keys.TaskResultByWorker, worker.ID)
+
+	// Clean all task:worker:* cache entries
+	if err := cache.DeleteByPattern(string(cache.Keys.TasksByWorker) + ":*"); err != nil {
+		log.Error().Err(err).Msg("Failed to clean task:worker cache entries")
+	}
 
 	// Update the metric data with goroutine
 	handleMetricData(taskData, updatedTask)

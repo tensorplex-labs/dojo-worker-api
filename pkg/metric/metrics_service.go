@@ -56,40 +56,42 @@ func (metricService *MetricService) UpdateCompletedTaskCount(ctx context.Context
 }
 
 func (metricService *MetricService) UpdateTotalTaskResultsCount(ctx context.Context) error {
-	cacheInstance := cache.GetCacheInstance()
+	cache := cache.GetCacheInstance()
+	cacheKey := string(cache.Keys.TaskResultsTotal)
 	metricORM := orm.NewMetricsORM()
 
-	cacheKey := string(cache.TaskResultsTotal)
-
 	// Try to get current count from Redis
-	currentCount, err := cacheInstance.Redis.Get(ctx, cacheKey).Int64()
-	log.Info().Int64("CurrentCount", currentCount).Msg("Current count")
+	currentCount, err := cache.Redis.Get(ctx, cacheKey).Int64()
+	log.Info().Int64("TaskResultsCount", currentCount).Msg("Current task results count")
 	if err == redis.Nil { // Key doesn't exist (e.g., after Redis restart)
 		// Get the last metric from database
 		lastMetric, err := metricORM.GetMetricsDataByMetricType(ctx, db.MetricsTypeTotalNumTaskResults)
-		log.Info().Interface("LastMetric", lastMetric).Msg("Last metric")
 		if err != nil && !db.IsErrNotFound(err) {
 			return err
 		}
 
-		// Initialize Redis with the last known count from database
+		// Initialize Redis counter with last known value from database
+		// If no metric is found, counter will start from 0
+		var initialCount int64 = 0
 		if lastMetric != nil {
 			var lastMetricData MetricTaskResultsCount
 			if err := json.Unmarshal(lastMetric.MetricsData, &lastMetricData); err != nil {
 				return err
 			}
-			currentCount := int64(lastMetricData.TotalNumTasksResults)
-			// Set the Redis counter to last known value
-			if err := cacheInstance.Redis.Set(ctx, cacheKey, currentCount, 0).Err(); err != nil {
-				return err
-			}
+			log.Info().Interface("LastMetricData", lastMetricData).Msg("Last Task Results Count in Metrics")
+			initialCount = int64(lastMetricData.TotalNumTasksResults)
 		}
+
+		if err := cache.Redis.Set(ctx, cacheKey, initialCount, 0).Err(); err != nil {
+			return err
+		}
+		log.Info().Int64("initial_count", initialCount).Msg("Initialized task results counter")
 	} else if err != nil {
 		return err
 	}
 
 	// Increment the counter
-	count, err := cacheInstance.Redis.Incr(ctx, cacheKey).Result()
+	count, err := cache.Redis.Incr(ctx, cacheKey).Result()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to increment task results count")
 		return err
