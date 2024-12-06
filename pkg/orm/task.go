@@ -52,10 +52,9 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 
 // GetById with caching
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.TaskById, taskId)
-
 	var task *db.TaskModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.TaskById, taskId)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &task); err == nil {
@@ -88,10 +87,10 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	for i, t := range taskTypes {
 		typeStrs[i] = string(t)
 	}
-	cacheKey := cache.BuildCacheKey(cache.TasksByWorker, workerId, strconv.Itoa(offset), strconv.Itoa(limit), strings.Join(typeStrs, ","))
 
 	var tasks []db.TaskModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.TasksByWorker, workerId, strconv.Itoa(offset), strconv.Itoa(limit), strings.Join(typeStrs, ","))
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &tasks); err == nil {
