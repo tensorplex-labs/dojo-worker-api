@@ -2,8 +2,10 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"errors"
+
+	"dojo-api/db"
+	"dojo-api/pkg/cache"
 
 	"github.com/rs/zerolog/log"
 )
@@ -19,8 +21,15 @@ func NewSubscriptionKeyORM() *SubscriptionKeyORM {
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]db.SubscriptionKeyModel, error) {
-	a.clientWrapper.BeforeQuery()
-	defer a.clientWrapper.AfterQuery()
+	cacheKey := cache.BuildCacheKey(cache.SubByHotkey, hotkey)
+
+	var subKeys []db.SubscriptionKeyModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &subKeys); err == nil {
+		return subKeys, nil
+	}
 
 	ctx := context.Background()
 
@@ -41,6 +50,11 @@ func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]
 		return nil, err
 	}
 
+	// Cache the result
+	if err := cache.SetCacheValue(cacheKey, apiKeys); err != nil {
+		log.Error().Err(err).Msgf("Error caching subscription keys")
+	}
+
 	return apiKeys, nil
 }
 
@@ -56,7 +70,7 @@ func (a *SubscriptionKeyORM) CreateSubscriptionKeyByHotkey(hotkey string, subscr
 		return nil, err
 	}
 
-	createdApiKey, err := a.dbClient.SubscriptionKey.CreateOne(
+	createdSubKey, err := a.dbClient.SubscriptionKey.CreateOne(
 		db.SubscriptionKey.Key.Set(subscriptionKey),
 		db.SubscriptionKey.MinerUser.Link(
 			db.MinerUser.ID.Equals(minerUser.ID),
@@ -67,7 +81,7 @@ func (a *SubscriptionKeyORM) CreateSubscriptionKeyByHotkey(hotkey string, subscr
 		log.Error().Err(err).Msgf("Error creating subscription key")
 		return nil, err
 	}
-	return createdApiKey, nil
+	return createdSubKey, nil
 }
 
 func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subscriptionKey string) (*db.SubscriptionKeyModel, error) {
@@ -88,6 +102,15 @@ func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subsc
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.SubscriptionKeyModel, error) {
+	cacheKey := cache.BuildCacheKey(cache.SubByKey, subScriptionKey)
+
+	var foundSubscriptionKey *db.SubscriptionKeyModel
+	cache := cache.GetCacheInstance()
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &foundSubscriptionKey); err == nil {
+		return foundSubscriptionKey, nil
+	}
 	a.clientWrapper.BeforeQuery()
 	defer a.clientWrapper.AfterQuery()
 
@@ -105,6 +128,11 @@ func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.S
 		}
 		log.Error().Err(err).Msgf("Error getting Subscription key")
 		return nil, err
+	}
+
+	// Cache the result
+	if err := cache.SetCacheValue(cacheKey, foundSubscriptionKey); err != nil {
+		log.Error().Err(err).Msgf("Error caching subscription key")
 	}
 
 	return foundSubscriptionKey, nil

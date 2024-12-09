@@ -3,22 +3,23 @@ run:
   go: "1.22"
   timeout: 3m
   allow-parallel-runners: true
+
 output:
   formats: colored-line-number
 
 linters:
   disable-all: true
   enable:
-    - gosimple  # Suggest code simplifications
-    - govet     # Reports suspicious constructs
-    - ineffassign  # Detects unused variable assignments
-    - staticcheck  # go vet on steroids
-    - unused    # Detect unused constants, variables, functions, and types
-    - gocyclo   # Detect cyclomatic complexity
-    - gofmt # Enforce standard formatting
+    - gosimple # Suggest code simplifications
+    - govet # Reports suspicious constructs
+    - ineffassign # Detects unused variable assignments
+    - staticcheck # go vet on steroids
+    - unused # Detect unused constants, variables, functions, and types
+    - gocyclo # Detect cyclomatic complexity
+    - gofmt
     - goimports
-    - misspell  # Fix spelling errors
-    - bodyclose  # Check whether HTTP response bodies are closed
+    - misspell # Fix spelling errors
+    - bodyclose # Check whether HTTP response bodies are closed
 
 linters-settings:
   gofumpt:
