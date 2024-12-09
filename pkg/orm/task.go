@@ -42,7 +42,6 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 		db.Task.Status.Set(task.Status),
 		db.Task.MaxResults.Set(task.MaxResults),
 		db.Task.NumResults.Set(task.NumResults),
-		db.Task.NumCriteria.Set(task.NumCriteria),
 		db.Task.MinerUser.Link(
 			db.MinerUser.ID.Equals(minerUserId),
 		),
