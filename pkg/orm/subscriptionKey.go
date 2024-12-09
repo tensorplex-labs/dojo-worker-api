@@ -21,10 +21,9 @@ func NewSubscriptionKeyORM() *SubscriptionKeyORM {
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionKeysByMinerHotkey(hotkey string) ([]db.SubscriptionKeyModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.SubByHotkey, hotkey)
-
 	var subKeys []db.SubscriptionKeyModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.SubByHotkey, hotkey)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &subKeys); err == nil {
@@ -102,10 +101,9 @@ func (a *SubscriptionKeyORM) DisableSubscriptionKeyByHotkey(hotkey string, subsc
 }
 
 func (a *SubscriptionKeyORM) GetSubscriptionByKey(subScriptionKey string) (*db.SubscriptionKeyModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.SubByKey, subScriptionKey)
-
 	var foundSubscriptionKey *db.SubscriptionKeyModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.SubByKey, subScriptionKey)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &foundSubscriptionKey); err == nil {

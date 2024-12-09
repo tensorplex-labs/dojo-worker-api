@@ -123,7 +123,7 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 	_, err := minerUserORM.GetUserByHotkey(hotkey)
 	if err != nil {
 		if err == db.ErrNotFound {
-			log.Info().Msg("User not found, continuing...")
+			log.Debug().Msg("User not found, continuing...")
 			return
 		}
 		log.Error().Err(err).Msg("Error getting user by hotkey")

@@ -36,10 +36,9 @@ func (s *DojoWorkerORM) CreateDojoWorker(walletAddress string, chainId string) (
 }
 
 func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.DojoWorkerModel, error) {
-	cacheKey := cache.BuildCacheKey(cache.WorkerByWallet, walletAddress)
-
 	var worker *db.DojoWorkerModel
 	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.WorkerByWallet, walletAddress)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &worker); err == nil {
@@ -71,9 +70,9 @@ func (s *DojoWorkerORM) GetDojoWorkerByWalletAddress(walletAddress string) (*db.
 }
 
 func (s *DojoWorkerORM) GetDojoWorkers() (int, error) {
-	cacheKey := cache.BuildCacheKey(cache.WorkerCount, "")
 	var count int
 	cache := cache.GetCacheInstance()
+	cacheKey := string(cache.Keys.WorkerCount)
 
 	// Try to get from cache first
 	if err := cache.GetCacheValue(cacheKey, &count); err == nil {

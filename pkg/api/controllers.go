@@ -193,6 +193,10 @@ func CreateTasksController(c *gin.Context) {
 		taskIds = append(taskIds, task.ID)
 	}
 
+	// Clean up the cache
+	cache := cache.GetCacheInstance()
+	cache.DeleteByPattern(string(cache.Keys.TasksByWorker) + ":*")
+
 	c.JSON(http.StatusOK, defaultSuccessResponse(taskIds))
 }
 
@@ -303,6 +307,15 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
 		c.Abort()
 		return
+	}
+
+	// Remove from cache
+	cache := cache.GetCacheInstance()
+	cache.DeleteWithSuffix(cache.Keys.TaskResultByWorker, worker.ID)
+
+	// Clean all task:worker:* cache entries
+	if err := cache.DeleteByPattern(string(cache.Keys.TasksByWorker) + ":*"); err != nil {
+		log.Error().Err(err).Msg("Failed to clean task:worker cache entries")
 	}
 
 	// Update the metric data with goroutine
@@ -471,6 +484,9 @@ func GetWorkerPartnerListController(c *gin.Context) {
 func GetTaskByIdController(c *gin.Context) {
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
+
+	// TODO: Remove this after testing
+	log.Info().Interface("Headers", c.Request.Header).Msg("Request Headers")
 
 	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
 	if err != nil {
