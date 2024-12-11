@@ -222,7 +222,7 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	}
 
 	if storageResponse.Value == nil {
-		log.Warn().Msgf("Value is nil for hotkey %s, means they are not serving an axon", hotkey)
+		log.Debug().Msgf("Value is nil for hotkey %s, means they are not serving an axon", hotkey)
 		return nil, errors.New("value is nil")
 	}
 
