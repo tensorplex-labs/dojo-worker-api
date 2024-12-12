@@ -2,10 +2,14 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"fmt"
 	"strconv"
 	"time"
+
+	"dojo-api/db"
+	"dojo-api/pkg/cache"
+
+	"github.com/rs/zerolog/log"
 )
 
 type TaskResultORM struct {
@@ -36,22 +40,54 @@ func (t *TaskResultORM) CreateTaskResult(ctx context.Context, taskResult *db.Inn
 func (t *TaskResultORM) GetTaskResultsByTaskId(ctx context.Context, taskId string) ([]db.TaskResultModel, error) {
 	t.clientWrapper.BeforeQuery()
 	defer t.clientWrapper.AfterQuery()
+
 	return t.client.TaskResult.FindMany(db.TaskResult.TaskID.Equals(taskId)).Exec(ctx)
 }
 
-func (orm *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
-	return orm.client.TaskResult.FindMany(
+func (t *TaskResultORM) GetCompletedTResultByTaskAndWorker(ctx context.Context, taskId string, workerId string) ([]db.TaskResultModel, error) {
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	results, err := t.client.TaskResult.FindMany(
 		db.TaskResult.TaskID.Equals(taskId),
 		db.TaskResult.WorkerID.Equals(workerId),
 		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
 	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
-func (orm *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
-	return orm.client.TaskResult.FindMany(
+func (t *TaskResultORM) GetCompletedTResultByWorker(ctx context.Context, workerId string) ([]db.TaskResultModel, error) {
+	var results []db.TaskResultModel
+	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.TaskResultByWorker, workerId)
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &results); err == nil {
+		return results, nil
+	}
+
+	// Cache miss, fetch from database
+	t.clientWrapper.BeforeQuery()
+	defer t.clientWrapper.AfterQuery()
+
+	results, err := t.client.TaskResult.FindMany(
 		db.TaskResult.WorkerID.Equals(workerId),
 		db.TaskResult.Status.Equals(db.TaskResultStatusCompleted),
 	).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, results); err != nil {
+		log.Warn().Err(err).Msg("Failed to set task result cache")
+	}
+
+	return results, nil
 }
 
 func (t *TaskResultORM) CreateTaskResultWithInvalid(ctx context.Context, taskResult *db.InnerTaskResult) (*db.TaskResultModel, error) {
