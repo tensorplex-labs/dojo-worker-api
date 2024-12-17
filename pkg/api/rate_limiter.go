@@ -156,10 +156,11 @@ func InMetagraphOnly() gin.HandlerFunc {
 		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
 		found := subnetSubscriber.FindMinerIpAddress(ip)
 		if !found {
+			log.Error().Msgf("IP %s is not in the metagraph", ip)
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
-		log.Debug().Msgf("IP %s is in the metagraph", ip)
+		log.Info().Msgf("IP %s is in the metagraph", ip)
 		c.Next()
 	}
 }
