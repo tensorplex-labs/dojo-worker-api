@@ -28,6 +28,8 @@ const (
 	CacheKeyHotkeyTemplate     string = "worker_api:sn%d_uid%d_hotkey"
 	CacheKeyAxonInfoTemplate   string = "worker_api:sn%d_hotkey%s_axon_info"
 	CacheKeyTotalStakeTemplate string = "worker_api:hotkey%s_total_stake"
+	maxRetries                        = 3
+	baseDelay                         = 100 * time.Millisecond
 )
 
 type StorageResponse struct {
@@ -118,22 +120,54 @@ func getCachedData[T any](cache *cache.Cache, cacheKey string) (*T, error) {
 }
 
 func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
+	var lastErr error
+
+	// Exponential backoff retry
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Calculate delay with exponential backoff
+		delay := time.Duration(math.Pow(2, float64(attempt))) * baseDelay
+
+		response, err := s.executeRequest(path, params)
+		if err == nil {
+			return response, nil
+		}
+
+		lastErr = err
+
+		// Don't sleep on the last attempt
+		if attempt < maxRetries {
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt+1).
+				Dur("nextRetryIn", delay).
+				Str("path", path).
+				Msg("Request failed, retrying...")
+
+			time.Sleep(delay)
+		}
+	}
+
+	return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
+}
+
+func (s *SubstrateService) executeRequest(path string, params url.Values) (*StorageResponse, error) {
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.URL.RawQuery = params.Encode()
+
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	// Ensure the response body is closed
 	defer resp.Body.Close()
-	// close connection after request
-	req.Close = true
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// check if the body is empty
@@ -142,11 +176,16 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 		return nil, fmt.Errorf("empty response body")
 	}
 
-	var storageResponse StorageResponse
-	err = json.Unmarshal(body, &storageResponse)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
+
+	var storageResponse StorageResponse
+	if err := json.Unmarshal(body, &storageResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w, body: %s", err, string(body))
+	}
+
 	return &storageResponse, nil
 }
 
