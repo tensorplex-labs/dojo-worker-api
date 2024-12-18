@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,8 +29,9 @@ const (
 	CacheKeyHotkeyTemplate     string = "worker_api:sn%d_uid%d_hotkey"
 	CacheKeyAxonInfoTemplate   string = "worker_api:sn%d_hotkey%s_axon_info"
 	CacheKeyTotalStakeTemplate string = "worker_api:hotkey%s_total_stake"
-	maxRetries                        = 3
-	baseDelay                         = 100 * time.Millisecond
+	maxRetries                        = 5
+	baseDelay                         = 2 * time.Second
+	maxDelay                          = 10 * time.Second
 )
 
 type StorageResponse struct {
@@ -124,8 +126,15 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 
 	// Exponential backoff retry
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Calculate delay with exponential backoff
-		delay := time.Duration(math.Pow(2, float64(attempt))) * baseDelay
+		// Calculate base delay with exponential backoff, capped at maxDelay
+		delay := time.Duration(math.Min(
+			float64(baseDelay)*math.Pow(2, float64(attempt)),
+			float64(maxDelay),
+		))
+
+		// Add random jitter between 0 and 3 seconds
+		jitter := time.Duration(float64(3*time.Second) * rand.Float64())
+		totalDelay := delay + jitter
 
 		response, err := s.executeRequest(path, params)
 		if err == nil {
@@ -139,15 +148,15 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 			log.Warn().
 				Err(err).
 				Int("attempt", attempt+1).
-				Dur("nextRetryIn", delay).
+				Float64("totalDelay_seconds", totalDelay.Seconds()).
 				Str("path", path).
 				Msg("Request failed, retrying...")
 
-			time.Sleep(delay)
+			time.Sleep(totalDelay)
 		}
 	}
 
-	return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
+	return nil, fmt.Errorf("all retry attempts failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 func (s *SubstrateService) executeRequest(path string, params url.Values) (*StorageResponse, error) {

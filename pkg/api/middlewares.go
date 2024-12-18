@@ -335,7 +335,15 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 		}
 
 		subnetState := blockchain.GetSubnetStateSubscriberInstance()
+
 		_, isFound := subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
+
+		// if hotkey is not found, refresh the subnet state, and give one more chance
+		if !isFound {
+			subnetState.RefreshState()
+			_, isFound = subnetState.FindMinerHotkeyIndex(foundApiKey.MinerUser().Hotkey)
+		}
+
 		if !isFound {
 			log.Error().Msg("Miner hotkey is deregistered")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, defaultErrorResponse("Unauthorized"))
