@@ -121,7 +121,7 @@ func getCachedData[T any](cache *cache.Cache, cacheKey string) (*T, error) {
 	return nil, err
 }
 
-func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*StorageResponse, error) {
+func (s *SubstrateService) GetStorageRequest(path string, params url.Values) (*StorageResponse, error) {
 	var lastErr error
 
 	// Exponential backoff retry
@@ -136,7 +136,7 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 		jitter := time.Duration(float64(3*time.Second) * rand.Float64())
 		totalDelay := delay + jitter
 
-		response, err := s.executeRequest(path, params)
+		response, err := s.executeStorageRequest(path, params)
 		if err == nil {
 			return response, nil
 		}
@@ -159,7 +159,7 @@ func (s *SubstrateService) DoGetRequest(path string, params url.Values) (*Storag
 	return nil, fmt.Errorf("all retry attempts failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-func (s *SubstrateService) executeRequest(path string, params url.Values) (*StorageResponse, error) {
+func (s *SubstrateService) executeStorageRequest(path string, params url.Values) (*StorageResponse, error) {
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -207,7 +207,7 @@ func (s *SubstrateService) GetMaxUID(subnetId int) (int, error) {
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/SubnetworkN", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
-	storageResponse, err := s.DoGetRequest(path, params)
+	storageResponse, err := s.GetStorageRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting max UID for subnet %d", subnetId)
 		return 0, err
@@ -234,7 +234,7 @@ func (s *SubstrateService) GetHotkeyByUid(subnetId int, uid int) (string, error)
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", strconv.Itoa(uid))
-	storageResponse, err := s.DoGetRequest(path, params)
+	storageResponse, err := s.GetStorageRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting hotkey for uid %d", uid)
 		return "", err
@@ -263,7 +263,7 @@ func (s *SubstrateService) GetAxonInfo(subnetId int, hotkey string) (*AxonInfo, 
 	params := url.Values{}
 	params.Add("keys[]", strconv.Itoa(subnetId))
 	params.Add("keys[]", hotkey)
-	storageResponse, err := s.DoGetRequest(path, params)
+	storageResponse, err := s.GetStorageRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting axon info for hotkey %s", hotkey)
 		return nil, err
@@ -350,7 +350,7 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
 	params.Add("keys[]", strconv.Itoa(subnetUid))
-	storageResponse, err := s.DoGetRequest(path, params)
+	storageResponse, err := s.GetStorageRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error checking if hotkey %s is registered", hotkey)
 		return false, err
@@ -373,7 +373,7 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
-	storageResponse, err := s.DoGetRequest(path, params)
+	storageResponse, err := s.GetStorageRequest(path, params)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s", hotkey)
 		return 0, err
@@ -495,43 +495,13 @@ type BlockResponse struct {
 }
 
 func (s *SubstrateService) getBlockById(blockId int) (*BlockResponse, error) {
-	log.Info().Msgf("Fetching block with ID: %d", blockId)
 	path := fmt.Sprintf("%s/blocks/%d", s.substrateApiUrl, blockId)
-	req, err := http.NewRequest("GET", path, nil)
+	block, err := s.GetBlockRequest(path)
 	if err != nil {
-		log.Error().Err(err).Msgf("Failed to create request for block ID: %d", blockId)
+		log.Error().Err(err).Msgf("Failed to get block with ID: %d", blockId)
 		return nil, err
 	}
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to fetch block ID: %d", blockId)
-		return nil, err
-	}
-	// Ensure the response body is closed
-	defer resp.Body.Close()
-	// close connection after request
-	req.Close = true
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to read response body for block ID: %d", blockId)
-		return nil, err
-	}
-
-	var block BlockResponse
-	err = json.Unmarshal(body, &block)
-	if err != nil || reflect.DeepEqual(block, BlockResponse{}) {
-		log.Error().Err(err).Msgf("Failed to unmarshal block response for block ID: %d, trying to unmarshal block error response", blockId)
-		var blockError BlockErrorResponse
-		err = json.Unmarshal(body, &blockError)
-		if err != nil {
-			log.Error().Err(err).Msgf("Failed to unmarshal block error response for block ID: %d", blockId)
-			return nil, err
-		}
-		return nil, fmt.Errorf("block error message: %s, stack: %s", blockError.Message, blockError.Stack)
-	}
-
-	log.Info().Msgf("Successfully fetched block with ID: %d, data: %v", blockId, block)
-	return &block, nil
+	return block, nil
 }
 
 // Use binary search to get the latest block since substrate API's
@@ -565,36 +535,94 @@ func (s *SubstrateService) GetLatestUnFinalizedBlock(low int) (*BlockResponse, e
 
 func (s *SubstrateService) GetLatestFinalizedBlock() (*BlockResponse, error) {
 	path := fmt.Sprintf("%s/blocks/head", s.substrateApiUrl)
-
-	req, err := http.NewRequest("GET", path, nil)
+	block, err := s.GetBlockRequest(path)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create new HTTP request")
+		log.Error().Err(err).Msg("Failed to get latest finalized block")
 		return nil, err
 	}
+	return block, nil
+}
 
-	resp, err := http.DefaultClient.Do(req)
+func (s *SubstrateService) GetBlockRequest(path string) (*BlockResponse, error) {
+	var lastErr error
+
+	// Exponential backoff retry
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Calculate base delay with exponential backoff, capped at maxDelay
+		delay := time.Duration(math.Min(
+			float64(baseDelay)*math.Pow(2, float64(attempt)),
+			float64(maxDelay),
+		))
+
+		// Add random jitter between 0 and 3 seconds
+		jitter := time.Duration(float64(3*time.Second) * rand.Float64())
+		totalDelay := delay + jitter
+
+		response, err := s.executeBlockRequest(path)
+		if err == nil {
+			return response, nil
+		}
+
+		lastErr = err
+
+		// Don't sleep on the last attempt
+		if attempt < maxRetries {
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt+1).
+				Float64("totalDelay_seconds", totalDelay.Seconds()).
+				Str("path", path).
+				Msg("Block request failed, retrying...")
+
+			time.Sleep(totalDelay)
+		}
+	}
+
+	return nil, fmt.Errorf("all retry attempts failed after %d attempts: %w", maxRetries, lastErr)
+}
+
+func (s *SubstrateService) executeBlockRequest(path string) (*BlockResponse, error) {
+	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to execute HTTP request")
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	// Ensure the response body is closed
 	defer resp.Body.Close()
-	// close connection after request
-	req.Close = true
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to read response body")
-		return nil, err
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// check if the body is empty
+	if len(body) == 0 {
+		log.Error().Msg("Empty response body")
+		return nil, fmt.Errorf("empty response body")
+	}
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var block BlockResponse
-	err = json.Unmarshal(body, &block)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal response body into BlockResponse")
-		return nil, err
+	if err := json.Unmarshal(body, &block); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w, body: %s", err, string(body))
 	}
 
-	log.Info().Msgf("Successfully fetched latest finalized block: %+v", block)
+	// Handle empty block response
+	if reflect.DeepEqual(block, BlockResponse{}) {
+		var blockError BlockErrorResponse
+		if err := json.Unmarshal(body, &blockError); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal error response: %w", err)
+		}
+		return nil, fmt.Errorf("block error message: %s, stack: %s", blockError.Message, blockError.Stack)
+	}
+
 	return &block, nil
 }
