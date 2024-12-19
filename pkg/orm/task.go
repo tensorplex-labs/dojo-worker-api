@@ -82,25 +82,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 
 // Modified GetTasksByWorkerSubscription with caching
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
-	// Convert TaskTypes to strings
-	typeStrs := make([]string, len(taskTypes))
-	for i, t := range taskTypes {
-		typeStrs[i] = string(t)
-	}
-
 	var tasks []db.TaskModel
-	cache := cache.GetCacheInstance()
-	cacheKey := cache.BuildCacheKey(cache.Keys.TasksByWorker, workerId, strconv.Itoa(offset), strconv.Itoa(limit), strings.Join(typeStrs, ","))
-
-	// Try to get from cache first
-	if err := cache.GetCacheValue(cacheKey, &tasks); err == nil {
-		totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, nil)
-		if err != nil {
-			log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
-			return tasks, 0, err
-		}
-		return tasks, totalTasks, nil
-	}
 
 	// Cache miss, proceed with database query
 	o.clientWrapper.BeforeQuery()
@@ -157,11 +139,6 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 	}
 
 	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
-
-	// Store in cache
-	if err := cache.SetCacheValue(cacheKey, tasks); err != nil {
-		log.Warn().Err(err).Msg("Failed to set cache")
-	}
 
 	return tasks, totalTasks, nil
 }
@@ -258,7 +235,6 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 					SELECT "id" FROM "Task"
 					WHERE "expire_at" <= $2
 					  AND "status" = $3::"TaskStatus"
-					  AND "id" IN (SELECT DISTINCT "task_id" FROM "TaskResult")
 					LIMIT $4
 				)
 			`
