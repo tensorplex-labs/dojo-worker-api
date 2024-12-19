@@ -2,9 +2,10 @@ package orm
 
 import (
 	"context"
-	"dojo-api/db"
 	"fmt"
 	"time"
+
+	"dojo-api/db"
 
 	"github.com/rs/zerolog/log"
 )
@@ -67,7 +68,7 @@ func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error
 	user, err := s.dbClient.MinerUser.FindFirst(
 		db.MinerUser.Hotkey.Equals(hotkey),
 	).Exec(ctx)
-	if err != nil {
+	if err != nil && err != db.ErrNotFound {
 		log.Error().Err(err).Msg("Error retrieving user by hotkey")
 		return nil, err
 	}

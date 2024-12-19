@@ -36,7 +36,6 @@ func GetValidatorMinStake() int {
 	return intValue
 }
 
-// TODO this is only applicable to whatever subnet has the same definition of validator min stake
 type SubnetState struct {
 	SubnetId               int
 	ActiveValidatorHotkeys map[int]string
@@ -124,7 +123,7 @@ func (s *SubnetStateSubscriber) OnRegisteredFound(hotkey string) {
 	_, err := minerUserORM.GetUserByHotkey(hotkey)
 	if err != nil {
 		if err == db.ErrNotFound {
-			log.Info().Msg("User not found, continuing...")
+			log.Debug().Msg("User not found, continuing...")
 			return
 		}
 		log.Error().Err(err).Msg("Error getting user by hotkey")
@@ -261,11 +260,19 @@ func (s *SubnetStateSubscriber) FindMinerHotkeyIndex(hotkey string) (int, bool) 
 }
 
 func (s *SubnetStateSubscriber) FindValidatorHotkeyIndex(hotkey string) (int, bool) {
-	// TODO fix why validator hotkey changes so quickly, should be a bug
 	for uid, vhotkey := range s.SubnetState.ActiveValidatorHotkeys {
 		if hotkey == vhotkey {
 			return uid, true
 		}
 	}
 	return -1, false
+}
+
+func (s *SubnetStateSubscriber) FindMinerIpAddress(ipAddress string) bool {
+	for _, participant := range s.SubnetState.ActiveParticipants {
+		if participant.Axon.IpAddress == ipAddress {
+			return true
+		}
+	}
+	return false
 }

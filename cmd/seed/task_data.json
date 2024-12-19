@@ -6,17 +6,12 @@
       "max": 100,
       "min": 1,
       "type": "multi-score",
-      "options": [
-        "459520f8-b654-41a8-9f94-93e003c4ecb5",
-        "024ffca6-aac0-40d2-959b-1ab7b165b68e",
-        "4fa05b97-cd66-4df7-bb3a-298d2b04b148",
-        "1b26f82c-935f-432b-a60d-f21204e580f2"
-      ]
+      "options": ["1", "2", "3", "4"]
     }
   ],
   "responses": [
     {
-      "model": "459520f8-b654-41a8-9f94-93e003c4ecb5",
+      "model": "1",
       "completion": {
         "files": [
           {
@@ -29,7 +24,7 @@
       }
     },
     {
-      "model": "024ffca6-aac0-40d2-959b-1ab7b165b68e",
+      "model": "2",
       "completion": {
         "files": [
           {
@@ -42,7 +37,7 @@
       }
     },
     {
-      "model": "4fa05b97-cd66-4df7-bb3a-298d2b04b148",
+      "model": "3",
       "completion": {
         "files": [
           {
@@ -55,7 +50,7 @@
       }
     },
     {
-      "model": "1b26f82c-935f-432b-a60d-f21204e580f2",
+      "model": "4",
       "completion": {
         "files": [
           {
