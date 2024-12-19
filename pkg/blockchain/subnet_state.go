@@ -276,18 +276,3 @@ func (s *SubnetStateSubscriber) FindMinerIpAddress(ipAddress string) bool {
 	}
 	return false
 }
-
-func (s *SubnetStateSubscriber) RefreshState() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	subnetUidStr := utils.LoadDotEnv("SUBNET_UID")
-	subnetUid, err := strconv.Atoi(subnetUidStr)
-	if err != nil {
-		log.Error().Err(err).Msg("Error parsing SUBNET_UID")
-		return
-	}
-
-	s.SubnetState = s.GetSubnetState(subnetUid)
-	log.Info().Msg("Subnet state refreshed")
-}
