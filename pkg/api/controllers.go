@@ -152,8 +152,6 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
-
 	// Here we will handle file upload
 	// Parse files from the form
 	form, err := c.MultipartForm()
