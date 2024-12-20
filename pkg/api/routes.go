@@ -6,39 +6,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GET /api/v1/metrics/dojo-worker-count
 func LoginRoutes(router *gin.Engine) {
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	apiV1 := router.Group("/api/v1")
 	{
 		worker := apiV1.Group("/worker")
 		{
+			worker.Use(WorkerRateLimiter())
 			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.PUT("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 			worker.GET("/partner/list", WorkerAuthMiddleware(), GetWorkerPartnerListController)
 		}
-		apiV1.GET("/auth/:address", GenerateNonceController)
-		apiV1.PUT("/partner/edit", WorkerAuthMiddleware(), UpdateWorkerPartnerController)
+		apiV1.GET("/auth/:address", GeneralRateLimiter(), GenerateNonceController)
+		apiV1.PUT("/partner/edit", GeneralRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
-			tasks.POST("/create-tasks", MinerAuthMiddleware(), CreateTasksController)
-			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
-			tasks.GET("/task-result/:task-id", GetTaskResultsController)
-			tasks.GET("/:task-id", GetTaskByIdController)
-			tasks.GET("/next-task/:task-id", WorkerAuthMiddleware(), GetNextInProgressTaskController)
-			tasks.GET("/", WorkerAuthMiddleware(), GetTasksByPageController)
+			tasks.PUT("/submit-result/:task-id", WriteTaskRateLimiter(), WorkerAuthMiddleware(), SubmitTaskResultController)
+			// TODO: re-enable InMetagraphOnly() in future
+			tasks.POST("/create-tasks", WriteTaskRateLimiter(), MinerAuthMiddleware(), CreateTasksController)
+			tasks.GET("/task-result/:task-id", ReadTaskRateLimiter(), GetTaskResultsController)
+			tasks.GET("/:task-id", ReadTaskRateLimiter(), GetTaskByIdController)
+			tasks.GET("/next-task/:task-id", ReadTaskRateLimiter(), WorkerAuthMiddleware(), GetNextInProgressTaskController)
+			tasks.GET("/", ReadTaskRateLimiter(), WorkerAuthMiddleware(), GetTasksByPageController)
 		}
 
 		miner := apiV1.Group("/miner")
 		{
-			// miner.POST("/login/auth", MinerLoginMiddleware(), MinerLoginController)
-			// miner.GET("/info/:hotkey", MinerAuthMiddleware(), MinerInfoController)
-			// miner.POST("/miner-application", MinerVerificationMiddleware(), MinerApplicationController)
-			// miner.PUT("/partner/disable", MinerAuthMiddleware(), DisableWorkerByMinerController)
-			miner.POST("/session/auth", GenerateCookieAuth)
+			miner.POST("/session/auth", GeneralRateLimiter(), GenerateCookieAuth)
 
 			apiKeyGroup := miner.Group("/api-key")
+			apiKeyGroup.Use(GeneralRateLimiter())
 			{
 				apiKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerApiKeyListController)
 				apiKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerApiKeyGenerateController)
@@ -46,6 +44,7 @@ func LoginRoutes(router *gin.Engine) {
 			}
 
 			subScriptionKeyGroup := miner.Group("/subscription-key")
+			subScriptionKeyGroup.Use(GeneralRateLimiter())
 			{
 				subScriptionKeyGroup.GET("/list", MinerCookieAuthMiddleware(), MinerSubscriptionKeyListController)
 				subScriptionKeyGroup.POST("/generate", MinerCookieAuthMiddleware(), MinerSubscriptionKeyGenerateController)
@@ -54,6 +53,7 @@ func LoginRoutes(router *gin.Engine) {
 		}
 		metrics := apiV1.Group("/metrics")
 		{
+			metrics.Use(MetricsRateLimiter())
 			metrics.GET("/dojo-worker-count", GetDojoWorkerCountController)
 			metrics.GET("/completed-tasks-count", GetTotalCompletedTasksController)
 			metrics.GET("/task-result-count", GetTotalTasksResultsController)

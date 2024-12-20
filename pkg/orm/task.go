@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/cache"
 
 	sq "github.com/Masterminds/squirrel"
 
@@ -49,45 +50,69 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 	return createdTask, err
 }
 
+// GetById with caching
 func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, error) {
+	var task *db.TaskModel
+	cache := cache.GetCacheInstance()
+	cacheKey := cache.BuildCacheKey(cache.Keys.TaskById, taskId)
+
+	// Try to get from cache first
+	if err := cache.GetCacheValue(cacheKey, &task); err == nil {
+		return task, nil
+	}
+
+	// Cache miss, fetch from database
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
+
 	task, err := o.dbClient.Task.FindUnique(
 		db.Task.ID.Equals(taskId),
 	).Exec(ctx)
-	return task, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if err := cache.SetCacheValue(cacheKey, task); err != nil {
+		log.Warn().Err(err).Msg("Failed to set cache")
+	}
+
+	return task, nil
 }
 
-// TODO: Optimization
+// Modified GetTasksByWorkerSubscription with caching
 func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+	var tasks []db.TaskModel
+
+	// Cache miss, proceed with database query
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
-	// Fetch all active WorkerPartner records to retrieve MinerUser's subscription keys.
+
+	// Rest of the existing implementation...
 	partners, err := o.dbClient.WorkerPartner.FindMany(
 		db.WorkerPartner.WorkerID.Equals(workerId),
 		db.WorkerPartner.IsDeleteByMiner.Equals(false),
 		db.WorkerPartner.IsDeleteByWorker.Equals(false),
 	).Exec(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching WorkerPartner by WorkerID")
+		log.Error().Err(err).Msgf("Error fetching WorkerPartner by WorkerID for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
-	// Collect Subscription keys from the fetched WorkerPartner records
 	var subscriptionKeys []string
 	for _, partner := range partners {
 		subscriptionKeys = append(subscriptionKeys, partner.MinerSubscriptionKey)
 	}
 
 	if len(subscriptionKeys) == 0 {
-		log.Error().Err(err).Msg("No WorkerPartner found with the given WorkerID")
+		log.Error().Msgf("No subscription keys found for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	filterParams := []db.TaskWhereParam{
 		db.Task.MinerUser.Where(
 			db.MinerUser.SubscriptionKeys.Some(
-				db.SubscriptionKey.Key.In(subscriptionKeys), // SubscriptionKey should be one of the keys in the subscriptionKeys slice.
+				db.SubscriptionKey.Key.In(subscriptionKeys),
 			),
 		),
 	}
@@ -96,32 +121,25 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
 	}
 
-	log.Debug().Interface("taskTypes", taskTypes).Msgf("Filter Params: %v", filterParams)
-
-	// Fetch tasks associated with these subscription keys
-	tasks, err := o.dbClient.Task.FindMany(
+	tasks, err = o.dbClient.Task.FindMany(
 		filterParams...,
 	).OrderBy(sortQuery).
 		Skip(offset).
 		Take(limit).
 		Exec(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching tasks by WorkerSubscriptionKey")
+		log.Error().Err(err).Msgf("Error fetching tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
-	// TODO commented out for now, testing raw query speed
-	// totalTasks, err := o.dbClient.Task.FindMany(
-	// 	filterParams...,
-	// ).Exec(ctx)
-
 	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in fetching total tasks by WorkerSubscriptionKey")
+		log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 		return nil, 0, err
 	}
 
 	log.Info().Int("totalTasks", totalTasks).Msgf("Successfully fetched total tasks fetched for worker ID %v", workerId)
+
 	return tasks, totalTasks, nil
 }
 
@@ -197,53 +215,50 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	return totalTasks, nil
 }
 
-// check every three mins for expired tasks
+// Check every 10 mins for expired tasks
 func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
-	for range time.Tick(3 * time.Minute) {
+	for range time.Tick(10 * time.Minute) {
 		log.Info().Msg("Checking for expired tasks")
 		o.clientWrapper.BeforeQuery()
-		// Fetch all expired tasks
-		tasks, err := o.dbClient.Task.
-			FindMany(
-				db.Task.ExpireAt.Lte(time.Now()),
-				db.Task.Status.Equals(db.TaskStatusInProgress),
-			).
-			OrderBy(db.Task.CreatedAt.Order(db.SortOrderDesc)).
-			Exec(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Error in fetching expired tasks")
-		}
+		defer o.clientWrapper.AfterQuery()
 
-		if len(tasks) == 0 {
-			log.Info().Msg("No newly expired tasks to update skipping...")
-			continue
-		} else {
-			log.Info().Msgf("Fetched %v newly expired tasks", len(tasks))
-		}
+		currentTime := time.Now().UTC()
+		batchSize := 100 // Adjust batch size based on database performance
+		batchNumber := 0
+		startTime := time.Now().UTC() // Start timing for update operation
+		for {
+			batchNumber++
+			updateQuery := `
+				UPDATE "Task"
+				SET "status" = $1::"TaskStatus", "updated_at" = $2
+				WHERE "id" IN (
+					SELECT "id" FROM "Task"
+					WHERE "expire_at" <= $2
+					  AND "status" = $3::"TaskStatus"
+					LIMIT $4
+				)
+			`
+			params := []interface{}{db.TaskStatusExpired, currentTime, db.TaskStatusInProgress, batchSize}
 
-		var txns []db.PrismaTransaction
-		for i, taskModel := range tasks {
-			transaction := o.dbClient.Task.FindUnique(
-				db.Task.ID.Equals(taskModel.ID),
-			).Update(
-				db.Task.Status.Set(db.TaskStatusExpired),
-				db.Task.UpdatedAt.Set(time.Now()),
-			).Tx()
-
-			txns = append(txns, transaction)
-
-			if len(txns) == 100 || (i == len(tasks)-1 && len(txns) > 0) {
-				if err := o.dbClient.Prisma.Transaction(txns...).Exec(ctx); err != nil {
-					log.Error().Err(err).Msg("Error in updating batch of task status to expired")
-				}
-				txns = []db.PrismaTransaction{}
+			execResult, err := o.dbClient.Prisma.ExecuteRaw(updateQuery, params...).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error updating tasks to expired status")
+				break
 			}
-		}
 
-		o.clientWrapper.AfterQuery()
+			if execResult.Count == 0 {
+				log.Info().Msg("No more expired tasks with TaskResults to update")
+				break
+			}
+
+			log.Info().Msgf("Updated %v expired tasks with associated TaskResults in batch %d", execResult.Count, batchNumber)
+		}
+		updateDuration := time.Since(startTime) // Calculate total duration for update operation
+		log.Info().Msgf("Total time taken to update expired tasks with TaskResults: %s", updateDuration)
 	}
 }
 
+// Modify GetCompletedTaskCount to use the new pattern
 func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
@@ -263,12 +278,12 @@ func (o *TaskORM) GetCompletedTaskCount(ctx context.Context) (int, error) {
 	}
 
 	taskCountStr := string(result[0].Count)
-	taskCountInt, err := strconv.Atoi(taskCountStr)
+	count, err := strconv.Atoi(taskCountStr)
 	if err != nil {
 		return 0, err
 	}
 
-	return taskCountInt, nil
+	return count, nil
 }
 
 func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, workerId string) (*db.TaskModel, error) {
