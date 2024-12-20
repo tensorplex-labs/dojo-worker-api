@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"dojo-api/pkg/cache"
+	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +16,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"dojo-api/pkg/cache"
-	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -391,7 +390,7 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 	}
 
 	for i, tokenSymbol := range runtimeSpec.Properties.TokenSymbol {
-		if tokenSymbol == "TAO" {
+		if tokenSymbol == "TAO" || tokenSymbol == "testTAO" {
 			tokenDecimals, err := strconv.Atoi(runtimeSpec.Properties.TokenDecimals[i])
 			if err != nil {
 				log.Error().Err(err).Msg("Error converting token decimals to int")
