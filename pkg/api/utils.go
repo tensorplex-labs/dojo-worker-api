@@ -184,14 +184,19 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 
 		logger := log.With().Logger().Output(consoleWriter)
 
+		// Log main request info
 		logger.Info().
-			Int("status_code", param.StatusCode).
-			Str("latency", param.Latency.String()).
-			Str("ip", param.ClientIP).
 			Str("method", param.Method).
 			Str("path", param.Path).
-			Int("resp_size", param.BodySize).
+			Int("status_code", param.StatusCode).
+			Str("latency", param.Latency.String()).
 			Int("req_size", len(body)).
+			Int("resp_size", param.BodySize).
+			Str("ip", param.ClientIP).
+			Msg("")
+
+		// Log headers separately
+		logger.Info().
 			Interface("headers", c.Request.Header).
 			Msg("")
 	}
