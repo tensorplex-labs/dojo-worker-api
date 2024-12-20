@@ -192,6 +192,7 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 			Str("path", param.Path).
 			Int("resp_size", param.BodySize).
 			Int("req_size", len(body)).
+			Interface("headers", c.Request.Header).
 			Msg("")
 	}
 }
