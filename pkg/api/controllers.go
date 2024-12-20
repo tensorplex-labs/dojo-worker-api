@@ -114,9 +114,6 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
-	// Log the headers of the request
-	headers := c.Request.Header
-	log.Info().Interface("headers", headers).Msg("Request headers")
 	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
 
 	minerUserInterface, exists := c.Get("minerUser")
@@ -468,9 +465,6 @@ func GetWorkerPartnerListController(c *gin.Context) {
 func GetTaskByIdController(c *gin.Context) {
 	taskID := c.Param("task-id")
 	taskService := task.NewTaskService()
-
-	// TODO: Remove this after testing
-	log.Info().Interface("Headers", c.Request.Header).Msg("Request Headers")
 
 	task, err := taskService.GetTaskResponseById(c.Request.Context(), taskID)
 	if err != nil {
