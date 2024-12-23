@@ -25,7 +25,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
-	"github.com/redis/rueidis"
 	"github.com/rs/zerolog/log"
 	"github.com/spruceid/siwe-go"
 )
@@ -115,14 +114,6 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
-	// Log the headers of the request
-	headers := c.Request.Header
-	log.Info().Interface("headers", headers).Msg("Request headers")
-
-	// Log the size of the request
-	requestSize := c.Request.ContentLength
-	log.Info().Int64("requestSize", requestSize).Msg("Request size")
-
 	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
 
 	minerUserInterface, exists := c.Get("minerUser")
@@ -157,8 +148,6 @@ func CreateTasksController(c *gin.Context) {
 		c.Abort()
 		return
 	}
-
-	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 
 	// Here we will handle file upload
 	// Parse files from the form
@@ -305,6 +294,10 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.Abort()
 		return
 	}
+
+	// Remove from cache
+	cache := cache.GetCacheInstance()
+	cache.DeleteWithSuffix(cache.Keys.TaskResultByWorker, worker.ID)
 
 	// Update the metric data with goroutine
 	handleMetricData(taskData, updatedTask)
@@ -976,21 +969,18 @@ func GenerateCookieAuth(c *gin.Context) {
 			},
 		}
 
-		expirationTime := 5 * time.Minute
-		if err := cache.Redis.Do(
-			context.Background(),
-			cache.Redis.B().JsonSet().Key(encoded).Path("$").Value(rueidis.JSON(redisData)).Build(),
-		).Error(); err != nil {
-			log.Error().Err(err).Msg("Failed to store session in redis")
+		jsonData, err := json.Marshal(redisData)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal auth data...")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
 			return
 		}
 
-		if err := cache.Redis.Do(
-			context.Background(),
-			cache.Redis.B().Expire().Key(encoded).Seconds(int64(expirationTime.Seconds())).Build(),
-		).Error(); err != nil {
-			log.Error().Err(err).Msg("Failed to set expiration time for session")
+		expirationTime := 5 * time.Minute
+		// migrating from rueidis to go-redis
+
+		if _, err := cache.Redis.Set(context.Background(), encoded, jsonData, expirationTime).Result(); err != nil {
+			log.Error().Err(err).Msg("Failed to store session in redis")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to generate session"))
 			return
 		}

@@ -109,7 +109,7 @@ func (o *FixtureService) CreateDefaultTask(ctx context.Context, title string, ex
 		db.Task.Type.Set(db.TaskTypeCodeGeneration),
 		db.Task.TaskData.Set(types.JSON(taskDataJSON)),
 		db.Task.Status.Set(db.TaskStatusInProgress),
-		db.Task.MaxResults.Set(10),
+		db.Task.MaxResults.Set(1),
 		db.Task.NumResults.Set(0),
 		db.Task.NumCriteria.Set(0),
 		db.Task.TotalReward.Set(101.0),

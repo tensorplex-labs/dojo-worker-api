@@ -1,9 +1,10 @@
 package main
 
 import (
+	"net/url"
+
 	"dojo-api/pkg/orm"
 	"dojo-api/utils"
-	"net/url"
 
 	"github.com/rs/zerolog/log"
 )
