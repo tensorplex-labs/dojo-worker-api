@@ -45,7 +45,7 @@ type CacheKeys struct {
 	TaskResultByTaskAndWorker CacheKey
 	TaskResultByWorker        CacheKey
 	TaskResultsTotal          CacheKey
-
+	CompletedTasksTotal       CacheKey
 	// Worker cache keys
 	WorkerByWallet CacheKey
 	WorkerCount    CacheKey
@@ -65,6 +65,7 @@ var cacheKeys = CacheKeys{
 	TaskResultByTaskAndWorker: "tr:task:worker",
 	TaskResultByWorker:        "tr:worker",
 	TaskResultsTotal:          "metrics:tr:total",
+	CompletedTasksTotal:       "metrics:completed_tasks:total",
 
 	// Worker cache keys
 	WorkerByWallet: "worker:wallet",
