@@ -342,26 +342,63 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		return nil, err
 	}
 
-	for _, item := range results {
-		itemType := CriteriaType(item.Type)
-		if !IsValidCriteriaType(itemType) {
-			log.Error().Msgf("Invalid criteria type: %v", item.Type)
-			continue
+	// Pre-process task criteria for faster lookup
+	modelCriteriaMap := make(map[string]map[CriteriaType]Criteria)
+	for _, response := range taskData.Responses {
+		criteriaMap := make(map[CriteriaType]Criteria)
+		for _, criteria := range response.Criteria {
+			criteriaMap[criteria.GetType()] = criteria
 		}
-		switch itemType {
-		case CriteriaTypeScore:
-			score, _ := item.Value.(ScoreValue)
-			// TODO: Update min and max to use taskdata min and max
-			if score < 1.0 || score > 10.0 {
-				return nil, fmt.Errorf("score %v is out of the valid range [1, 10]", score)
+		modelCriteriaMap[response.Model] = criteriaMap
+	}
+
+	// Validate results
+	for _, result := range results {
+		criteriaMap, exists := modelCriteriaMap[result.Model]
+		if !exists {
+			return nil, fmt.Errorf("model %s not found in task data", result.Model)
+		}
+
+		for _, criteria := range result.Criteria {
+			if err := validateCriteria(criteria, criteriaMap); err != nil {
+				return nil, fmt.Errorf("validation failed for model %s: %w", result.Model, err)
 			}
-		default:
-			return nil, fmt.Errorf("unknown result data type: %s", item.Type)
 		}
 	}
 
 	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
 	return results, nil
+}
+
+// Helper function to validate individual criteria
+// TODO: Might need to update this, if necessary to add criteria id since we might have multiple same criteria types
+func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) error {
+	if err := criteria.Validate(); err != nil {
+		return err
+	}
+
+	switch criteria.GetType() {
+	case CriteriaTypeScore:
+		submitted, ok := criteria.(ScoreCriteria)
+		if !ok {
+			return fmt.Errorf("invalid score criteria type")
+		}
+
+		taskCriteria, ok := criteriaMap[CriteriaTypeScore].(ScoreCriteria)
+		if !ok {
+			return fmt.Errorf("no matching score criteria found in task")
+		}
+
+		if submitted.MinerScore < taskCriteria.Min || submitted.MinerScore > taskCriteria.Max {
+			return fmt.Errorf("score %v is out of the valid range [%v, %v]",
+				submitted.MinerScore, taskCriteria.Min, taskCriteria.Max)
+		}
+
+	default:
+		return fmt.Errorf("unknown criteria type: %s", criteria.GetType())
+	}
+
+	return nil
 }
 
 func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
@@ -372,17 +409,40 @@ func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
 		return nil, err
 	}
 
-	for i, item := range results {
-		switch CriteriaType(item.Type) {
-		case CriteriaTypeScore:
-			score, _ := item.Value.(ScoreValue)
-			for _, response := range taskData.Responses {
-				for _, criteria := range response.Criteria {
-					if scoreCriteria, ok := criteria.(ScoreCriteria); ok && scoreCriteria.Type == CriteriaTypeScore {
-						scaledScore := scaleScore(float64(score), 1, 10, scoreCriteria.Min, scoreCriteria.Max)
-						results[i].Value = ScoreValue(scaledScore)
-						break
-					}
+	modelCriteriaMap := make(map[string]map[CriteriaType]Criteria)
+	for _, response := range taskData.Responses {
+		criteriaMap := make(map[CriteriaType]Criteria)
+		for _, criteria := range response.Criteria {
+			criteriaMap[criteria.GetType()] = criteria
+		}
+		modelCriteriaMap[response.Model] = criteriaMap
+	}
+
+	for i, result := range results {
+		criteriaMap, exists := modelCriteriaMap[result.Model]
+		if !exists {
+			return nil, fmt.Errorf("model %s not found in task data", result.Model)
+		}
+
+		for j, submittedCriteria := range result.Criteria {
+			switch submittedCriteria.GetType() {
+			case CriteriaTypeScore:
+				submitted, ok := submittedCriteria.(ScoreCriteria)
+				if !ok {
+					return nil, fmt.Errorf("invalid score criteria type for model %s", result.Model)
+				}
+
+				taskCriteria, ok := criteriaMap[CriteriaTypeScore].(ScoreCriteria)
+				if !ok {
+					return nil, fmt.Errorf("no matching score criteria found in task for model %s", result.Model)
+				}
+
+				scaledScore := scaleScore(submitted.MinerScore, 1, 10, taskCriteria.Min, taskCriteria.Max)
+				results[i].Criteria[j] = ScoreCriteria{
+					Type:       CriteriaTypeScore,
+					Min:        taskCriteria.Min,
+					Max:        taskCriteria.Max,
+					MinerScore: scaledScore,
 				}
 			}
 		}

@@ -91,9 +91,10 @@ type Criteria interface {
 }
 
 type ScoreCriteria struct {
-	Type CriteriaType `json:"type"`
-	Min  float64      `json:"min,omitempty"`
-	Max  float64      `json:"max,omitempty"`
+	Type       CriteriaType `json:"type"`
+	Min        float64      `json:"min,omitempty"`
+	Max        float64      `json:"max,omitempty"`
+	MinerScore float64      `json:"minerScore,omitempty"`
 }
 
 type CriteriaType string
@@ -106,8 +107,8 @@ const (
 )
 
 type Result struct {
-	Type  string      `json:"type"`
-	Value interface{} `json:"value"`
+	Model    string     `json:"model"`
+	Criteria []Criteria `json:"criteria"`
 }
 
 // embed TaskResultModel to reuse its fields
