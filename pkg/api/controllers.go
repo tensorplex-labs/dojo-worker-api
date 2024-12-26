@@ -114,14 +114,6 @@ func WorkerLoginController(c *gin.Context) {
 func CreateTasksController(c *gin.Context) {
 	log.Info().Msg("Creating Tasks")
 
-	// Log the headers of the request
-	headers := c.Request.Header
-	log.Info().Interface("headers", headers).Msg("Request headers")
-
-	// Log the size of the request
-	requestSize := c.Request.ContentLength
-	log.Info().Int64("requestSize", requestSize).Msg("Request size")
-
 	log.Debug().Interface("request body", c.Request.Body).Msg("Creating tasks with request body")
 
 	minerUserInterface, exists := c.Get("minerUser")
@@ -156,8 +148,6 @@ func CreateTasksController(c *gin.Context) {
 		c.Abort()
 		return
 	}
-
-	log.Info().Str("minerUser", fmt.Sprintf("%+v", minerUser)).Msg("Miner user found")
 
 	// Here we will handle file upload
 	// Parse files from the form
@@ -304,6 +294,10 @@ func SubmitTaskResultController(c *gin.Context) {
 		c.Abort()
 		return
 	}
+
+	// Remove from cache
+	cache := cache.GetCacheInstance()
+	cache.DeleteWithSuffix(cache.Keys.TaskResultByWorker, worker.ID)
 
 	// Update the metric data with goroutine
 	handleMetricData(taskData, updatedTask)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"dojo-api/db"
@@ -114,14 +115,21 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 
 // Get the user's IP address from the gin request headers
 func getCallerIP(c *gin.Context) string {
-	// TODO - Need to check if this is the correct way without getting spoofing
 	if runtimeEnv := utils.LoadDotEnv("RUNTIME_ENV"); runtimeEnv == "aws" {
-		callerIp := c.Request.Header.Get("X-Original-Forwarded-For")
-		log.Trace().Msgf("Got caller IP from X-Original-Forwarded-For header: %s", callerIp)
-		return callerIp
+		forwardedFor := c.Request.Header.Get("X-Original-Forwarded-For")
+		if forwardedFor != "" {
+			// Split the string by comma and get the last IP
+			ips := strings.Split(forwardedFor, ",")
+			if len(ips) > 0 {
+				// Trim any whitespace from the last IP
+				lastIP := strings.TrimSpace(ips[len(ips)-1])
+				log.Debug().Msgf("Got last caller IP from X-Original-Forwarded-For header: %s", lastIP)
+				return lastIP
+			}
+		}
 	}
 	callerIp := c.ClientIP()
-	log.Trace().Msgf("Got caller IP from ClientIP: %s", callerIp)
+	log.Debug().Msgf("Got caller IP from ClientIP: %s", callerIp)
 	return callerIp
 }
 
@@ -176,14 +184,20 @@ func CustomGinLogger(logger *zerolog.Logger) gin.HandlerFunc {
 
 		logger := log.With().Logger().Output(consoleWriter)
 
+		// Log main request info
 		logger.Info().
-			Int("status_code", param.StatusCode).
-			Str("latency", param.Latency.String()).
-			Str("ip", param.ClientIP).
 			Str("method", param.Method).
 			Str("path", param.Path).
-			Int("resp_size", param.BodySize).
+			Int("status_code", param.StatusCode).
+			Str("latency", param.Latency.String()).
 			Int("req_size", len(body)).
+			Int("resp_size", param.BodySize).
+			Str("ip", param.ClientIP).
+			Msg("")
+
+		// Log headers separately
+		logger.Info().
+			Interface("headers", c.Request.Header).
 			Msg("")
 	}
 }
