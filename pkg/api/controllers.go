@@ -228,6 +228,7 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
+	// Validate the request body for required fields [resultData]
 	var requestBody task.SubmitTaskResultRequest
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Error().Err(err).Msg("Failed to bind JSON to requestBody")
@@ -236,11 +237,11 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
-	// Validate the request body for required fields [resultData]
 	taskId := c.Param("task-id")
 	ctx := c.Request.Context()
 	taskService := task.NewTaskService()
 
+	// Fetch the task data
 	taskData, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -262,6 +263,7 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
+	// Check if the task has reached max results
 	if taskData.MaxResults == taskData.NumResults || taskData.Status == db.TaskStatusCompleted {
 		log.Info().Str("taskId", taskId).Msg("Task has reached max results")
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("Task has reached max results"))
@@ -269,6 +271,7 @@ func SubmitTaskResultController(c *gin.Context) {
 		return
 	}
 
+	// Check if the task result is already completed by the worker
 	isCompletedTResult, err := taskService.ValidateCompletedTResultByWorker(ctx, taskId, worker.ID)
 	if err != nil {
 		log.Error().Err(err).Str("taskId", taskId).Msg("Error validating completed task result")
