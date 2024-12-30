@@ -1,12 +1,13 @@
 package task
 
 import (
-	"dojo-api/db"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"time"
+
+	"dojo-api/db"
 )
 
 // TaskResponse reflects the task structure used in API responses
@@ -37,9 +38,7 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var (
-	ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
-)
+var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
@@ -94,7 +93,8 @@ type ScoreCriteria struct {
 	Type       CriteriaType `json:"type"`
 	Min        float64      `json:"min,omitempty"`
 	Max        float64      `json:"max,omitempty"`
-	MinerScore float64      `json:"minerScore,omitempty"`
+	Text       string       `json:"text,omitempty"`
+	MinerScore float64      `json:"value,omitempty"`
 }
 
 type CriteriaType string
@@ -203,6 +203,68 @@ func (mr *ModelResponse) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+func (r *Result) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Model    string            `json:"model"`
+		Criteria []json.RawMessage `json:"criteria"`
+	}
+	// unmarshal the outer structure
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	r.Model = raw.Model
+	r.Criteria = make([]Criteria, 0)
+
+	for _, criteriaData := range raw.Criteria {
+		// Peek at the type field first
+		var temp struct {
+			Type CriteriaType `json:"type"`
+		}
+		if err := json.Unmarshal(criteriaData, &temp); err != nil {
+			return err
+		}
+
+		// Based on the type, unmarshal into the correct concrete type
+		switch temp.Type {
+		case CriteriaTypeScore:
+			var sc ScoreCriteria
+			if err := json.Unmarshal(criteriaData, &sc); err != nil {
+				return err
+			}
+			r.Criteria = append(r.Criteria, sc)
+		default:
+			return fmt.Errorf("unknown criteria type: %s", temp.Type)
+		}
+	}
+	return nil
+}
+
+// type CriteriaUnmarshaler struct {
+// 	Criteria
+// }
+
+// func (c *CriteriaUnmarshaler) UnmarshalJSON(data []byte) error {
+// 	var temp struct {
+// 		Type CriteriaType `json:"type"`
+// 	}
+// 	if err := json.Unmarshal(data, &temp); err != nil {
+// 		return err
+// 	}
+
+// 	switch temp.Type {
+// 	case CriteriaTypeScore:
+// 		var sc ScoreCriteria
+// 		if err := json.Unmarshal(data, &sc); err != nil {
+// 			return err
+// 		}
+// 		c.Criteria = sc
+// 	default:
+// 		return fmt.Errorf("unknown criteria type: %s", temp.Type)
+// 	}
+// 	return nil
+// }
 
 // TODO: Remove this
 // func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
