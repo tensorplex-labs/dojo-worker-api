@@ -8,7 +8,6 @@ import (
 	"math"
 	"mime/multipart"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 
@@ -55,16 +54,15 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 	}
 
 	return &TaskResponse{
-		ID:          task.ID,
-		Title:       task.Title,
-		Body:        task.Body,
-		ExpireAt:    task.ExpireAt,
-		Type:        task.Type,
-		TaskData:    rawJSON,
-		Status:      task.Status,
-		MaxResults:  task.MaxResults,
-		NumResults:  task.NumResults,
-		NumCriteria: task.NumCriteria,
+		ID:         task.ID,
+		Title:      task.Title,
+		Body:       task.Body,
+		ExpireAt:   task.ExpireAt,
+		Type:       task.Type,
+		TaskData:   rawJSON,
+		Status:     task.Status,
+		MaxResults: task.MaxResults,
+		NumResults: task.NumResults,
 	}, nil
 }
 
@@ -80,8 +78,6 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	case "numResults":
 		sortQuery = db.Task.NumResults.Order(params.Order)
-	case "numCriteria":
-		sortQuery = db.Task.NumCriteria.Order(params.Order)
 	default:
 		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	}
@@ -118,16 +114,15 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 
 		taskResponse := TaskPaginationResponse{
 			TaskResponse: TaskResponse{ // Fill the embedded TaskResponse structure.
-				ID:          task.ID,
-				Title:       task.Title,
-				Body:        task.Body,
-				ExpireAt:    task.ExpireAt,
-				Type:        task.Type,
-				TaskData:    taskData,
-				Status:      task.Status,
-				NumResults:  task.NumResults,
-				MaxResults:  task.MaxResults,
-				NumCriteria: task.NumCriteria,
+				ID:         task.ID,
+				Title:      task.Title,
+				Body:       task.Body,
+				ExpireAt:   task.ExpireAt,
+				Type:       task.Type,
+				TaskData:   taskData,
+				Status:     task.Status,
+				NumResults: task.NumResults,
+				MaxResults: task.MaxResults,
 			},
 			IsCompletedByWorker: completedTaskMap[task.ID], // Set the completion status.
 		}
@@ -244,12 +239,6 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 	for _, currTask := range request.TaskData {
 		taskType := db.TaskType(currTask.Task)
 
-		_, err := json.Marshal(currTask.Criteria)
-		if err != nil {
-			log.Error().Err(err).Msgf("Error marshaling criteria")
-			errors = append(errors, err)
-		}
-
 		taskData, err := json.Marshal(currTask)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error marshaling task data")
@@ -265,15 +254,14 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 		}
 
 		taskToCreate := db.InnerTask{
-			ExpireAt:    *expireAt,
-			Title:       request.Title,
-			Body:        request.Body,
-			Type:        db.TaskType(taskType),
-			TaskData:    taskData,
-			MaxResults:  request.MaxResults,
-			NumResults:  0,
-			Status:      db.TaskStatusInProgress,
-			NumCriteria: len(currTask.Criteria),
+			ExpireAt:   *expireAt,
+			Title:      request.Title,
+			Body:       request.Body,
+			Type:       db.TaskType(taskType),
+			TaskData:   taskData,
+			MaxResults: request.MaxResults,
+			NumResults: 0,
+			Status:     db.TaskStatusInProgress,
 		}
 
 		if request.TotalRewards > 0 {
@@ -354,82 +342,63 @@ func ValidateResultData(results []Result, task *db.TaskModel) ([]Result, error) 
 		return nil, err
 	}
 
-	modelNames := make([]string, 0, len(taskData.Responses))
+	// Pre-process task criteria for faster lookup
+	modelCriteriaMap := make(map[string]map[CriteriaType]Criteria)
 	for _, response := range taskData.Responses {
-		modelNames = append(modelNames, response.Model)
+		criteriaMap := make(map[CriteriaType]Criteria)
+		for _, criteria := range response.Criteria {
+			criteriaMap[criteria.GetType()] = criteria
+		}
+		modelCriteriaMap[response.Model] = criteriaMap
 	}
 
-	for _, item := range results {
-		itemType := CriteriaType(item.Type)
-		if !IsValidCriteriaType(itemType) {
-			log.Error().Msgf("Invalid criteria type: %v", item.Type)
-			continue
+	// Validate results
+	for _, result := range results {
+		criteriaMap, exists := modelCriteriaMap[result.Model]
+		if !exists {
+			return nil, fmt.Errorf("model %s not found in task data", result.Model)
 		}
-		switch itemType {
-		case CriteriaTypeScore:
-			score, _ := item.Value.(ScoreValue)
-			if score < 1.0 || score > 10.0 {
-				return nil, fmt.Errorf("score %v is out of the valid range [1, 10]", score)
+
+		for _, criteria := range result.Criteria {
+			if err := validateCriteria(criteria, criteriaMap); err != nil {
+				return nil, fmt.Errorf("validation failed for model %s: %w", result.Model, err)
 			}
-		case CriteriaTypeRanking:
-			ranking, _ := item.Value.(RankingValue)
-			if len(ranking) == 0 {
-				return nil, fmt.Errorf("ranking criteria provided but no rankings found")
-			}
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type != itemType {
-					continue
-				}
-
-				if len(ranking) != len(criteria.Options) {
-					return nil, fmt.Errorf("number of rankings provided does not match number of options")
-				}
-			}
-		case CriteriaTypeMultiSelect:
-			multiSelect, _ := item.Value.(MultiSelectValue)
-
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type != itemType {
-					continue
-				}
-
-				if len(multiSelect) > len(criteria.Options) {
-					return nil, fmt.Errorf("number of selections provided exceeds number of options")
-				}
-			}
-		case CriteriaMultiScore:
-			multiScore, _ := item.Value.(MultiScoreValue)
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type != itemType {
-					continue
-				}
-
-				if len(multiScore) != len(criteria.Options) {
-					return nil, fmt.Errorf("number of scores provided does not match number of options")
-				}
-
-				// Validate that options match model names
-				if !slices.Equal(criteria.Options, modelNames) {
-					return nil, fmt.Errorf("multi-score options does not match the model names in responses")
-				}
-
-				for option, score := range multiScore {
-					if score < 1.0 || score > 10.0 {
-						return nil, fmt.Errorf("score %v for option %s is out of the valid range [1, 10]", score, option)
-					}
-
-					if !slices.Contains(criteria.Options, option) {
-						return nil, fmt.Errorf("option %v not found in criteria options", option)
-					}
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unknown result data type: %s", item.Type)
 		}
 	}
 
 	log.Info().Str("resultData", fmt.Sprintf("%v", results)).Msgf("Result data validated successfully")
 	return results, nil
+}
+
+// Helper function to validate individual criteria
+// TODO: Might need to update this, if necessary to add criteria id since we might have multiple same criteria types
+func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) error {
+	if err := criteria.Validate(); err != nil {
+		return err
+	}
+
+	switch criteria.GetType() {
+	case CriteriaTypeScore:
+		submitted, ok := criteria.(ScoreCriteria)
+		if !ok {
+			return fmt.Errorf("invalid score criteria type")
+		}
+
+		taskCriteria, ok := criteriaMap[CriteriaTypeScore].(ScoreCriteria)
+		if !ok {
+			return fmt.Errorf("no matching score criteria found in task")
+		}
+
+		if submitted.MinerScore < taskCriteria.Min || submitted.MinerScore > taskCriteria.Max {
+			return fmt.Errorf("score %v is out of the valid range [%v, %v]",
+				submitted.MinerScore, taskCriteria.Min, taskCriteria.Max)
+		}
+
+	default:
+		return fmt.Errorf("unknown criteria type: %s", criteria.GetType())
+	}
+
+	return nil
 }
 
 func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
@@ -440,29 +409,40 @@ func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
 		return nil, err
 	}
 
-	for i, item := range results {
-		switch CriteriaType(item.Type) {
-		case CriteriaTypeScore:
-			score, _ := item.Value.(ScoreValue)
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type == CriteriaTypeScore {
-					scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
-					results[i].Value = ScoreValue(scaledScore)
-					break
-				}
-			}
+	modelCriteriaMap := make(map[string]map[CriteriaType]Criteria)
+	for _, response := range taskData.Responses {
+		criteriaMap := make(map[CriteriaType]Criteria)
+		for _, criteria := range response.Criteria {
+			criteriaMap[criteria.GetType()] = criteria
+		}
+		modelCriteriaMap[response.Model] = criteriaMap
+	}
 
-		case CriteriaMultiScore:
-			multiScore, _ := item.Value.(MultiScoreValue)
-			for _, criteria := range taskData.Criteria {
-				if criteria.Type == CriteriaMultiScore {
-					scaledMultiScore := make(MultiScoreValue)
-					for option, score := range multiScore {
-						scaledScore := scaleScore(float64(score), 1, 10, criteria.Min, criteria.Max)
-						scaledMultiScore[option] = float64(ScoreValue(scaledScore))
-					}
-					results[i].Value = scaledMultiScore
-					break
+	for i, result := range results {
+		criteriaMap, exists := modelCriteriaMap[result.Model]
+		if !exists {
+			return nil, fmt.Errorf("model %s not found in task data", result.Model)
+		}
+
+		for j, submittedCriteria := range result.Criteria {
+			switch submittedCriteria.GetType() {
+			case CriteriaTypeScore:
+				submitted, ok := submittedCriteria.(ScoreCriteria)
+				if !ok {
+					return nil, fmt.Errorf("invalid score criteria type for model %s", result.Model)
+				}
+
+				taskCriteria, ok := criteriaMap[CriteriaTypeScore].(ScoreCriteria)
+				if !ok {
+					return nil, fmt.Errorf("no matching score criteria found in task for model %s", result.Model)
+				}
+
+				scaledScore := scaleScore(submitted.MinerScore, 1, 10, taskCriteria.Min, taskCriteria.Max)
+				results[i].Criteria[j] = ScoreCriteria{
+					Type:       CriteriaTypeScore,
+					Min:        taskCriteria.Min,
+					Max:        taskCriteria.Max,
+					MinerScore: scaledScore,
 				}
 			}
 		}
@@ -498,6 +478,11 @@ func ValidateTaskData(taskData TaskData) error {
 
 	task := taskData.Task
 	for _, taskresponse := range taskData.Responses {
+		// Validate model name is not empty
+		if taskresponse.Model == "" {
+			return fmt.Errorf("model name cannot be empty")
+		}
+
 		switch task {
 		case db.TaskTypeTextToImage:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
@@ -541,63 +526,15 @@ func ValidateTaskData(taskData TaskData) error {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
 		}
-	}
 
-	if len(taskData.Criteria) == 0 {
-		return errors.New("criteria is required")
-	}
-
-	modelNames := make([]string, 0, len(taskData.Responses))
-	for _, response := range taskData.Responses {
-		modelNames = append(modelNames, response.Model)
-	}
-
-	for _, criteria := range taskData.Criteria {
-		if criteria.Type == "" {
-			return errors.New("type is required for criteria")
+		if len(taskresponse.Criteria) == 0 {
+			return fmt.Errorf("criteria is required for model: %s", taskresponse.Model)
 		}
 
-		if !IsValidCriteriaType(criteria.Type) {
-			return errors.New("unsupported criteria")
-		}
-
-		switch criteria.Type {
-		case CriteriaTypeMultiSelect:
-			if len(criteria.Options) == 0 {
-				return errors.New("options is required for multiple choice criteria")
-			}
-		case CriteriaTypeRanking:
-			// Block ranking criteria
-			return fmt.Errorf("ranking criteria is not supported")
-		case CriteriaMultiScore:
-			if len(criteria.Options) == 0 {
-				return errors.New("options is required for multiple choice criteria")
-			}
-			if task != db.TaskTypeDialogue {
-				if len(criteria.Options) != len(taskData.Responses) {
-					return fmt.Errorf("number of options should match number of responses: %v", len(taskData.Responses))
-				}
-
-				// Validate that options match model names
-				if !slices.Equal(criteria.Options, modelNames) {
-					return fmt.Errorf("multi-score options must match the model names in responses")
-				}
-			}
-
-			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
-				return errors.New("valid min or max is required for numeric criteria")
-			}
-
-			if criteria.Min >= criteria.Max {
-				return errors.New("min must be less than max")
-			}
-		case CriteriaTypeScore:
-			if (criteria.Min < 0 || criteria.Max < 0) || (criteria.Min == 0 && criteria.Max == 0) {
-				return errors.New("valid min or max is required for numeric criteria")
-			}
-
-			if criteria.Min >= criteria.Max {
-				return errors.New("min must be less than max")
+		// Validate each criteria
+		for _, criteria := range taskresponse.Criteria {
+			if err := criteria.Validate(); err != nil {
+				return fmt.Errorf("invalid criteria for model %s: %w", taskresponse.Model, err)
 			}
 		}
 	}

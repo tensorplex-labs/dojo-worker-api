@@ -3,7 +3,6 @@ package orm
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"dojo-api/db"
 
@@ -21,41 +20,6 @@ func NewMinerUserORM() *MinerUserORM {
 		dbClient:      clientWrapper.Client,
 		clientWrapper: clientWrapper,
 	}
-}
-
-func (s *MinerUserORM) CreateUserWithOrganisation(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string, organisation string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
-	ctx := context.Background()
-	createdUser, err := s.dbClient.MinerUser.CreateOne(
-		db.MinerUser.Hotkey.Set(hotkey),
-		db.MinerUser.Email.Set(email),
-		db.MinerUser.OrganizationName.Set(organisation),
-	).Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msgf("Error creating user")
-		return nil, err
-	}
-	log.Info().Msg("User created successfully")
-	return createdUser, nil
-}
-
-func (s *MinerUserORM) CreateUser(hotkey string, apiKey string, expiry time.Time, isVerified bool, email string, subscriptionKey string) (*db.MinerUserModel, error) {
-	s.clientWrapper.BeforeQuery()
-	defer s.clientWrapper.AfterQuery()
-
-	ctx := context.Background()
-	createdUser, err := s.dbClient.MinerUser.CreateOne(
-		db.MinerUser.Hotkey.Set(hotkey),
-		db.MinerUser.Email.Set(email),
-	).Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msgf("Error creating user")
-		return nil, err
-	}
-	log.Info().Msg("User created successfully")
-	return createdUser, nil
 }
 
 func (s *MinerUserORM) GetUserByHotkey(hotkey string) (*db.MinerUserModel, error) {

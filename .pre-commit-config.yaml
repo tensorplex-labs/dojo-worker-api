@@ -3,7 +3,9 @@ repos:
     rev: v4.0.1  # Use the latest stable version
     hooks:
       - id: trailing-whitespace
+        exclude: ^migrations/
       - id: end-of-file-fixer
+        exclude: ^migrations/
       - id: check-yaml
       - id: check-added-large-files
       - id: check-case-conflict
