@@ -53,7 +53,7 @@ func main() {
 	// Execute the appropriate function based on the command-line argument
 	switch taskType {
 	case "reset":
-		resetMinerUserAndCreateTask(client, ctx)
+		resetMockMinerUser(client, ctx)
 	case "gen-task-expired":
 		generateTasks(ctx, client, "Expired Task", 3, -6*time.Hour)
 	case "gen-task-short":
@@ -66,7 +66,7 @@ func main() {
 }
 
 // Function to reset MinerUser and create a single default task
-func resetMinerUserAndCreateTask(client *db.PrismaClient, ctx context.Context) {
+func resetMockMinerUser(client *db.PrismaClient, ctx context.Context) {
 	fixtureService := fixtures.NewFixtureService(client)
 
 	// Reset the MinerUser
@@ -75,15 +75,7 @@ func resetMinerUserAndCreateTask(client *db.PrismaClient, ctx context.Context) {
 		return
 	}
 
-	// Create a single default task
-	title := "Default Mock Task"
-	expireDuration := 6 * time.Hour
-	if _, err := fixtureService.CreateDefaultTask(ctx, title, expireDuration); err != nil {
-		log.Error().Err(err).Msg("Failed to create default task")
-		return
-	}
-
-	log.Info().Msg("Reset MinerUser and created a single default task successfully")
+	log.Info().Msg("Reset Mock MinerUser successfully")
 }
 
 // Function to generate tasks with a specified number and expiration duration
