@@ -70,11 +70,11 @@ func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) mi
 }
 
 func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
-	// We want to make sure task status just changed to completion
 	metricService := metric.NewMetricService()
 	eventService := event.NewEventService()
 	ctx := context.Background()
 
+	// Always update total task results count
 	go func() {
 		if err := metricService.UpdateTotalTaskResultsCount(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to update total tasks results count")
@@ -83,16 +83,21 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 		}
 	}()
 
-	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
+	// Only update completed task count when task gets its first result
+	// TODO: need to consider race condition
+	if updatedTask.NumResults == 1 {
 		go func() {
-			// Update the completed task count
 			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
 				log.Error().Err(err).Msg("Failed to update completed task count")
 			} else {
 				log.Info().Msg("Updated completed task count")
 			}
 		}()
+	}
 
+	// Handle task completion events and metrics
+	// TODO: reconsider this logic for task completion events, and avg task completion time
+	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
 		go func() {
 			// Update the task completion event
 			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
