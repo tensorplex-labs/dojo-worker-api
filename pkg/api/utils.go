@@ -84,6 +84,7 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 	}()
 
 	// Only update completed task count when task gets its first result
+	// TODO: need to consider race condition
 	if updatedTask.NumResults == 1 {
 		go func() {
 			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
