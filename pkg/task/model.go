@@ -1,12 +1,13 @@
 package task
 
 import (
-	"dojo-api/db"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"time"
+
+	"dojo-api/db"
 )
 
 // TaskResponse reflects the task structure used in API responses
@@ -37,9 +38,7 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var (
-	ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
-)
+var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
@@ -66,12 +65,18 @@ type TaskData struct {
 	Prompt    string          `json:"prompt"`
 	Responses []ModelResponse `json:"responses,omitempty"`
 	Task      db.TaskType     `json:"task"`
-	Criteria  []Criteria      `json:"criteria"`
 }
 
 type ModelResponse struct {
 	Model      string      `json:"model"`
 	Completion interface{} `json:"completion"`
+	Criteria   []Criteria  `json:"criteria"`
+}
+
+type rawModelResponse struct {
+	Model      string            `json:"model"`
+	Completion interface{}       `json:"completion"`
+	Criteria   []json.RawMessage `json:"criteria"`
 }
 
 type Message struct {
@@ -79,12 +84,17 @@ type Message struct {
 	Message string `json:"message"`
 }
 
-type Criteria struct {
-	Type    CriteriaType `json:"type"`
-	Options []string     `json:"options,omitempty"`
-	Text    string       `json:"text,omitempty"`
-	Min     float64      `json:"min,omitempty"`
-	Max     float64      `json:"max,omitempty"`
+type Criteria interface {
+	GetType() CriteriaType
+	Validate() error
+}
+
+type ScoreCriteria struct {
+	Type       CriteriaType `json:"type"`
+	Min        float64      `json:"min,omitempty"`
+	Max        float64      `json:"max,omitempty"`
+	Text       string       `json:"text,omitempty"`
+	MinerScore float64      `json:"value,omitempty"`
 }
 
 type CriteriaType string
@@ -97,8 +107,8 @@ const (
 )
 
 type Result struct {
-	Type  string      `json:"type"`
-	Value interface{} `json:"value"`
+	Model    string     `json:"model"`
+	Criteria []Criteria `json:"criteria"`
 }
 
 // embed TaskResultModel to reuse its fields
@@ -139,79 +149,94 @@ type PaginationParams struct {
 	Order db.SortOrder `json:"order"`
 }
 
-func parseJsonStringOrFloat(v json.RawMessage) (float64, error) {
-	var floatStr string
-	err := json.Unmarshal(v, &floatStr)
-	if err == nil {
-		res, err := strconv.ParseFloat(floatStr, 64)
-		if err != nil {
-			return SENTINEL_VALUE, err
-		}
-		return res, nil
-	}
-
-	var floatVal float64
-	if err := json.Unmarshal(v, &floatVal); err != nil {
-		return SENTINEL_VALUE, err
-	}
-	return floatVal, nil
+// Implement GetType for all criteria types
+func (s ScoreCriteria) GetType() CriteriaType {
+	return CriteriaTypeScore
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface for Result,
-// allowing for custom unmarshalling logic based on the type of value.
-func (r *Result) UnmarshalJSON(data []byte) error {
-	// Helper struct to avoid recursion into UnmarshalJSON
-	type tempResult struct {
-		Type  string          `json:"type"`
-		Value json.RawMessage `json:"value"`
+// Implement Validate for each type
+func (c ScoreCriteria) Validate() error {
+	if (c.Min < 0 || c.Max < 0) || (c.Min == 0 && c.Max == 0) {
+		return errors.New("valid min and max are required for score criteria")
 	}
-	var i tempResult
-	if err := json.Unmarshal(data, &i); err != nil {
+	if c.Min >= c.Max {
+		return errors.New("min must be less than max for score criteria")
+	}
+	return nil
+}
+
+// Add custom unmarshaling for ModelResponse
+func (mr *ModelResponse) UnmarshalJSON(data []byte) error {
+	var raw rawModelResponse
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	r.Type = i.Type
+	mr.Model = raw.Model
+	mr.Completion = raw.Completion
+	mr.Criteria = make([]Criteria, 0)
 
-	tempType := CriteriaType(i.Type)
-
-	switch tempType {
-	case CriteriaTypeScore:
-		value, err := parseJsonStringOrFloat(i.Value)
-		if err != nil {
-			return err
+	for _, criteriaData := range raw.Criteria {
+		// unmarshal to get the type
+		var temp struct {
+			Type CriteriaType `json:"type"`
 		}
-		r.Value = ScoreValue(value)
-	case CriteriaTypeRanking:
-		var v RankingValue
-		if err := json.Unmarshal(i.Value, &v); err != nil {
-			return err
-		}
-		r.Value = v
-	case CriteriaTypeMultiSelect:
-		var v MultiSelectValue
-		if err := json.Unmarshal(i.Value, &v); err != nil {
-			return err
-		}
-		r.Value = v
-	case CriteriaMultiScore:
-		var intermediate map[string]json.RawMessage
-		if err := json.Unmarshal(i.Value, &intermediate); err != nil {
+		if err := json.Unmarshal(criteriaData, &temp); err != nil {
 			return err
 		}
 
-		v := make(MultiScoreValue)
-		for k, vRaw := range intermediate {
-			value, err := parseJsonStringOrFloat(vRaw)
-			if err != nil {
+		// Based on the type, unmarshal to the correct criteria struct
+		var criteria Criteria
+		switch temp.Type {
+		case CriteriaTypeScore:
+			var sc ScoreCriteria
+			if err := json.Unmarshal(criteriaData, &sc); err != nil {
 				return err
 			}
-			v[k] = value
+			criteria = sc
+		default:
+			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
 
-		r.Value = v
-	default:
-		return fmt.Errorf("unknown type: %s", i.Type)
+		mr.Criteria = append(mr.Criteria, criteria)
 	}
 
+	return nil
+}
+
+func (r *Result) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Model    string            `json:"model"`
+		Criteria []json.RawMessage `json:"criteria"`
+	}
+	// unmarshal the outer structure
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	r.Model = raw.Model
+	r.Criteria = make([]Criteria, 0)
+
+	for _, criteriaData := range raw.Criteria {
+		// Peek at the type field first
+		var temp struct {
+			Type CriteriaType `json:"type"`
+		}
+		if err := json.Unmarshal(criteriaData, &temp); err != nil {
+			return err
+		}
+
+		// Based on the type, unmarshal into the correct concrete type
+		switch temp.Type {
+		case CriteriaTypeScore:
+			var sc ScoreCriteria
+			if err := json.Unmarshal(criteriaData, &sc); err != nil {
+				return err
+			}
+			r.Criteria = append(r.Criteria, sc)
+		default:
+			return fmt.Errorf("unknown criteria type: %s", temp.Type)
+		}
+	}
 	return nil
 }
