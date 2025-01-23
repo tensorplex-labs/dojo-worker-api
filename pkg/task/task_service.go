@@ -8,6 +8,7 @@ import (
 	"math"
 	"mime/multipart"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -262,6 +263,10 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 			MaxResults: request.MaxResults,
 			NumResults: 0,
 			Status:     db.TaskStatusInProgress,
+		}
+
+		if request.TaskId != "" {
+			taskToCreate.ID = request.TaskId
 		}
 
 		if request.TotalRewards > 0 {
@@ -566,6 +571,12 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 		return errors.New("maxResults is required")
 	}
 
+	if request.TaskId != "" {
+		if matched, _ := regexp.MatchString(UUID_REGEX, request.TaskId); !matched {
+			return errors.New("taskId must be a valid UUID when specified")
+		}
+	}
+
 	return nil
 }
 
@@ -584,6 +595,7 @@ func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 		}
 	}
 	taskData.TaskData = processedTaskData
+
 	return taskData, nil
 }
 
@@ -663,6 +675,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 	expireAt := c.PostForm("expireAt")
 	maxResults, _ := strconv.Atoi(c.PostForm("maxResults"))
 	totalRewards, _ := strconv.ParseFloat(c.PostForm("totalRewards"), 64)
+	taskId := c.PostForm("taskId")
 
 	var taskData []TaskData
 	if err := json.Unmarshal([]byte(c.PostForm("taskData")), &taskData); err != nil {
@@ -677,6 +690,7 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 		TaskData:     taskData,
 		MaxResults:   maxResults,
 		TotalRewards: totalRewards,
+		TaskId:       taskId,
 	}
 
 	return reqbody, nil

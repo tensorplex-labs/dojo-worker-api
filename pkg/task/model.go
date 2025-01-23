@@ -36,6 +36,7 @@ const (
 	SortNumResult    SortField = "numResult"
 	SortHighestYield SortField = "highestYield"
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
+	UUID_REGEX       string    = "^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$"
 )
 
 var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
@@ -59,6 +60,7 @@ type CreateTaskRequest struct {
 	TaskData     []TaskData  `json:"taskData"`
 	MaxResults   int         `json:"maxResults"`
 	TotalRewards float64     `json:"totalRewards"`
+	TaskId       string      `json:"taskId,omitempty"`
 }
 
 type TaskData struct {
