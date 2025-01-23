@@ -373,10 +373,18 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
 	storageResponse, err := s.GetStorageRequest(path, params)
-	if err != nil {
-		log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s", hotkey)
-		return 0, err
+
+	// If first attempt fails, try TotalHotkeyAlpha
+	if err != nil || storageResponse == nil || storageResponse.Value == nil {
+		log.Debug().Msgf("TotalHotkeyStake not found for %s, trying TotalHotkeyAlpha", hotkey)
+		path = fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyAlpha", s.substrateApiUrl)
+		storageResponse, err = s.GetStorageRequest(path, params)
+		if err != nil {
+			log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s from both endpoints", hotkey)
+			return 0, err
+		}
 	}
+
 	totalHotkeyStake, err := strconv.Atoi(storageResponse.Value.(string))
 	if err != nil {
 		log.Error().Err(err).Msgf("Error converting total hotkey stake to int for hotkey %s", hotkey)
