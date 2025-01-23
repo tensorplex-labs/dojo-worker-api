@@ -14,7 +14,6 @@ import (
 
 	"dojo-api/pkg/auth"
 	"dojo-api/pkg/blockchain"
-	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
 	"dojo-api/pkg/orm"
 	"dojo-api/pkg/worker"
@@ -138,86 +137,6 @@ func WorkerLoginMiddleware() gin.HandlerFunc {
 		c.Set("JWTToken", token)
 		c.Set("WalletAddress", walletAddress)
 		c.Set("ChainId", chainId)
-		c.Next()
-	}
-}
-
-// login middleware for miner user
-func MinerLoginMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var loginRequest auth.MinerLoginRequest
-		if err := c.BindJSON(&loginRequest); err != nil {
-			log.Error().Err(err).Msg("Invalid request body")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
-			c.Abort()
-			return
-		}
-
-		isVerified, err := siws.SS58VerifySignature(loginRequest.Message, loginRequest.Hotkey, loginRequest.Signature)
-		if err != nil {
-			log.Error().Err(err).Msg("Error verifying signature")
-			println(loginRequest.Message, loginRequest.Signature, loginRequest.Hotkey)
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("error verifying signature"))
-			c.Abort()
-			return
-		}
-
-		if !isVerified {
-			log.Error().Msg("Invalid signature")
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("invalid signature"))
-			c.Abort()
-			return
-		}
-
-		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
-		_, found := subnetSubscriber.FindMinerHotkeyIndex(loginRequest.Hotkey)
-		if !found {
-			log.Error().Msg("Hotkey is not registered")
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
-			c.Abort()
-			return
-		}
-
-		c.Set("loginRequest", loginRequest)
-		c.Next()
-	}
-}
-
-func MinerVerificationMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var requestMap map[string]string
-		if err := c.BindJSON(&requestMap); err != nil {
-			log.Error().Err(err).Msg("Invalid request body")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("invalid request body"))
-			c.Abort()
-			return
-		}
-
-		hotkey, ok := requestMap["hotkey"]
-		if !ok {
-			log.Error().Msg("hotkey is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("hotkey is required"))
-			c.Abort()
-			return
-		}
-
-		if _, ok := requestMap["email"]; !ok {
-			log.Error().Msg("email is required")
-			c.JSON(http.StatusBadRequest, defaultErrorResponse("email is required"))
-			c.Abort()
-			return
-		}
-
-		subnetSubscriber := blockchain.GetSubnetStateSubscriberInstance()
-		_, found := subnetSubscriber.FindMinerHotkeyIndex(hotkey)
-		if !found {
-			log.Error().Msg("Hotkey is not registered")
-			c.JSON(http.StatusUnauthorized, defaultErrorResponse("hotkey is not registered"))
-			c.Abort()
-			return
-		}
-
-		c.Set("requestMap", requestMap)
 		c.Next()
 	}
 }
