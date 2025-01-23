@@ -287,7 +287,7 @@ func (t *TaskService) GetTaskById(ctx context.Context, id string) (*db.TaskModel
 	task, err := t.taskORM.GetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("task with ID %s not found", id)
+			return nil, &NotFoundError{ID: id}
 		}
 		return nil, err
 	}

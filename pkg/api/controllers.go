@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -141,6 +140,18 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
+	taskService := task.NewTaskService()
+	if requestBody.TaskId != "" {
+		existingTask, err := taskService.GetTaskById(c.Request.Context(), requestBody.TaskId)
+		if existingTask == nil && task.IsNotFoundError(err) {
+			log.Debug().Str("taskId", requestBody.TaskId).Msg("Task ID was specified and not found yet, proceeding to create task")
+		} else {
+			log.Error().Err(err).Str("taskId", requestBody.TaskId).Msg("Task ID was specified but already exists")
+			c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Task ID was specified but already exists"))
+			return
+		}
+	}
+
 	requestBody, err = task.ProcessTaskRequest(requestBody)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to process task request")
@@ -169,7 +180,6 @@ func CreateTasksController(c *gin.Context) {
 		return
 	}
 
-	taskService := task.NewTaskService()
 	tasks, errors := taskService.CreateTasksWithTimeout(requestBody, minerUser.ID, 60*time.Second)
 
 	if len(tasks) == 0 {
@@ -244,9 +254,9 @@ func SubmitTaskResultController(c *gin.Context) {
 	// Fetch the task data
 	taskData, err := taskService.GetTaskById(ctx, taskId)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
+		if task.IsNotFoundError(err) {
 			log.Error().Err(err).Str("taskId", taskId).Msg("Task not found")
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+			c.JSON(http.StatusNotFound, defaultErrorResponse(err.Error()))
 			c.Abort()
 			return
 		}
@@ -1361,10 +1371,10 @@ func GetNextInProgressTaskController(c *gin.Context) {
 	}
 	taskData, err := orm.NewTaskORM().GetNextInProgressTask(c, taskId, worker.ID)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			log.Info().Msg("No in progress tasks found")
-			c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: ""}))
-			return
+		if task.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
 		}
 		log.Error().Err(err).Msg("Failed to get next in-progress task")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get next in-progress task"))
