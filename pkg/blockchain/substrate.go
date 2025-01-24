@@ -362,7 +362,7 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 	return storageResponseValue, nil
 }
 
-func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
+func (s *SubstrateService) TotalHotkeyStake(hotkey string, subnetId int) (float64, error) {
 	cacheKey := fmt.Sprintf(CacheKeyTotalStakeTemplate, hotkey)
 	cachedTotalStake, err := getCachedData[float64](s.cache, cacheKey)
 	if err == nil && cachedTotalStake != nil {
@@ -378,6 +378,7 @@ func (s *SubstrateService) TotalHotkeyStake(hotkey string) (float64, error) {
 	if err != nil || storageResponse == nil || storageResponse.Value == nil {
 		log.Debug().Msgf("TotalHotkeyStake not found for %s, trying TotalHotkeyAlpha", hotkey)
 		path = fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyAlpha", s.substrateApiUrl)
+		params.Add("keys[]", strconv.Itoa(subnetId))
 		storageResponse, err = s.GetStorageRequest(path, params)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s from both endpoints", hotkey)
