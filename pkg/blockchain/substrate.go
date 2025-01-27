@@ -1,8 +1,6 @@
 package blockchain
 
 import (
-	"dojo-api/pkg/cache"
-	"dojo-api/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,8 +12,12 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"dojo-api/pkg/cache"
+	"dojo-api/utils"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -141,6 +143,13 @@ func (s *SubstrateService) GetStorageRequest(path string, params url.Values) (*S
 		}
 
 		lastErr = err
+
+		// Check for TotalHotkeyStake not found error - no need to retry instead try TotalHotkeyAlpha
+		// TODO: this is a temporary fix, we can just use TotalHotkeyAlpha in the future when dTAO is live
+		if strings.Contains(err.Error(), "Could not find storage item (\\\"totalHotkeyStake\\\") in metadata") {
+			log.Debug().Err(err).Msg("TotalHotkeyStake not found, trying TotalHotkeyAlpha")
+			return nil, err
+		}
 
 		// Don't sleep on the last attempt
 		if attempt < maxRetries {
