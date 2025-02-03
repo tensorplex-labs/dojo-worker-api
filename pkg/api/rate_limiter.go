@@ -74,7 +74,7 @@ func InitializeLimiters() {
 			},
 			{
 				key:    WriteTaskRateLimiterKey,
-				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 60},
+				rate:   limiter.Rate{Period: 1 * time.Minute, Limit: 80},
 				prefix: string(WriteTaskRateLimiterKey),
 			},
 			{
