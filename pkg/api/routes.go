@@ -22,9 +22,9 @@ func LoginRoutes(router *gin.Engine) {
 		apiV1.PUT("/partner/edit", GeneralRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
-			tasks.PUT("/submit-result/:task-id", WriteTaskRateLimiter(), WorkerAuthMiddleware(), SubmitTaskResultController)
+			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
 			// TODO: re-enable InMetagraphOnly(), and rate limiter in future
-			tasks.POST("/create-tasks", WriteTaskRateLimiter(), MinerAuthMiddleware(), CreateTasksController)
+			tasks.POST("/create-tasks", MinerAuthMiddleware(), CreateTasksController)
 			tasks.GET("/task-result/:task-id", ReadTaskRateLimiter(), GetTaskResultsController)
 			tasks.GET("/:task-id", ReadTaskRateLimiter(), GetTaskByIdController)
 			tasks.GET("/next-task/:task-id", ReadTaskRateLimiter(), WorkerAuthMiddleware(), GetNextInProgressTaskController)
