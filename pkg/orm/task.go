@@ -227,33 +227,45 @@ func (o *TaskORM) UpdateExpiredTasks(ctx context.Context) {
 		startTime := time.Now().UTC() // Start timing for update operation
 		for {
 			batchNumber++
-			updateQuery := `
-				UPDATE "Task"
-				SET "status" = $1::"TaskStatus", "updated_at" = $2
-				WHERE "id" IN (
-					SELECT "id" FROM "Task"
-					WHERE "expire_at" <= $2
-					  AND "status" = $3::"TaskStatus"
-					LIMIT $4
-				)
-			`
-			params := []interface{}{db.TaskStatusExpired, currentTime, db.TaskStatusInProgress, batchSize}
 
-			execResult, err := o.dbClient.Prisma.ExecuteRaw(updateQuery, params...).Exec(ctx)
+			// Find expired tasks that are still in progress
+			expiredTasks, err := o.dbClient.Task.FindMany(
+				db.Task.ExpireAt.Lte(currentTime),
+				db.Task.Status.Equals(db.TaskStatusInProgress),
+			).Take(batchSize).Exec(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error finding expired tasks")
+				break
+			}
+
+			if len(expiredTasks) == 0 {
+				log.Info().Msg("No more expired tasks to update")
+				break
+			}
+
+			// Extract task IDs for the update
+			taskIDs := make([]string, len(expiredTasks))
+			for i, task := range expiredTasks {
+				taskIDs[i] = task.ID
+			}
+
+			// Update the expired tasks
+			_, err = o.dbClient.Task.FindMany(
+				db.Task.ID.In(taskIDs),
+			).Update(
+				db.Task.Status.Set(db.TaskStatusExpired),
+				db.Task.UpdatedAt.Set(currentTime),
+			).Exec(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Error updating tasks to expired status")
 				break
 			}
 
-			if execResult.Count == 0 {
-				log.Info().Msg("No more expired tasks with TaskResults to update")
-				break
-			}
-
-			log.Info().Msgf("Updated %v expired tasks with associated TaskResults in batch %d", execResult.Count, batchNumber)
+			log.Info().Msgf("Updated %v expired tasks in batch %d", len(taskIDs), batchNumber)
 		}
-		updateDuration := time.Since(startTime) // Calculate total duration for update operation
-		log.Info().Msgf("Total time taken to update expired tasks with TaskResults: %s", updateDuration)
+
+		updateDuration := time.Since(startTime)
+		log.Info().Msgf("Total time taken to update expired tasks: %s", updateDuration)
 	}
 }
 
