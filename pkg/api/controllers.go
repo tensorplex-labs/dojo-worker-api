@@ -1234,6 +1234,18 @@ func MinerSubscriptionKeyGenerateController(c *gin.Context) {
 	}
 	log.Info().Msgf("Subscription Key %s generated successfully", createdSubscriptionKey.Key)
 
+	// Reset cache for both subscription key caches
+	cache := cache.GetCacheInstance()
+	cacheKeyByHotkey := cache.BuildCacheKey(cache.Keys.SubByHotkey, session.Hotkey)
+	cacheKeyByKey := cache.BuildCacheKey(cache.Keys.SubByKey, subscriptionKey)
+
+	if err := cache.Delete(cacheKeyByHotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete hotkey subscription cache")
+	}
+	if err := cache.Delete(cacheKeyByKey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete subscription key cache")
+	}
+
 	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
@@ -1302,6 +1314,18 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 		return
 	}
 	log.Info().Msgf("Subscription Key %s disabled successfully", disabledKey.Key)
+
+	// Reset cache for both subscription key caches
+	cache := cache.GetCacheInstance()
+	cacheKeyByHotkey := cache.BuildCacheKey(cache.Keys.SubByHotkey, session.Hotkey)
+	cacheKeyByKey := cache.BuildCacheKey(cache.Keys.SubByKey, request.SubscriptionKey)
+
+	if err := cache.Delete(cacheKeyByHotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete hotkey subscription cache")
+	}
+	if err := cache.Delete(cacheKeyByKey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete subscription key cache")
+	}
 
 	newSubscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
 	if err != nil {
