@@ -7,7 +7,7 @@ This mainly consists of our authentication services, and human task services.
 
 ## Run Locally
 
-In order to setup the database connection, you can utilze docker compose to setup a local postgres instance.
+In order to setup the database connection, you can utilize docker compose to setup a local postgres instance.
 
 You will need to install Docker and Docker Compose.
 Make sure to update the .env file with the correct credentials.
@@ -54,7 +54,7 @@ Add [Swagger annotations]((https://github.com/swaggo/swag?tab=readme-ov-file#gen
 func GenerateNonceController(c *gin.Context) {
 }
 ```
-> **Note:** Highly recommend to creating models for Swagger to ensures clarity and consistency, automatic documentation generation, and data validation. Without models, Swagger cannot accurately represent complex data structures or generate detailed API documentation.
+> **Note:** Highly recommend to create models for Swagger to ensure clarity and consistency, automatic documentation generation, and data validation. Without models, Swagger cannot accurately represent complex data structures or generate detailed API documentation.
 
 ### Step 2: Generate the Swagger Documentation
 Run the swag command to generate the Swagger documentation. This command will scan your Go files for Swagger annotations and generate the required files for gin-swagger. Make sure to specify the main Go file.
@@ -62,7 +62,7 @@ Run the swag command to generate the Swagger documentation. This command will sc
 ```bash
 swag init -g cmd/server/main.go
 ```
-Format the Swagger annotation by using this commend (Optional)
+Format the Swagger annotation by using this command (Optional)
 ```bash
 swag fmt
 ```
