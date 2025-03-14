@@ -2,7 +2,6 @@ package orm
 
 import (
 	"context"
-	"errors"
 
 	"dojo-api/db"
 
@@ -99,8 +98,7 @@ func (a *ApiKeyORM) GetByApiKey(apiKey string) (*db.APIKeyModel, error) {
 	).Exec(ctx)
 	if err != nil {
 		if db.IsErrNotFound(err) {
-			log.Error().Err(err).Msgf("API key not found")
-			return nil, errors.New("API key not found")
+			return nil, nil
 		}
 		log.Error().Err(err).Msgf("Error getting api key")
 		return nil, err
