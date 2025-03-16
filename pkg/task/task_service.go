@@ -190,7 +190,7 @@ func IsValidTaskType(taskType interface{}) (bool, error) {
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
 	switch criteriaType {
-	case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
+	case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore, CriteriaTypeText:
 		return true
 	default:
 		return false
@@ -299,7 +299,7 @@ func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel,
 	}
 
 	// Process and scale the scores
-	processedResults, err := ProcessScores(validatedResults, task)
+	processedResults, err := ProcessResults(validatedResults, task)
 	if err != nil {
 		log.Error().Err(err).Msg("Error processing scores")
 		return nil, err
@@ -393,7 +393,21 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 			return fmt.Errorf("score %v is out of the valid range [%v, %v]",
 				submitted.MinerScore, taskCriteria.Min, taskCriteria.Max)
 		}
+	case CriteriaTypeText:
+		submitted, ok := criteria.(TextCriteria)
+		if !ok {
+			return fmt.Errorf("invalid text criteria type")
+		}
 
+		_, exists := criteriaMap[CriteriaTypeText].(TextCriteria)
+		if !exists {
+			return fmt.Errorf("no matching text criteria found in task")
+		}
+
+		// Validate text_feedback field
+		if submitted.TextFeedback == "" {
+			return fmt.Errorf("text_feedback is required for text criteria")
+		}
 	default:
 		return fmt.Errorf("unknown criteria type: %s", criteria.GetType())
 	}
@@ -401,7 +415,7 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 	return nil
 }
 
-func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
+func ProcessResults(results []Result, task *db.TaskModel) ([]Result, error) {
 	var taskData TaskData
 	err := json.Unmarshal(task.TaskData, &taskData)
 	if err != nil {
@@ -525,6 +539,10 @@ func ValidateTaskData(taskData TaskData) error {
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
+		case db.TaskTypeTextToCompletion:
+			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
+				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
+			}
 		}
 
 		if len(taskresponse.Criteria) == 0 {
@@ -572,7 +590,7 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	processedTaskData := make([]TaskData, 0)
 	for _, taskInterface := range taskData.TaskData {
-		if taskInterface.Task == db.TaskTypeCodeGeneration {
+		if taskInterface.Task == db.TaskTypeCodeGeneration || taskInterface.Task == db.TaskTypeTextToCompletion {
 			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")

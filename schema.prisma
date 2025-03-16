@@ -39,6 +39,7 @@ enum TaskType {
     DIALOGUE
     TEXT_TO_IMAGE
     TEXT_TO_THREE_D
+    TEXT_TO_COMPLETION
 }
 
 model ApiKey {
