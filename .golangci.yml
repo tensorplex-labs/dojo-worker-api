@@ -5,7 +5,8 @@ run:
   allow-parallel-runners: true
 
 output:
-  formats: colored-line-number
+  formats:
+    - format: colored-line-number
 
 linters:
   disable-all: true

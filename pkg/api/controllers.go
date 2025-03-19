@@ -246,7 +246,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			log.Error().Err(err).Str("taskId", taskId).Msg("Task not found")
-			c.JSON(http.StatusInternalServerError, defaultErrorResponse(err.Error()))
+			c.JSON(http.StatusNotFound, defaultErrorResponse(err.Error()))
 			c.Abort()
 			return
 		}
@@ -282,7 +282,7 @@ func SubmitTaskResultController(c *gin.Context) {
 
 	if isCompletedTResult {
 		log.Info().Str("taskId", taskId).Str("workerId", worker.ID).Msg("Task Result is already completed by worker")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Task Result is already completed by worker"))
+		c.JSON(http.StatusConflict, defaultErrorResponse("Task Result is already completed by worker"))
 		c.Abort()
 		return
 	}
@@ -340,12 +340,16 @@ func WorkerPartnerCreateController(c *gin.Context) {
 
 	if walletAddress == "" {
 		log.Error().Msg("Missing wallet address, so cannot find worker by wallet address")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Missing wallet address"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, defaultErrorResponse("Missing wallet address"))
 		return
 	}
 
 	workerData, err := orm.NewDojoWorkerORM().GetDojoWorkerByWalletAddress(walletAddress)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, defaultErrorResponse("Worker not found"))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get worker"))
 		return
 	}
@@ -1234,6 +1238,18 @@ func MinerSubscriptionKeyGenerateController(c *gin.Context) {
 	}
 	log.Info().Msgf("Subscription Key %s generated successfully", createdSubscriptionKey.Key)
 
+	// Reset cache for both subscription key caches
+	cache := cache.GetCacheInstance()
+	cacheKeyByHotkey := cache.BuildCacheKey(cache.Keys.SubByHotkey, session.Hotkey)
+	cacheKeyByKey := cache.BuildCacheKey(cache.Keys.SubByKey, subscriptionKey)
+
+	if err := cache.Delete(cacheKeyByHotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete hotkey subscription cache")
+	}
+	if err := cache.Delete(cacheKeyByKey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete subscription key cache")
+	}
+
 	subscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get api keys by miner hotkey")
@@ -1302,6 +1318,18 @@ func MinerSubscriptionKeyDisableController(c *gin.Context) {
 		return
 	}
 	log.Info().Msgf("Subscription Key %s disabled successfully", disabledKey.Key)
+
+	// Reset cache for both subscription key caches
+	cache := cache.GetCacheInstance()
+	cacheKeyByHotkey := cache.BuildCacheKey(cache.Keys.SubByHotkey, session.Hotkey)
+	cacheKeyByKey := cache.BuildCacheKey(cache.Keys.SubByKey, request.SubscriptionKey)
+
+	if err := cache.Delete(cacheKeyByHotkey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete hotkey subscription cache")
+	}
+	if err := cache.Delete(cacheKeyByKey); err != nil {
+		log.Error().Err(err).Msg("Failed to delete subscription key cache")
+	}
 
 	newSubscriptionKeys, err := orm.NewSubscriptionKeyORM().GetSubscriptionKeysByMinerHotkey(session.Hotkey)
 	if err != nil {

@@ -240,9 +240,16 @@ func MinerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 		foundApiKey, err := orm.NewApiKeyORM().GetByApiKey(apiKey)
-		if err != nil || foundApiKey == nil {
+		if err != nil {
 			log.Error().Err(err).Msg("Failed to retrieve user by API key")
 			c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to retrieve user by API key"))
+			c.Abort()
+			return
+		}
+
+		if foundApiKey == nil {
+			log.Error().Msg("API key not found")
+			c.JSON(http.StatusUnauthorized, defaultErrorResponse("API key not found"))
 			c.Abort()
 			return
 		}
@@ -314,7 +321,7 @@ func MinerCookieAuthMiddleware() gin.HandlerFunc {
 		var session auth.SecureCookieSession
 		if err := json.Unmarshal([]byte(result), &session); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal redis data from JSON")
-			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Unauthorized"))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, defaultErrorResponse("Failed to process authentication data"))
 			return
 		}
 
