@@ -38,7 +38,7 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
+var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD, db.TaskTypeTextToCompletion}
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
@@ -97,6 +97,12 @@ type ScoreCriteria struct {
 	MinerScore float64      `json:"value,omitempty"`
 }
 
+type TextCriteria struct {
+	Type         CriteriaType `json:"type"`
+	Query        string       `json:"query,omitempty"`
+	TextFeedback string       `json:"textFeedback,omitempty"`
+}
+
 type CriteriaType string
 
 const (
@@ -104,6 +110,7 @@ const (
 	CriteriaTypeMultiSelect CriteriaType = "multi-select"
 	CriteriaTypeScore       CriteriaType = "score"
 	CriteriaMultiScore      CriteriaType = "multi-score"
+	CriteriaTypeText        CriteriaType = "text"
 )
 
 type Result struct {
@@ -154,6 +161,10 @@ func (s ScoreCriteria) GetType() CriteriaType {
 	return CriteriaTypeScore
 }
 
+func (t TextCriteria) GetType() CriteriaType {
+	return CriteriaTypeText
+}
+
 // Implement Validate for each type
 func (c ScoreCriteria) Validate() error {
 	if (c.Min < 0 || c.Max < 0) || (c.Min == 0 && c.Max == 0) {
@@ -161,6 +172,16 @@ func (c ScoreCriteria) Validate() error {
 	}
 	if c.Min >= c.Max {
 		return errors.New("min must be less than max for score criteria")
+	}
+	return nil
+}
+
+func (c TextCriteria) Validate() error {
+	if c.Type != CriteriaTypeText {
+		return fmt.Errorf("invalid criteria type: expected %s, got %s", CriteriaTypeText, c.Type)
+	}
+	if c.Query == "" {
+		return fmt.Errorf("query is required for text criteria")
 	}
 	return nil
 }
@@ -194,6 +215,12 @@ func (mr *ModelResponse) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			criteria = sc
+		case CriteriaTypeText:
+			var tc TextCriteria
+			if err := json.Unmarshal(criteriaData, &tc); err != nil {
+				return err
+			}
+			criteria = tc
 		default:
 			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
@@ -234,6 +261,12 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			r.Criteria = append(r.Criteria, sc)
+		case CriteriaTypeText:
+			var tc TextCriteria
+			if err := json.Unmarshal(criteriaData, &tc); err != nil {
+				return err
+			}
+			r.Criteria = append(r.Criteria, tc)
 		default:
 			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
