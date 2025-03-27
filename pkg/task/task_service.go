@@ -458,6 +458,17 @@ func ProcessResults(results []Result, task *db.TaskModel) ([]Result, error) {
 					Max:        taskCriteria.Max,
 					MinerScore: scaledScore,
 				}
+			case CriteriaTypeText:
+				submitted, ok := submittedCriteria.(TextCriteria)
+				if !ok {
+					return nil, fmt.Errorf("invalid text criteria type for model %s", result.Model)
+				}
+
+				results[i].Criteria[j] = TextCriteria{
+					Type:         CriteriaTypeText,
+					Query:        submitted.Query,
+					TextFeedback: submitted.TextFeedback,
+				}
 			}
 		}
 	}
