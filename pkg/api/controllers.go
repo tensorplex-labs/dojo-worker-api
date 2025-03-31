@@ -591,7 +591,7 @@ func GetTasksByPageController(c *gin.Context) {
 		errorDetails := make([]string, 0)
 		for _, err := range taskErrors {
 			errorDetails = append(errorDetails, err.Error())
-			if _, ok := err.(*task.ErrInvalidTaskType); ok {
+			if _, ok := err.(*task.ErrInvalidTaskModality); ok {
 				isBadRequest = true
 			}
 		}

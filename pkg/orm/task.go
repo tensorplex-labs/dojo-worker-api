@@ -80,7 +80,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 // Modified GetTasksByWorkerSubscription with caching
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskModality) ([]db.TaskModel, int, error) {
 	var tasks []db.TaskModel
 
 	// Cache miss, proceed with database query
@@ -144,7 +144,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskModality, subscriptionKeys []string) (int, error) {
 	var taskTypesParam []string
 	for _, taskType := range taskTypes {
 		taskTypesParam = append(taskTypesParam, string(taskType))

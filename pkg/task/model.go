@@ -16,7 +16,6 @@ type TaskResponse struct {
 	Title       string        `json:"title"`
 	Body        string        `json:"body"`
 	ExpireAt    time.Time     `json:"expireAt"`
-	Type        db.TaskType   `json:"type"`
 	TaskData    interface{}   `json:"taskData"`
 	Status      db.TaskStatus `json:"status"`
 	NumResults  int           `json:"numResults"`
@@ -38,7 +37,7 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD}
+var ValidTaskModalities = []db.TaskModality{db.TaskModalityCodeGeneration, db.TaskModalityImage, db.TaskModalityThreeD}
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
@@ -62,9 +61,9 @@ type CreateTaskRequest struct {
 }
 
 type TaskData struct {
-	Prompt    string          `json:"prompt"`
-	Responses []ModelResponse `json:"responses,omitempty"`
-	Task      db.TaskType     `json:"task"`
+	Prompt       string          `json:"prompt"`
+	Responses    []ModelResponse `json:"responses,omitempty"`
+	TaskModality db.TaskModality `json:"task_modality"`
 }
 
 type ModelResponse struct {

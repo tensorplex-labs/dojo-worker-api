@@ -58,7 +58,6 @@ func (taskService *TaskService) GetTaskResponseById(ctx context.Context, id stri
 		Title:      task.Title,
 		Body:       task.Body,
 		ExpireAt:   task.ExpireAt,
-		Type:       task.Type,
 		TaskData:   rawJSON,
 		Status:     task.Status,
 		MaxResults: task.MaxResults,
@@ -82,7 +81,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	}
 
-	taskTypes, errs := convertStringToTaskTypes(params.Types)
+	taskTypes, errs := convertStringToTaskModalities(params.Types)
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -118,7 +117,6 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 				Title:      task.Title,
 				Body:       task.Body,
 				ExpireAt:   task.ExpireAt,
-				Type:       task.Type,
 				TaskData:   taskData,
 				Status:     task.Status,
 				NumResults: task.NumResults,
@@ -145,46 +143,46 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 	}, []error{}
 }
 
-func convertStringToTaskTypes(taskTypes []string) ([]db.TaskType, []error) {
-	convertedTypes := make([]db.TaskType, 0)
+func convertStringToTaskModalities(taskTypes []string) ([]db.TaskModality, []error) {
+	convertedModalities := make([]db.TaskModality, 0)
 	errors := make([]error, 0)
 	for _, t := range taskTypes {
-		isValid, err := IsValidTaskType(t)
+		isValid, err := IsValidTaskModality(t)
 		if !isValid {
 			errors = append(errors, err)
 			continue
 		}
-		convertedTypes = append(convertedTypes, db.TaskType(t))
+		convertedModalities = append(convertedModalities, db.TaskModality(t))
 	}
-	return convertedTypes, errors
+	return convertedModalities, errors
 }
 
-type ErrInvalidTaskType struct {
+type ErrInvalidTaskModality struct {
 	Type interface{}
 }
 
-func (e *ErrInvalidTaskType) Error() string {
-	return fmt.Sprintf("invalid task type: '%v', supported types are %v", e.Type, ValidTaskTypes)
+func (e *ErrInvalidTaskModality) Error() string {
+	return fmt.Sprintf("invalid task modality: '%v', supported modalities are %v", e.Type, ValidTaskModalities)
 }
 
-func IsValidTaskType(taskType interface{}) (bool, error) {
-	switch t := taskType.(type) {
-	case string, db.TaskType:
-		for _, validType := range ValidTaskTypes {
+func IsValidTaskModality(taskModality interface{}) (bool, error) {
+	switch t := taskModality.(type) {
+	case string, db.TaskModality:
+		for _, validModality := range ValidTaskModalities {
 			switch v := t.(type) {
 			case string:
-				if v == string(validType) {
+				if v == string(validModality) {
 					return true, nil
 				}
-			case db.TaskType:
-				if v == validType {
+			case db.TaskModality:
+				if v == validModality {
 					return true, nil
 				}
 			}
 		}
-		return false, &ErrInvalidTaskType{Type: t}
+		return false, &ErrInvalidTaskModality{Type: t}
 	default:
-		return false, fmt.Errorf("invalid task type argument: %T, supported types are string and db.TaskType", t)
+		return false, fmt.Errorf("invalid task modality argument: %T, supported types are string and db.TaskModality", t)
 	}
 }
 
@@ -237,7 +235,7 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 
 	taskORM := orm.NewTaskORM()
 	for _, currTask := range request.TaskData {
-		taskType := db.TaskType(currTask.Task)
+		taskModality := db.TaskModality(currTask.TaskModality)
 
 		taskData, err := json.Marshal(currTask)
 		if err != nil {
@@ -257,7 +255,7 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 			ExpireAt:   *expireAt,
 			Title:      request.Title,
 			Body:       request.Body,
-			Type:       db.TaskType(taskType),
+			Type:       db.TaskModality(taskModality),
 			TaskData:   taskData,
 			MaxResults: request.MaxResults,
 			NumResults: 0,
@@ -459,11 +457,11 @@ func scaleScore(score, oldMin, oldMax, newMin, newMax float64) float64 {
 //
 //nolint:gocyclo
 func ValidateTaskData(taskData TaskData) error {
-	if taskData.Task == "" {
-		return errors.New("task is required")
+	if taskData.TaskModality == "" {
+		return errors.New("task modality is required")
 	}
 
-	isValid, err := IsValidTaskType(taskData.Task)
+	isValid, err := IsValidTaskModality(taskData.TaskModality)
 	if !isValid {
 		return err
 	}
@@ -476,19 +474,19 @@ func ValidateTaskData(taskData TaskData) error {
 		return errors.New("responses shouldn't be empty")
 	}
 
-	task := taskData.Task
+	taskModality := taskData.TaskModality
 	for _, taskresponse := range taskData.Responses {
 		// Validate model name is not empty
 		if taskresponse.Model == "" {
 			return fmt.Errorf("model name cannot be empty")
 		}
 
-		switch task {
-		case db.TaskTypeTextToImage:
+		switch taskModality {
+		case db.TaskModalityImage:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
-		case db.TaskTypeCodeGeneration:
+		case db.TaskModalityCodeGeneration:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -501,27 +499,7 @@ func ValidateTaskData(taskData TaskData) error {
 			if _, ok = files.([]interface{}); !ok {
 				return errors.New("files must be an array")
 			}
-		case db.TaskTypeDialogue:
-			messages, ok := taskresponse.Completion.([]interface{})
-			if !ok {
-				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
-			}
-
-			for _, msg := range messages {
-				message, ok := msg.(map[string]interface{})
-				if !ok {
-					return fmt.Errorf("invalid message format: %v", msg)
-				}
-
-				if _, ok := message["role"].(string); !ok {
-					return errors.New("role is required for each message")
-				}
-
-				if _, ok := message["message"].(string); !ok {
-					return errors.New("message is required for each message")
-				}
-			}
-		case db.TaskTypeTextToThreeD:
+		case db.TaskModalityThreeD:
 			if _, ok := taskresponse.Completion.(map[string]interface{}); !ok {
 				return fmt.Errorf("invalid completion format: %v", taskresponse.Completion)
 			}
@@ -572,7 +550,7 @@ func ValidateTaskRequest(request CreateTaskRequest) error {
 func ProcessTaskRequest(taskData CreateTaskRequest) (CreateTaskRequest, error) {
 	processedTaskData := make([]TaskData, 0)
 	for _, taskInterface := range taskData.TaskData {
-		if taskInterface.Task == db.TaskTypeCodeGeneration {
+		if taskInterface.TaskModality == db.TaskModalityCodeGeneration {
 			processedTaskEntry, err := ProcessCodeCompletion(taskInterface)
 			if err != nil {
 				log.Error().Msg("Error processing code completion")
@@ -689,11 +667,11 @@ func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHea
 		return CreateTaskRequest{}, errors.New("S3_PUBLIC_URL not set")
 	}
 	for i, t := range requestBody.TaskData {
-		if t.Task == db.TaskTypeTextToImage || t.Task == db.TaskTypeTextToThreeD {
+		if t.TaskModality == db.TaskModalityImage || t.TaskModality == db.TaskModalityThreeD {
 			for j, response := range t.Responses {
 				completionMap, ok := response.Completion.(map[string]interface{})
 				if !ok {
-					return CreateTaskRequest{}, fmt.Errorf("unexpected type for response.Completion: %T", response.Completion)
+					return CreateTaskRequest{}, fmt.Errorf("unexpected modality for response.Completion: %T", response.Completion)
 				}
 
 				filename, ok := completionMap["filename"].(string)
