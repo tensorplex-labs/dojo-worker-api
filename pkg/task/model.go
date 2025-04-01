@@ -96,13 +96,17 @@ type ScoreCriteria struct {
 	MinerScore float64      `json:"value,omitempty"`
 }
 
+type TextCriteria struct {
+	Type         CriteriaType `json:"type"`
+	Query        string       `json:"query,omitempty"`
+	TextFeedback string       `json:"text_feedback,omitempty"`
+}
+
 type CriteriaType string
 
 const (
-	CriteriaTypeRanking     CriteriaType = "ranking"
-	CriteriaTypeMultiSelect CriteriaType = "multi-select"
-	CriteriaTypeScore       CriteriaType = "score"
-	CriteriaMultiScore      CriteriaType = "multi-score"
+	CriteriaTypeScore CriteriaType = "score"
+	CriteriaTypeText  CriteriaType = "text"
 )
 
 type Result struct {
@@ -141,16 +145,21 @@ type NextTaskResponse struct {
 }
 
 type PaginationParams struct {
-	Page  int          `json:"page"`
-	Limit int          `json:"limit"`
-	Types []string     `json:"types"`
-	Sort  string       `json:"sort"`
-	Order db.SortOrder `json:"order"`
+	Page       int          `json:"page"`
+	Limit      int          `json:"limit"`
+	Modalities []string     `json:"modalities"`
+	Sort       string       `json:"sort"`
+	Order      db.SortOrder `json:"order"`
 }
 
 // Implement GetType for all criteria types
 func (s ScoreCriteria) GetType() CriteriaType {
 	return CriteriaTypeScore
+}
+
+// GetType for TextCriteria
+func (t TextCriteria) GetType() CriteriaType {
+	return CriteriaTypeText
 }
 
 // Implement Validate for each type
@@ -160,6 +169,14 @@ func (c ScoreCriteria) Validate() error {
 	}
 	if c.Min >= c.Max {
 		return errors.New("min must be less than max for score criteria")
+	}
+	return nil
+}
+
+// Validate for TextCriteria
+func (t TextCriteria) Validate() error {
+	if t.TextFeedback == "" {
+		return errors.New("text feedback is required")
 	}
 	return nil
 }
@@ -193,6 +210,12 @@ func (mr *ModelResponse) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			criteria = sc
+		case CriteriaTypeText:
+			var tc TextCriteria
+			if err := json.Unmarshal(criteriaData, &tc); err != nil {
+				return err
+			}
+			criteria = tc
 		default:
 			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
@@ -233,9 +256,16 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			r.Criteria = append(r.Criteria, sc)
+		case CriteriaTypeText:
+			var tc TextCriteria
+			if err := json.Unmarshal(criteriaData, &tc); err != nil {
+				return err
+			}
+			r.Criteria = append(r.Criteria, tc)
 		default:
 			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
 	}
+
 	return nil
 }

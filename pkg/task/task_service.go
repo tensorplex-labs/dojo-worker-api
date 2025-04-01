@@ -81,7 +81,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	}
 
-	taskTypes, errs := convertStringToTaskModalities(params.Types)
+	taskTypes, errs := convertStringToTaskModalities(params.Modalities)
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -188,7 +188,7 @@ func IsValidTaskModality(taskModality interface{}) (bool, error) {
 
 func IsValidCriteriaType(criteriaType CriteriaType) bool {
 	switch criteriaType {
-	case CriteriaTypeMultiSelect, CriteriaTypeRanking, CriteriaTypeScore, CriteriaMultiScore:
+	case CriteriaTypeScore, CriteriaTypeText:
 		return true
 	default:
 		return false
@@ -390,6 +390,15 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 		if submitted.MinerScore < taskCriteria.Min || submitted.MinerScore > taskCriteria.Max {
 			return fmt.Errorf("score %v is out of the valid range [%v, %v]",
 				submitted.MinerScore, taskCriteria.Min, taskCriteria.Max)
+		}
+	case CriteriaTypeText:
+		submitted, ok := criteria.(TextCriteria)
+		if !ok {
+			return fmt.Errorf("invalid text criteria type")
+		}
+
+		if submitted.TextFeedback == "" {
+			return fmt.Errorf("text feedback is required")
 		}
 
 	default:

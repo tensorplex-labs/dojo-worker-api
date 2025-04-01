@@ -497,7 +497,7 @@ func GetTaskByIdController(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			Authorization	header		string									true	"Bearer token"
-//	@Param			task			query		string									true	"Comma-separated list of task types (e.g., CODE_GENERATION,TEXT_TO_IMAGE,DIALOGUE). Use 'All' to include all types."
+//	@Param			task			query		string									true	"Comma-separated list of task types (e.g., CODE_GENERATION,IMAGE,THREE_D). Use 'All' to include all types."
 //	@Param			page			query		int										false	"Page number (default is 1)"
 //	@Param			limit			query		int										false	"Number of tasks per page (default is 10)"
 //	@Param			sort			query		string									false	"Sort field (default is createdAt)"
@@ -535,14 +535,14 @@ func GetTasksByPageController(c *gin.Context) {
 		return
 	}
 	// Split the string into a slice of strings
-	taskTypes := strings.Split(taskParam, ",")
-	if len(taskTypes) == 0 {
+	taskModalities := strings.Split(taskParam, ",")
+	if len(taskModalities) == 0 {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
 		return
 	}
 
-	if len(taskTypes) == 1 && taskTypes[0] == "All" {
-		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE", "TEXT_TO_THREE_D"}
+	if len(taskModalities) == 1 && taskModalities[0] == "All" {
+		taskModalities = []string{"CODE_GENERATION", "IMAGE", "THREE_D"}
 	}
 
 	// Parsing "page" and "limit" as integers with default values
@@ -576,11 +576,11 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	paginationParams := task.PaginationParams{
-		Page:  page,
-		Limit: limit,
-		Sort:  sort,
-		Types: taskTypes,
-		Order: order,
+		Page:       page,
+		Limit:      limit,
+		Sort:       sort,
+		Modalities: taskModalities,
+		Order:      order,
 	}
 
 	// fetching tasks by pagination
@@ -1406,4 +1406,45 @@ func GetNextInProgressTaskController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: taskData.ID}))
+}
+
+// GetCompletedTasksCountByTimestampController godoc
+//
+//	@Summary		Get the total number of completed tasks by timestamp
+//	@Description	Retrieves the total number of completed tasks from the beginning of time until the given timestamp
+//	@Tags			Metrics
+//	@Produce		json
+//	@Param			timestamp	query		string	true	"Timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z)"
+//	@Success		200			{object}	ApiResponse{body=metric.CompletedTasksByTimestampResponse}	"Total number of completed tasks by timestamp retrieved successfully"
+//	@Failure		400			{object}	ApiResponse												"Invalid timestamp format"
+//	@Failure		500			{object}	ApiResponse												"Failed to get completed tasks count by timestamp"
+//	@Router			/metrics/completed-tasks-by-timestamp [get]
+func GetCompletedTasksCountByTimestampController(c *gin.Context) {
+	timestampStr := c.Query("timestamp")
+	if timestampStr == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Timestamp parameter is required"))
+		return
+	}
+
+	timestamp, err := time.Parse(time.RFC3339, timestampStr)
+	if err != nil {
+		log.Error().Err(err).Str("timestamp", timestampStr).Msg("Invalid timestamp format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid timestamp format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		return
+	}
+
+	metricService := metric.NewMetricService()
+	count, err := metricService.GetCompletedTaskCountByTimestamp(c, timestamp)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get completed tasks count by timestamp")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by timestamp"))
+		return
+	}
+
+	response := metric.CompletedTasksByTimestampResponse{
+		Timestamp:         timestamp,
+		NumCompletedTasks: count,
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }

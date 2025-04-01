@@ -372,3 +372,32 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 
 	return nextTask, nil
 }
+
+// GetCompletedTaskCountByTimestamp counts the total number of completed tasks that were completed before the given timestamp
+func (o *TaskORM) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	// Query to count completed tasks before or at the given timestamp
+	query := "SELECT COUNT(*) as count FROM \"Task\" WHERE status = 'COMPLETED' AND updated_at <= $1;"
+	err := o.clientWrapper.Client.Prisma.QueryRaw(query, timestamp).Exec(ctx, &result)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found for completed tasks count query")
+	}
+
+	taskCountStr := string(result[0].Count)
+	count, err := strconv.Atoi(taskCountStr)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
