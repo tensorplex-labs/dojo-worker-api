@@ -99,7 +99,7 @@ type ScoreCriteria struct {
 type TextCriteria struct {
 	Type         CriteriaType `json:"type"`
 	Query        string       `json:"query,omitempty"`
-	TextFeedback string       `json:"text_feedback,omitempty"`
+	TextFeedback string       `json:"text_feedback"`
 }
 
 type CriteriaType string
