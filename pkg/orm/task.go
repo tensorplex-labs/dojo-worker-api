@@ -80,7 +80,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 // Modified GetTasksByWorkerSubscription with caching
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskModality) ([]db.TaskModel, int, error) {
 	var tasks []db.TaskModel
 
 	// Cache miss, proceed with database query
@@ -144,7 +144,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskModality, subscriptionKeys []string) (int, error) {
 	var taskTypesParam []string
 	for _, taskType := range taskTypes {
 		taskTypesParam = append(taskTypesParam, string(taskType))
@@ -371,4 +371,33 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 	}
 
 	return nextTask, nil
+}
+
+// GetCompletedTaskCountByTimestamp counts the total number of completed tasks that were completed before the given timestamp
+func (o *TaskORM) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	var result []struct {
+		Count db.RawString `json:"count"`
+	}
+
+	// Query to count completed tasks before or at the given timestamp
+	query := "SELECT COUNT(*) as count FROM \"Task\" WHERE status = 'COMPLETED' AND updated_at <= $1;"
+	err := o.clientWrapper.Client.Prisma.QueryRaw(query, timestamp).Exec(ctx, &result)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, fmt.Errorf("no results found for completed tasks count query")
+	}
+
+	taskCountStr := string(result[0].Count)
+	count, err := strconv.Atoi(taskCountStr)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

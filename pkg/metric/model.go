@@ -1,5 +1,9 @@
 package metric
 
+import (
+	"time"
+)
+
 type DojoWorkerCountResponse struct {
 	NumDojoWorkers int `json:"numDojoWorkers"`
 }
@@ -32,4 +36,9 @@ type MetricTaskResultsCount struct {
 
 type MetricAvgTaskCompletionTime struct {
 	AverageTaskCompletionTime int `json:"average_task_completion_time"`
+}
+
+type CompletedTasksByTimestampResponse struct {
+	Timestamp         time.Time `json:"timestamp"`
+	NumCompletedTasks int       `json:"numCompletedTasks"`
 }

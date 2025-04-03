@@ -58,6 +58,7 @@ func LoginRoutes(router *gin.Engine) {
 			metrics.GET("/completed-tasks-count", GetTotalCompletedTasksController)
 			metrics.GET("/task-result-count", GetTotalTasksResultsController)
 			metrics.GET("/average-task-completion-time", GetAvgTaskCompletionTimeController)
+			metrics.GET("/completed-tasks-by-timestamp", GetCompletedTasksCountByTimestampController)
 		}
 	}
 }
