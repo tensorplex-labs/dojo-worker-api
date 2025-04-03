@@ -106,7 +106,7 @@ func (o *FixtureService) CreateDefaultTask(ctx context.Context, title string, ex
 		db.Task.ExpireAt.Set(expireAt),
 		db.Task.Title.Set(title),
 		db.Task.Body.Set("This is a sample task body"),
-		db.Task.Type.Set(db.TaskTypeCodeGeneration),
+		db.Task.Type.Set(db.TaskModalityCodeGeneration),
 		db.Task.TaskData.Set(types.JSON(taskDataJSON)),
 		db.Task.Status.Set(db.TaskStatusInProgress),
 		db.Task.MaxResults.Set(1),
