@@ -37,7 +37,7 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 		db.Task.ExpireAt.Set(task.ExpireAt),
 		db.Task.Title.Set(task.Title),
 		db.Task.Body.Set(task.Body),
-		db.Task.Type.Set(task.Type),
+		db.Task.Modality.Set(task.Modality),
 		db.Task.TaskData.Set(task.TaskData),
 		db.Task.Status.Set(task.Status),
 		db.Task.MaxResults.Set(task.MaxResults),
@@ -80,7 +80,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 // Modified GetTasksByWorkerSubscription with caching
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskModality) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskModalities []db.TaskModality) ([]db.TaskModel, int, error) {
 	var tasks []db.TaskModel
 
 	// Cache miss, proceed with database query
@@ -116,8 +116,8 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		),
 	}
 
-	if len(taskTypes) > 0 {
-		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
+	if len(taskModalities) > 0 {
+		filterParams = append(filterParams, db.Task.Modality.In(taskModalities))
 	}
 
 	tasks, err = o.dbClient.Task.FindMany(
@@ -131,7 +131,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, 0, err
 	}
 
-	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskModalities, subscriptionKeys)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 		return nil, 0, err
@@ -144,10 +144,10 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskModality, subscriptionKeys []string) (int, error) {
-	var taskTypesParam []string
-	for _, taskType := range taskTypes {
-		taskTypesParam = append(taskTypesParam, string(taskType))
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskModalities []db.TaskModality, subscriptionKeys []string) (int, error) {
+	var taskModalitiesParam []string
+	for _, taskModality := range taskModalities {
+		taskModalitiesParam = append(taskModalitiesParam, string(taskModality))
 	}
 
 	validSubscriptionKeys := make([]string, 0)
@@ -173,8 +173,8 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	mainQuery := sq.Select("count(*) as total_tasks").
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
-		// need to do this since TaskType is a custom prisma enum type
-		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypesParam, "', '")))).
+		// need to do this since TaskModality is a custom prisma enum type
+		Where(sq.Expr(fmt.Sprintf("modality in ('%s')", strings.Join(taskModalitiesParam, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()

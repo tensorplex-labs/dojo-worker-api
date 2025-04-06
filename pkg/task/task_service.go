@@ -81,7 +81,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 		sortQuery = db.Task.CreatedAt.Order(params.Order)
 	}
 
-	taskTypes, errs := convertStringToTaskModalities(params.Modalities)
+	taskModalities, errs := convertStringToTaskModalities(params.Modalities)
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -91,7 +91,7 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 
 	log.Debug().Interface("completedTaskMap", completedTaskMap).Msg("Completed Task Mapping -------")
 
-	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, params.Limit, sortQuery, taskTypes)
+	tasks, totalTasks, err := taskService.taskORM.GetTasksByWorkerSubscription(ctx, workerId, offset, params.Limit, sortQuery, taskModalities)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting tasks by pagination")
 		return nil, []error{err}
@@ -143,10 +143,10 @@ func (taskService *TaskService) GetTasksByPagination(ctx context.Context, worker
 	}, []error{}
 }
 
-func convertStringToTaskModalities(taskTypes []string) ([]db.TaskModality, []error) {
+func convertStringToTaskModalities(taskModalities []string) ([]db.TaskModality, []error) {
 	convertedModalities := make([]db.TaskModality, 0)
 	errors := make([]error, 0)
-	for _, t := range taskTypes {
+	for _, t := range taskModalities {
 		isValid, err := IsValidTaskModality(t)
 		if !isValid {
 			errors = append(errors, err)
@@ -255,7 +255,7 @@ func (s *TaskService) CreateTasks(ctx context.Context, request CreateTaskRequest
 			ExpireAt:   *expireAt,
 			Title:      request.Title,
 			Body:       request.Body,
-			Type:       db.TaskModality(taskModality),
+			Modality:   db.TaskModality(taskModality),
 			TaskData:   taskData,
 			MaxResults: request.MaxResults,
 			NumResults: 0,
