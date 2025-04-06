@@ -82,7 +82,7 @@ model Task {
     expire_at     DateTime
     title         String
     body          String
-    type          TaskModality
+    modality      TaskModality
     task_data     Json
     status        TaskStatus
     max_results   Int
