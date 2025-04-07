@@ -1,6 +1,5 @@
 -- Create new enum type
 CREATE TYPE "TaskModality" AS ENUM ('CODE_GENERATION', 'IMAGE', 'THREE_D');
-CREATE TYPE "TaskType" AS ENUM ('CODE_GENERATION', 'DIALOGUE', 'TEXT_TO_IMAGE', 'TEXT_TO_THREE_D');
 
 -- Delete all tasks with type 'DIALOGUE' as we don't want to migrate them
 DELETE FROM "Task" WHERE "type" = 'DIALOGUE'::"TaskType";
