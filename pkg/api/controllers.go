@@ -1408,42 +1408,77 @@ func GetNextInProgressTaskController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: taskData.ID}))
 }
 
-// GetCompletedTasksCountByTimestampController godoc
+// GetCompletedTasksCountByIntervalController godoc
 //
-//	@Summary		Get the total number of completed tasks by timestamp
-//	@Description	Retrieves the total number of completed tasks from the beginning of time until the given timestamp
+//	@Summary		Get the number of completed tasks over time intervals
+//	@Description	Retrieves the number of completed tasks for each interval between dateFrom and dateTo
 //	@Tags			Metrics
 //	@Produce		json
-//	@Param			timestamp	query		string	true	"Timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z)"
-//	@Success		200			{object}	ApiResponse{body=metric.CompletedTasksByTimestampResponse}	"Total number of completed tasks by timestamp retrieved successfully"
-//	@Failure		400			{object}	ApiResponse												"Invalid timestamp format"
-//	@Failure		500			{object}	ApiResponse												"Failed to get completed tasks count by timestamp"
-//	@Router			/metrics/completed-tasks-by-timestamp [get]
-func GetCompletedTasksCountByTimestampController(c *gin.Context) {
-	timestampStr := c.Query("timestamp")
-	if timestampStr == "" {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Timestamp parameter is required"))
+//	@Param			dateFrom		query		string	true	"Start timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z)"
+//	@Param			dateTo			query		string	true	"End timestamp in RFC3339 format (e.g., 2023-01-02T12:00:00Z)"
+//	@Param			intervalSeconds	query		int		true	"Interval in seconds"
+//	@Success		200				{object}	ApiResponse{body=metric.CompletedTasksIntervalResponse}	"Completed tasks by interval retrieved successfully"
+//	@Failure		400				{object}	ApiResponse											"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse											"Failed to get completed tasks count"
+//	@Router			/metrics/completed-tasks-by-interval [get]
+func GetCompletedTasksCountByIntervalController(c *gin.Context) {
+	dateFromStr := c.Query("dateFrom")
+	dateToStr := c.Query("dateTo")
+	intervalSecondsStr := c.Query("intervalSeconds")
+
+	// Validate required parameters
+	if dateFromStr == "" || dateToStr == "" || intervalSecondsStr == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Required parameters: dateFrom, dateTo, and intervalSeconds"))
 		return
 	}
 
-	timestamp, err := time.Parse(time.RFC3339, timestampStr)
+	// Parse dateFrom and dateTo
+	dateFrom, err := time.Parse(time.RFC3339, dateFromStr)
 	if err != nil {
-		log.Error().Err(err).Str("timestamp", timestampStr).Msg("Invalid timestamp format")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid timestamp format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		log.Error().Err(err).Str("dateFrom", dateFromStr).Msg("Invalid dateFrom format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateFrom format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		return
+	}
+
+	dateTo, err := time.Parse(time.RFC3339, dateToStr)
+	if err != nil {
+		log.Error().Err(err).Str("dateTo", dateToStr).Msg("Invalid dateTo format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateTo format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		return
+	}
+
+	// Ensure dateFrom is before dateTo
+	if dateFrom.After(dateTo) {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("dateFrom must be before dateTo"))
+		return
+	}
+
+	// Parse intervalSeconds
+	intervalSeconds, err := strconv.Atoi(intervalSecondsStr)
+	if err != nil {
+		log.Error().Err(err).Str("intervalSeconds", intervalSecondsStr).Msg("Invalid intervalSeconds")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid intervalSeconds parameter. Must be a positive integer."))
+		return
+	}
+
+	if intervalSeconds <= 0 {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("intervalSeconds must be greater than 0"))
 		return
 	}
 
 	metricService := metric.NewMetricService()
-	count, err := metricService.GetCompletedTaskCountByTimestamp(c, timestamp)
+	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFrom, dateTo, intervalSeconds)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get completed tasks count by timestamp")
-		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by timestamp"))
+		log.Error().Err(err).Msg("Failed to get completed tasks count by interval")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by interval"))
 		return
 	}
 
-	response := metric.CompletedTasksByTimestampResponse{
-		Timestamp:         timestamp,
-		NumCompletedTasks: count,
+	response := metric.CompletedTasksIntervalResponse{
+		IntervalSeconds: intervalSeconds,
+		DateFrom:        dateFrom,
+		DateTo:          dateTo,
+		DataPoints:      dataPoints,
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))

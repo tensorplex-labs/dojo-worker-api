@@ -3,6 +3,7 @@ package metric
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"dojo-api/db"
@@ -181,14 +182,31 @@ func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {
 	return &totalCompletionTime, nil
 }
 
-// GetCompletedTaskCountByTimestamp returns the total number of completed tasks up to a specified timestamp
-func (metricService *MetricService) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
-	taskORM := orm.NewTaskORM()
-	count, err := taskORM.GetCompletedTaskCountByTimestamp(ctx, timestamp)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get completed tasks count by timestamp")
-		return 0, err
+// GetCompletedTasksCountByInterval returns the number of completed tasks for each interval between dateFrom and dateTo
+func (metricService *MetricService) GetCompletedTasksCountByInterval(ctx context.Context, dateFrom, dateTo time.Time, intervalSeconds int) ([]IntervalDataPoint, error) {
+	if intervalSeconds <= 0 {
+		return nil, fmt.Errorf("interval must be greater than 0")
 	}
 
-	return count, nil
+	taskORM := orm.NewTaskORM()
+
+	intervalResults, err := taskORM.GetCompletedTasksCountByIntervals(ctx, dateFrom, dateTo, intervalSeconds)
+	if err != nil {
+		log.Error().Err(err).
+			Time("dateFrom", dateFrom).
+			Time("dateTo", dateTo).
+			Int("intervalSeconds", intervalSeconds).
+			Msg("Failed to get completed tasks count by intervals")
+		return nil, err
+	}
+
+	dataPoints := make([]IntervalDataPoint, len(intervalResults))
+	for i, result := range intervalResults {
+		dataPoints[i] = IntervalDataPoint{
+			Timestamp:         result.IntervalEnd,
+			NumCompletedTasks: result.Count,
+		}
+	}
+
+	return dataPoints, nil
 }

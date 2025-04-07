@@ -373,31 +373,82 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 	return nextTask, nil
 }
 
-// GetCompletedTaskCountByTimestamp counts the total number of completed tasks that were completed before the given timestamp
-func (o *TaskORM) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
+// GetCompletedTasksCountByIntervals efficiently fetches task counts for multiple intervals in a single query
+func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromTime, toTime time.Time, intervalSeconds int) ([]struct {
+	IntervalEnd time.Time `json:"interval_end"`
+	Count       int       `json:"count"`
+}, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 
-	var result []struct {
-		Count db.RawString `json:"count"`
+	// Build a more efficient query using window functions to count tasks in each interval
+	type resultStruct struct {
+		IntervalEnd db.RawString `json:"interval_end"`
+		Count       db.RawString `json:"count"`
 	}
+	var result []resultStruct
 
-	// Query to count completed tasks before or at the given timestamp
-	query := "SELECT COUNT(*) as count FROM \"Task\" WHERE status = 'COMPLETED' AND updated_at <= $1;"
-	err := o.clientWrapper.Client.Prisma.QueryRaw(query, timestamp).Exec(ctx, &result)
+	query := `
+WITH intervals AS (
+  SELECT
+    generate_series(
+      $1::timestamp,
+      $2::timestamp,
+      ($3 || ' seconds')::interval
+    ) AS interval_end
+)
+SELECT
+  to_char(intervals.interval_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
+  COUNT(t.id)::text AS count
+FROM
+  intervals
+LEFT JOIN
+  "Task" t ON
+  t.status = 'COMPLETED' AND
+  t.updated_at > (intervals.interval_end - ($3 || ' seconds')::interval) AND
+  t.updated_at <= intervals.interval_end
+GROUP BY
+  intervals.interval_end
+ORDER BY
+  intervals.interval_end;
+`
+	// Execute the query
+	err := o.clientWrapper.Client.Prisma.QueryRaw(
+		query,
+		fromTime,
+		toTime,
+		strconv.Itoa(intervalSeconds),
+	).Exec(ctx, &result)
+
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("failed to execute interval count query: %w", err)
 	}
 
-	if len(result) == 0 {
-		return 0, fmt.Errorf("no results found for completed tasks count query")
+	// Parse the results
+	parsed := make([]struct {
+		IntervalEnd time.Time `json:"interval_end"`
+		Count       int       `json:"count"`
+	}, 0, len(result))
+
+	for _, r := range result {
+		timestamp, err := time.Parse(time.RFC3339, string(r.IntervalEnd))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+		}
+
+		count, err := strconv.Atoi(string(r.Count))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse count: %w", err)
+		}
+
+		parsed = append(parsed, struct {
+			IntervalEnd time.Time `json:"interval_end"`
+			Count       int       `json:"count"`
+		}{
+			IntervalEnd: timestamp,
+			Count:       count,
+		})
 	}
 
-	taskCountStr := string(result[0].Count)
-	count, err := strconv.Atoi(taskCountStr)
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
+	return parsed, nil
 }
