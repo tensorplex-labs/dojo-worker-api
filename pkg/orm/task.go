@@ -373,31 +373,99 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 	return nextTask, nil
 }
 
-// GetCompletedTaskCountByTimestamp counts the total number of completed tasks that were completed before the given timestamp
-func (o *TaskORM) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
+// GetCompletedTasksCountByIntervals efficiently fetches task counts for multiple intervals in a single query
+func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromUnix, toUnix int64, intervalDays int) ([]struct {
+	IntervalEnd int64 `json:"interval_end"`
+	Count       int   `json:"count"`
+}, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 
+	// Set minimum dateFrom to October 1, 2024 (Unix timestamp: 1727798400)
+	minDateUnix := int64(1727798400) // Oct 1, 2024 00:00:00 UTC
+	if fromUnix < minDateUnix {
+		fromUnix = minDateUnix
+	}
+
+	// Restrict dateTo to current date (now)
+	currentUnix := time.Now().UTC().Unix()
+	if toUnix > currentUnix {
+		toUnix = currentUnix
+	}
+
+	// Convert Unix timestamps to time.Time only for database query
+	// as PostgreSQL needs timestamptz for generate_series
+	fromTime := time.Unix(fromUnix, 0).UTC()
+	toTime := time.Unix(toUnix, 0).UTC()
+
+	// Build a more efficient query using window functions to count tasks in each interval
 	var result []struct {
-		Count db.RawString `json:"count"`
+		IntervalEnd db.RawString `json:"interval_end"`
+		Count       db.RawString `json:"count"`
 	}
 
-	// Query to count completed tasks before or at the given timestamp
-	query := "SELECT COUNT(*) as count FROM \"Task\" WHERE status = 'COMPLETED' AND updated_at <= $1;"
-	err := o.clientWrapper.Client.Prisma.QueryRaw(query, timestamp).Exec(ctx, &result)
+	query := `
+WITH intervals AS (
+  SELECT
+    generate_series(
+      $1::timestamptz,
+      $2::timestamptz,
+      ($3 || ' days')::interval
+    )::timestamptz AS interval_end
+),
+interval_counts AS (
+  SELECT
+    intervals.interval_end,
+    (SELECT COUNT(*) FROM "Task" WHERE status = 'COMPLETED' AND updated_at <= intervals.interval_end) AS total_count
+  FROM
+    intervals
+  ORDER BY
+    intervals.interval_end
+)
+SELECT
+  EXTRACT(EPOCH FROM interval_counts.interval_end)::bigint AS interval_end,
+  total_count::text AS count
+FROM
+  interval_counts;
+`
+	// Execute the query
+	err := o.clientWrapper.Client.Prisma.QueryRaw(
+		query,
+		fromTime,
+		toTime,
+		strconv.Itoa(intervalDays),
+	).Exec(ctx, &result)
+
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("failed to execute interval count query: %w", err)
 	}
 
-	if len(result) == 0 {
-		return 0, fmt.Errorf("no results found for completed tasks count query")
+	// Parse the results directly to int64 timestamps
+	parsed := make([]struct {
+		IntervalEnd int64 `json:"interval_end"`
+		Count       int   `json:"count"`
+	}, 0, len(result))
+
+	for _, r := range result {
+		// Parse the Unix timestamp (seconds since epoch)
+		intervalUnix, err := strconv.ParseInt(string(r.IntervalEnd), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse unix timestamp: %w", err)
+		}
+
+		count, err := strconv.Atoi(string(r.Count))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse count: %w", err)
+		}
+
+		parsed = append(parsed, struct {
+			IntervalEnd int64 `json:"interval_end"`
+			Count       int   `json:"count"`
+		}{
+			IntervalEnd: intervalUnix,
+			Count:       count,
+		})
 	}
 
-	taskCountStr := string(result[0].Count)
-	count, err := strconv.Atoi(taskCountStr)
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
+	return parsed, nil
 }
