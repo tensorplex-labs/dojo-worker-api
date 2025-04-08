@@ -16,7 +16,6 @@ type TaskResponse struct {
 	Title       string        `json:"title"`
 	Body        string        `json:"body"`
 	ExpireAt    time.Time     `json:"expireAt"`
-	Type        db.TaskType   `json:"type"`
 	TaskData    interface{}   `json:"taskData"`
 	Status      db.TaskStatus `json:"status"`
 	NumResults  int           `json:"numResults"`
@@ -38,7 +37,7 @@ const (
 	SENTINEL_VALUE   float64   = -math.MaxFloat64
 )
 
-var ValidTaskTypes = []db.TaskType{db.TaskTypeCodeGeneration, db.TaskTypeTextToImage, db.TaskTypeDialogue, db.TaskTypeTextToThreeD, db.TaskTypeTextToCompletion}
+var ValidTaskModalities = []db.TaskModality{db.TaskModalityCodeGeneration, db.TaskModalityImage, db.TaskModalityThreeD}
 
 type Pagination struct {
 	Page       int `json:"pageNumber"`
@@ -62,9 +61,9 @@ type CreateTaskRequest struct {
 }
 
 type TaskData struct {
-	Prompt    string          `json:"prompt"`
-	Responses []ModelResponse `json:"responses,omitempty"`
-	Task      db.TaskType     `json:"task"`
+	Prompt       string          `json:"prompt"`
+	Responses    []ModelResponse `json:"responses,omitempty"`
+	TaskModality db.TaskModality `json:"task_modality"`
 }
 
 type ModelResponse struct {
@@ -100,17 +99,14 @@ type ScoreCriteria struct {
 type TextCriteria struct {
 	Type         CriteriaType `json:"type"`
 	Query        string       `json:"query,omitempty"`
-	TextFeedback string       `json:"textFeedback,omitempty"`
+	TextFeedback string       `json:"text_feedback"`
 }
 
 type CriteriaType string
 
 const (
-	CriteriaTypeRanking     CriteriaType = "ranking"
-	CriteriaTypeMultiSelect CriteriaType = "multi-select"
-	CriteriaTypeScore       CriteriaType = "score"
-	CriteriaMultiScore      CriteriaType = "multi-score"
-	CriteriaTypeText        CriteriaType = "text"
+	CriteriaTypeScore CriteriaType = "score"
+	CriteriaTypeText  CriteriaType = "text"
 )
 
 type Result struct {
@@ -149,11 +145,11 @@ type NextTaskResponse struct {
 }
 
 type PaginationParams struct {
-	Page  int          `json:"page"`
-	Limit int          `json:"limit"`
-	Types []string     `json:"types"`
-	Sort  string       `json:"sort"`
-	Order db.SortOrder `json:"order"`
+	Page       int          `json:"page"`
+	Limit      int          `json:"limit"`
+	Modalities []string     `json:"modalities"`
+	Sort       string       `json:"sort"`
+	Order      db.SortOrder `json:"order"`
 }
 
 // Implement GetType for all criteria types
@@ -161,6 +157,7 @@ func (s ScoreCriteria) GetType() CriteriaType {
 	return CriteriaTypeScore
 }
 
+// GetType for TextCriteria
 func (t TextCriteria) GetType() CriteriaType {
 	return CriteriaTypeText
 }
@@ -176,12 +173,10 @@ func (c ScoreCriteria) Validate() error {
 	return nil
 }
 
-func (c TextCriteria) Validate() error {
-	if c.Type != CriteriaTypeText {
-		return fmt.Errorf("invalid criteria type: expected %s, got %s", CriteriaTypeText, c.Type)
-	}
-	if c.Query == "" {
-		return fmt.Errorf("query is required for text criteria")
+// Validate for TextCriteria
+func (t TextCriteria) Validate() error {
+	if t.TextFeedback == "" {
+		return errors.New("text feedback is required")
 	}
 	return nil
 }
@@ -271,5 +266,6 @@ func (r *Result) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("unknown criteria type: %s", temp.Type)
 		}
 	}
+
 	return nil
 }

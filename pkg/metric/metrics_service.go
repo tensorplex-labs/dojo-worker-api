@@ -3,6 +3,7 @@ package metric
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/cache"
@@ -178,4 +179,16 @@ func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {
 		totalCompletionTime += eventData.TaskCompletionTime
 	}
 	return &totalCompletionTime, nil
+}
+
+// GetCompletedTaskCountByTimestamp returns the total number of completed tasks up to a specified timestamp
+func (metricService *MetricService) GetCompletedTaskCountByTimestamp(ctx context.Context, timestamp time.Time) (int, error) {
+	taskORM := orm.NewTaskORM()
+	count, err := taskORM.GetCompletedTaskCountByTimestamp(ctx, timestamp)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get completed tasks count by timestamp")
+		return 0, err
+	}
+
+	return count, nil
 }
