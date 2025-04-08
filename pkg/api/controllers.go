@@ -1411,13 +1411,13 @@ func GetNextInProgressTaskController(c *gin.Context) {
 // GetCompletedTasksCountByIntervalController godoc
 //
 //	@Summary		Get the number of completed tasks over time intervals
-//	@Description	Retrieves the number of completed tasks for each interval between dateFrom and dateTo
+//	@Description	Retrieves the number of completed tasks for each interval between dateFrom and dateTo, using Unix timestamps
 //	@Tags			Metrics
 //	@Produce		json
-//	@Param			dateFrom		query		string	true	"Start timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z), minimum allowed is October 1, 2024"
-//	@Param			dateTo			query		string	true	"End timestamp in RFC3339 format (e.g., 2023-01-02T12:00:00Z), maximum allowed is current date"
+//	@Param			dateFrom		query		integer	true	"Start timestamp as Unix timestamp (seconds since epoch). Minimum allowed is October 1, 2024 (1727798400)"
+//	@Param			dateTo			query		integer	true	"End timestamp as Unix timestamp (seconds since epoch). Maximum allowed is current date"
 //	@Param			intervalDays	query		int		true	"Interval in days"
-//	@Success		200				{object}	ApiResponse{body=metric.CompletedTasksIntervalResponse}	"Completed tasks by interval retrieved successfully"
+//	@Success		200				{object}	ApiResponse{body=metric.CompletedTasksIntervalResponse}	"Completed tasks by interval retrieved successfully. All timestamp fields are Unix timestamps (seconds since epoch)"
 //	@Failure		400				{object}	ApiResponse											"Invalid parameters"
 //	@Failure		500				{object}	ApiResponse											"Failed to get completed tasks count"
 //	@Router			/metrics/completed-tasks-by-interval [get]
@@ -1432,41 +1432,25 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 		return
 	}
 
-	// Parse dateFrom and dateTo
-	dateFrom, err := time.Parse(time.RFC3339, dateFromStr)
+	// Parse Unix timestamps
+	dateFromUnix, err := strconv.ParseInt(dateFromStr, 10, 64)
 	if err != nil {
 		log.Error().Err(err).Str("dateFrom", dateFromStr).Msg("Invalid dateFrom format")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateFrom format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateFrom format. Use Unix timestamp (seconds since epoch)"))
 		return
 	}
 
-	dateTo, err := time.Parse(time.RFC3339, dateToStr)
+	dateToUnix, err := strconv.ParseInt(dateToStr, 10, 64)
 	if err != nil {
 		log.Error().Err(err).Str("dateTo", dateToStr).Msg("Invalid dateTo format")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateTo format. Use RFC3339 format (e.g., 2023-01-01T12:00:00Z)"))
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateTo format. Use Unix timestamp (seconds since epoch)"))
 		return
 	}
 
 	// Ensure dateFrom is before dateTo
-	if dateFrom.After(dateTo) {
+	if dateFromUnix >= dateToUnix {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("dateFrom must be before dateTo"))
 		return
-	}
-
-	// Apply date restrictions
-	minDate := time.Date(2024, time.October, 1, 0, 0, 0, 0, time.UTC)
-	currentTime := time.Now().UTC()
-
-	// Check if dateFrom is too early
-	if dateFrom.Before(minDate) {
-		log.Info().Time("requestedFrom", dateFrom).Time("adjustedFrom", minDate).Msg("Requested dateFrom is before minimum allowed date, 1st October 2024, adjusting to minimum")
-		dateFrom = minDate
-	}
-
-	// Check if dateTo is in the future
-	if dateTo.After(currentTime) {
-		log.Info().Time("requestedTo", dateTo).Time("adjustedTo", currentTime).Msg("Requested dateTo is in the future, adjusting to current time")
-		dateTo = currentTime
 	}
 
 	// Parse intervalDays
@@ -1483,7 +1467,7 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 	}
 
 	metricService := metric.NewMetricService()
-	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFrom, dateTo, intervalDays)
+	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFromUnix, dateToUnix, intervalDays)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get completed tasks count by interval")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by interval"))
@@ -1492,8 +1476,8 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 
 	response := metric.CompletedTasksIntervalResponse{
 		IntervalDays: intervalDays,
-		DateFrom:     dateFrom,
-		DateTo:       dateTo,
+		DateFrom:     dateFromUnix,
+		DateTo:       dateToUnix,
 		DataPoints:   dataPoints,
 	}
 

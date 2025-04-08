@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"dojo-api/db"
 	"dojo-api/pkg/cache"
@@ -183,18 +182,18 @@ func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {
 }
 
 // GetCompletedTasksCountByInterval returns the number of completed tasks for each interval between dateFrom and dateTo
-func (metricService *MetricService) GetCompletedTasksCountByInterval(ctx context.Context, dateFrom, dateTo time.Time, intervalDays int) ([]IntervalDataPoint, error) {
+func (metricService *MetricService) GetCompletedTasksCountByInterval(ctx context.Context, fromUnix int64, toUnix int64, intervalDays int) ([]IntervalDataPoint, error) {
 	if intervalDays <= 0 {
 		return nil, fmt.Errorf("interval must be greater than 0")
 	}
 
 	taskORM := orm.NewTaskORM()
 
-	intervalResults, err := taskORM.GetCompletedTasksCountByIntervals(ctx, dateFrom, dateTo, intervalDays)
+	intervalResults, err := taskORM.GetCompletedTasksCountByIntervals(ctx, fromUnix, toUnix, intervalDays)
 	if err != nil {
 		log.Error().Err(err).
-			Time("dateFrom", dateFrom).
-			Time("dateTo", dateTo).
+			Int64("dateFrom", fromUnix).
+			Int64("dateTo", toUnix).
 			Int("intervalDays", intervalDays).
 			Msg("Failed to get completed tasks count by intervals")
 		return nil, err

@@ -374,24 +374,29 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 }
 
 // GetCompletedTasksCountByIntervals efficiently fetches task counts for multiple intervals in a single query
-func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromTime, toTime time.Time, intervalDays int) ([]struct {
-	IntervalEnd time.Time `json:"interval_end"`
-	Count       int       `json:"count"`
+func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromUnix, toUnix int64, intervalDays int) ([]struct {
+	IntervalEnd int64 `json:"interval_end"`
+	Count       int   `json:"count"`
 }, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 
-	// Set minimum dateFrom to October 1, 2024
-	minDate := time.Date(2024, time.October, 1, 0, 0, 0, 0, time.UTC)
-	if fromTime.Before(minDate) {
-		fromTime = minDate
+	// Set minimum dateFrom to October 1, 2024 (Unix timestamp: 1727798400)
+	minDateUnix := int64(1727798400) // Oct 1, 2024 00:00:00 UTC
+	if fromUnix < minDateUnix {
+		fromUnix = minDateUnix
 	}
 
 	// Restrict dateTo to current date (now)
-	currentTime := time.Now().UTC()
-	if toTime.After(currentTime) {
-		toTime = currentTime
+	currentUnix := time.Now().UTC().Unix()
+	if toUnix > currentUnix {
+		toUnix = currentUnix
 	}
+
+	// Convert Unix timestamps to time.Time only for database query
+	// as PostgreSQL needs timestamptz for generate_series
+	fromTime := time.Unix(fromUnix, 0).UTC()
+	toTime := time.Unix(toUnix, 0).UTC()
 
 	// Build a more efficient query using window functions to count tasks in each interval
 	var result []struct {
@@ -411,14 +416,14 @@ WITH intervals AS (
 interval_counts AS (
   SELECT
     intervals.interval_end,
-    (SELECT COUNT(*) FROM "Task" WHERE status = 'IN_PROGRESS' AND updated_at <= intervals.interval_end) AS total_count
+    (SELECT COUNT(*) FROM "Task" WHERE status = 'COMPLETED' AND updated_at <= intervals.interval_end) AS total_count
   FROM
     intervals
   ORDER BY
     intervals.interval_end
 )
 SELECT
-  to_char(interval_counts.interval_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
+  EXTRACT(EPOCH FROM interval_counts.interval_end)::bigint AS interval_end,
   total_count::text AS count
 FROM
   interval_counts;
@@ -435,16 +440,17 @@ FROM
 		return nil, fmt.Errorf("failed to execute interval count query: %w", err)
 	}
 
-	// Parse the results
+	// Parse the results directly to int64 timestamps
 	parsed := make([]struct {
-		IntervalEnd time.Time `json:"interval_end"`
-		Count       int       `json:"count"`
+		IntervalEnd int64 `json:"interval_end"`
+		Count       int   `json:"count"`
 	}, 0, len(result))
 
 	for _, r := range result {
-		timestamp, err := time.Parse(time.RFC3339, string(r.IntervalEnd))
+		// Parse the Unix timestamp (seconds since epoch)
+		intervalUnix, err := strconv.ParseInt(string(r.IntervalEnd), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+			return nil, fmt.Errorf("failed to parse unix timestamp: %w", err)
 		}
 
 		count, err := strconv.Atoi(string(r.Count))
@@ -453,10 +459,10 @@ FROM
 		}
 
 		parsed = append(parsed, struct {
-			IntervalEnd time.Time `json:"interval_end"`
-			Count       int       `json:"count"`
+			IntervalEnd int64 `json:"interval_end"`
+			Count       int   `json:"count"`
 		}{
-			IntervalEnd: timestamp,
+			IntervalEnd: intervalUnix,
 			Count:       count,
 		})
 	}

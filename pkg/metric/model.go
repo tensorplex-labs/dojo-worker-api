@@ -45,14 +45,14 @@ type CompletedTasksByTimestampResponse struct {
 
 // IntervalDataPoint represents a single data point with timestamp and count
 type IntervalDataPoint struct {
-	Timestamp         time.Time `json:"timestamp"`
-	NumCompletedTasks int       `json:"numCompletedTasks"`
+	Timestamp         int64 `json:"timestamp"`
+	NumCompletedTasks int   `json:"numCompletedTasks"`
 }
 
 // CompletedTasksIntervalResponse represents the response for interval-based task completion metrics
 type CompletedTasksIntervalResponse struct {
 	IntervalDays int                 `json:"intervalDays"`
-	DateFrom     time.Time           `json:"dateFrom"`
-	DateTo       time.Time           `json:"dateTo"`
+	DateFrom     int64               `json:"dateFrom"`
+	DateTo       int64               `json:"dateTo"`
 	DataPoints   []IntervalDataPoint `json:"dataPoints"`
 }
