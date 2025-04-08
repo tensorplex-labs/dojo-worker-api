@@ -392,13 +392,13 @@ func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromTim
 WITH intervals AS (
   SELECT
     generate_series(
-      $1::timestamp,
-      $2::timestamp,
+      $1::timestamptz,
+      $2::timestamptz,
       ($3 || ' seconds')::interval
     ) AS interval_end
 )
 SELECT
-  to_char(intervals.interval_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
+  to_char(intervals.interval_end, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
   COUNT(t.id)::text AS count
 FROM
   intervals
