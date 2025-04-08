@@ -374,19 +374,30 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 }
 
 // GetCompletedTasksCountByIntervals efficiently fetches task counts for multiple intervals in a single query
-func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromTime, toTime time.Time, intervalSeconds int) ([]struct {
+func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromTime, toTime time.Time, intervalDays int) ([]struct {
 	IntervalEnd time.Time `json:"interval_end"`
 	Count       int       `json:"count"`
 }, error) {
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 
+	// Set minimum dateFrom to October 1, 2024
+	minDate := time.Date(2024, time.October, 1, 0, 0, 0, 0, time.UTC)
+	if fromTime.Before(minDate) {
+		fromTime = minDate
+	}
+
+	// Restrict dateTo to current date (now)
+	currentTime := time.Now().UTC()
+	if toTime.After(currentTime) {
+		toTime = currentTime
+	}
+
 	// Build a more efficient query using window functions to count tasks in each interval
-	type resultStruct struct {
+	var result []struct {
 		IntervalEnd db.RawString `json:"interval_end"`
 		Count       db.RawString `json:"count"`
 	}
-	var result []resultStruct
 
 	query := `
 WITH intervals AS (
@@ -394,30 +405,30 @@ WITH intervals AS (
     generate_series(
       $1::timestamptz,
       $2::timestamptz,
-      ($3 || ' seconds')::interval
-    ) AS interval_end
+      ($3 || ' days')::interval
+    )::timestamptz AS interval_end
+),
+interval_counts AS (
+  SELECT
+    intervals.interval_end,
+    (SELECT COUNT(*) FROM "Task" WHERE status = 'IN_PROGRESS' AND updated_at <= intervals.interval_end) AS total_count
+  FROM
+    intervals
+  ORDER BY
+    intervals.interval_end
 )
 SELECT
-  to_char(intervals.interval_end, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
-  COUNT(t.id)::text AS count
+  to_char(interval_counts.interval_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS interval_end,
+  total_count::text AS count
 FROM
-  intervals
-LEFT JOIN
-  "Task" t ON
-  t.status = 'COMPLETED' AND
-  t.updated_at > (intervals.interval_end - ($3 || ' seconds')::interval) AND
-  t.updated_at <= intervals.interval_end
-GROUP BY
-  intervals.interval_end
-ORDER BY
-  intervals.interval_end;
+  interval_counts;
 `
 	// Execute the query
 	err := o.clientWrapper.Client.Prisma.QueryRaw(
 		query,
 		fromTime,
 		toTime,
-		strconv.Itoa(intervalSeconds),
+		strconv.Itoa(intervalDays),
 	).Exec(ctx, &result)
 
 	if err != nil {

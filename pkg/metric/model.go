@@ -51,8 +51,8 @@ type IntervalDataPoint struct {
 
 // CompletedTasksIntervalResponse represents the response for interval-based task completion metrics
 type CompletedTasksIntervalResponse struct {
-	IntervalSeconds int                 `json:"intervalSeconds"`
-	DateFrom        time.Time           `json:"dateFrom"`
-	DateTo          time.Time           `json:"dateTo"`
-	DataPoints      []IntervalDataPoint `json:"dataPoints"`
+	IntervalDays int                 `json:"intervalDays"`
+	DateFrom     time.Time           `json:"dateFrom"`
+	DateTo       time.Time           `json:"dateTo"`
+	DataPoints   []IntervalDataPoint `json:"dataPoints"`
 }

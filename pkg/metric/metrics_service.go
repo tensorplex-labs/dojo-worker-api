@@ -183,19 +183,19 @@ func CalculateTotalTaskCompletionTime(events []db.EventsModel) (*int, error) {
 }
 
 // GetCompletedTasksCountByInterval returns the number of completed tasks for each interval between dateFrom and dateTo
-func (metricService *MetricService) GetCompletedTasksCountByInterval(ctx context.Context, dateFrom, dateTo time.Time, intervalSeconds int) ([]IntervalDataPoint, error) {
-	if intervalSeconds <= 0 {
+func (metricService *MetricService) GetCompletedTasksCountByInterval(ctx context.Context, dateFrom, dateTo time.Time, intervalDays int) ([]IntervalDataPoint, error) {
+	if intervalDays <= 0 {
 		return nil, fmt.Errorf("interval must be greater than 0")
 	}
 
 	taskORM := orm.NewTaskORM()
 
-	intervalResults, err := taskORM.GetCompletedTasksCountByIntervals(ctx, dateFrom, dateTo, intervalSeconds)
+	intervalResults, err := taskORM.GetCompletedTasksCountByIntervals(ctx, dateFrom, dateTo, intervalDays)
 	if err != nil {
 		log.Error().Err(err).
 			Time("dateFrom", dateFrom).
 			Time("dateTo", dateTo).
-			Int("intervalSeconds", intervalSeconds).
+			Int("intervalDays", intervalDays).
 			Msg("Failed to get completed tasks count by intervals")
 		return nil, err
 	}

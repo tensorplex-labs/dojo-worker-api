@@ -1414,9 +1414,9 @@ func GetNextInProgressTaskController(c *gin.Context) {
 //	@Description	Retrieves the number of completed tasks for each interval between dateFrom and dateTo
 //	@Tags			Metrics
 //	@Produce		json
-//	@Param			dateFrom		query		string	true	"Start timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z)"
-//	@Param			dateTo			query		string	true	"End timestamp in RFC3339 format (e.g., 2023-01-02T12:00:00Z)"
-//	@Param			intervalSeconds	query		int		true	"Interval in seconds"
+//	@Param			dateFrom		query		string	true	"Start timestamp in RFC3339 format (e.g., 2023-01-01T12:00:00Z), minimum allowed is October 1, 2024"
+//	@Param			dateTo			query		string	true	"End timestamp in RFC3339 format (e.g., 2023-01-02T12:00:00Z), maximum allowed is current date"
+//	@Param			intervalDays	query		int		true	"Interval in days"
 //	@Success		200				{object}	ApiResponse{body=metric.CompletedTasksIntervalResponse}	"Completed tasks by interval retrieved successfully"
 //	@Failure		400				{object}	ApiResponse											"Invalid parameters"
 //	@Failure		500				{object}	ApiResponse											"Failed to get completed tasks count"
@@ -1424,11 +1424,11 @@ func GetNextInProgressTaskController(c *gin.Context) {
 func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 	dateFromStr := c.Query("dateFrom")
 	dateToStr := c.Query("dateTo")
-	intervalSecondsStr := c.Query("intervalSeconds")
+	intervalDaysStr := c.Query("intervalDays")
 
 	// Validate required parameters
-	if dateFromStr == "" || dateToStr == "" || intervalSecondsStr == "" {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Required parameters: dateFrom, dateTo, and intervalSeconds"))
+	if dateFromStr == "" || dateToStr == "" || intervalDaysStr == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Required parameters: dateFrom, dateTo, and intervalDays"))
 		return
 	}
 
@@ -1453,21 +1453,37 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 		return
 	}
 
-	// Parse intervalSeconds
-	intervalSeconds, err := strconv.Atoi(intervalSecondsStr)
+	// Apply date restrictions
+	minDate := time.Date(2024, time.October, 1, 0, 0, 0, 0, time.UTC)
+	currentTime := time.Now().UTC()
+
+	// Check if dateFrom is too early
+	if dateFrom.Before(minDate) {
+		log.Info().Time("requestedFrom", dateFrom).Time("adjustedFrom", minDate).Msg("Requested dateFrom is before minimum allowed date, 1st October 2024, adjusting to minimum")
+		dateFrom = minDate
+	}
+
+	// Check if dateTo is in the future
+	if dateTo.After(currentTime) {
+		log.Info().Time("requestedTo", dateTo).Time("adjustedTo", currentTime).Msg("Requested dateTo is in the future, adjusting to current time")
+		dateTo = currentTime
+	}
+
+	// Parse intervalDays
+	intervalDays, err := strconv.Atoi(intervalDaysStr)
 	if err != nil {
-		log.Error().Err(err).Str("intervalSeconds", intervalSecondsStr).Msg("Invalid intervalSeconds")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid intervalSeconds parameter. Must be a positive integer."))
+		log.Error().Err(err).Str("intervalDays", intervalDaysStr).Msg("Invalid intervalDays")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid intervalDays parameter. Must be a positive integer."))
 		return
 	}
 
-	if intervalSeconds <= 0 {
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("intervalSeconds must be greater than 0"))
+	if intervalDays <= 0 {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("intervalDays must be greater than 0"))
 		return
 	}
 
 	metricService := metric.NewMetricService()
-	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFrom, dateTo, intervalSeconds)
+	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFrom, dateTo, intervalDays)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get completed tasks count by interval")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by interval"))
@@ -1475,10 +1491,10 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 	}
 
 	response := metric.CompletedTasksIntervalResponse{
-		IntervalSeconds: intervalSeconds,
-		DateFrom:        dateFrom,
-		DateTo:          dateTo,
-		DataPoints:      dataPoints,
+		IntervalDays: intervalDays,
+		DateFrom:     dateFrom,
+		DateTo:       dateTo,
+		DataPoints:   dataPoints,
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
