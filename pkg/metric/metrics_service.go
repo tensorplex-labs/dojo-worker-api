@@ -147,9 +147,21 @@ func (metricService *MetricService) UpdateAvgTaskCompletionTime(ctx context.Cont
 		return err
 	}
 
+	// Check if there are any events to prevent divide by zero
+	if len(events) == 0 {
+		log.Warn().Msg("No task completion events found, skipping average calculation")
+		return nil
+	}
+
 	totalCompletionTime, err := CalculateTotalTaskCompletionTime(events)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to calculate total task completion time")
+		return err
+	}
+
+	// Add null check for totalCompletionTime
+	if totalCompletionTime == nil {
+		log.Error().Msg("Total completion time is nil")
 		return err
 	}
 
