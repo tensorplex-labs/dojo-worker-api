@@ -175,8 +175,9 @@ func (c ScoreCriteria) Validate() error {
 
 // Validate for TextCriteria
 func (t TextCriteria) Validate() error {
-	if t.TextFeedback == "" {
-		return errors.New("text feedback is required")
+	// TODO: Add sanitization and max length for query
+	if t.Query == "" {
+		return fmt.Errorf("query is required for text criteria")
 	}
 	return nil
 }
