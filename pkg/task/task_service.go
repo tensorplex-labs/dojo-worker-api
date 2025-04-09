@@ -397,6 +397,7 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 			return fmt.Errorf("invalid text criteria type")
 		}
 
+		// TODO: Add sanitization and max length for text feedback
 		if submitted.TextFeedback == "" {
 			return fmt.Errorf("text feedback is required")
 		}
