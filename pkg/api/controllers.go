@@ -497,7 +497,7 @@ func GetTaskByIdController(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			Authorization	header		string									true	"Bearer token"
-//	@Param			task			query		string									true	"Comma-separated list of task types (e.g., CODE_GENERATION,TEXT_TO_IMAGE,DIALOGUE). Use 'All' to include all types."
+//	@Param			task			query		string									true	"Comma-separated list of task types (e.g., CODE_GENERATION,IMAGE,THREE_D). Use 'All' to include all types."
 //	@Param			page			query		int										false	"Page number (default is 1)"
 //	@Param			limit			query		int										false	"Number of tasks per page (default is 10)"
 //	@Param			sort			query		string									false	"Sort field (default is createdAt)"
@@ -535,14 +535,14 @@ func GetTasksByPageController(c *gin.Context) {
 		return
 	}
 	// Split the string into a slice of strings
-	taskTypes := strings.Split(taskParam, ",")
-	if len(taskTypes) == 0 {
+	taskModalities := strings.Split(taskParam, ",")
+	if len(taskModalities) == 0 {
 		c.JSON(http.StatusBadRequest, defaultErrorResponse("task parameter is required"))
 		return
 	}
 
-	if len(taskTypes) == 1 && taskTypes[0] == "All" {
-		taskTypes = []string{"CODE_GENERATION", "TEXT_TO_IMAGE", "DIALOGUE", "TEXT_TO_THREE_D"}
+	if len(taskModalities) == 1 && taskModalities[0] == "All" {
+		taskModalities = []string{"CODE_GENERATION", "IMAGE", "THREE_D"}
 	}
 
 	// Parsing "page" and "limit" as integers with default values
@@ -576,11 +576,11 @@ func GetTasksByPageController(c *gin.Context) {
 	}
 
 	paginationParams := task.PaginationParams{
-		Page:  page,
-		Limit: limit,
-		Sort:  sort,
-		Types: taskTypes,
-		Order: order,
+		Page:       page,
+		Limit:      limit,
+		Sort:       sort,
+		Modalities: taskModalities,
+		Order:      order,
 	}
 
 	// fetching tasks by pagination
@@ -591,7 +591,7 @@ func GetTasksByPageController(c *gin.Context) {
 		errorDetails := make([]string, 0)
 		for _, err := range taskErrors {
 			errorDetails = append(errorDetails, err.Error())
-			if _, ok := err.(*task.ErrInvalidTaskType); ok {
+			if _, ok := err.(*task.ErrInvalidTaskModality); ok {
 				isBadRequest = true
 			}
 		}
@@ -1406,4 +1406,80 @@ func GetNextInProgressTaskController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.NextTaskResponse{NextInProgressTaskId: taskData.ID}))
+}
+
+// GetCompletedTasksCountByIntervalController godoc
+//
+//	@Summary		Get the number of completed tasks over time intervals
+//	@Description	Retrieves the number of completed tasks for each interval between dateFrom and dateTo, using Unix timestamps
+//	@Tags			Metrics
+//	@Produce		json
+//	@Param			dateFrom		query		integer	true	"Start timestamp as Unix timestamp (seconds since epoch). Minimum allowed is October 1, 2024 (1727798400)"
+//	@Param			dateTo			query		integer	true	"End timestamp as Unix timestamp (seconds since epoch). Maximum allowed is current date"
+//	@Param			intervalDays	query		int		true	"Interval in days"
+//	@Success		200				{object}	ApiResponse{body=metric.CompletedTasksIntervalResponse}	"Completed tasks by interval retrieved successfully. All timestamp fields are Unix timestamps (seconds since epoch)"
+//	@Failure		400				{object}	ApiResponse											"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse											"Failed to get completed tasks count"
+//	@Router			/metrics/completed-tasks-by-interval [get]
+func GetCompletedTasksCountByIntervalController(c *gin.Context) {
+	dateFromStr := c.Query("dateFrom")
+	dateToStr := c.Query("dateTo")
+	intervalDaysStr := c.Query("intervalDays")
+
+	// Validate required parameters
+	if dateFromStr == "" || dateToStr == "" || intervalDaysStr == "" {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Required parameters: dateFrom, dateTo, and intervalDays"))
+		return
+	}
+
+	// Parse Unix timestamps
+	dateFromUnix, err := strconv.ParseInt(dateFromStr, 10, 64)
+	if err != nil {
+		log.Error().Err(err).Str("dateFrom", dateFromStr).Msg("Invalid dateFrom format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateFrom format. Use Unix timestamp (seconds since epoch)"))
+		return
+	}
+
+	dateToUnix, err := strconv.ParseInt(dateToStr, 10, 64)
+	if err != nil {
+		log.Error().Err(err).Str("dateTo", dateToStr).Msg("Invalid dateTo format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid dateTo format. Use Unix timestamp (seconds since epoch)"))
+		return
+	}
+
+	// Ensure dateFrom is before dateTo
+	if dateFromUnix >= dateToUnix {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("dateFrom must be before dateTo"))
+		return
+	}
+
+	// Parse intervalDays
+	intervalDays, err := strconv.Atoi(intervalDaysStr)
+	if err != nil {
+		log.Error().Err(err).Str("intervalDays", intervalDaysStr).Msg("Invalid intervalDays")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid intervalDays parameter. Must be a positive integer."))
+		return
+	}
+
+	if intervalDays <= 0 {
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("intervalDays must be greater than 0"))
+		return
+	}
+
+	metricService := metric.NewMetricService()
+	dataPoints, err := metricService.GetCompletedTasksCountByInterval(c, dateFromUnix, dateToUnix, intervalDays)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get completed tasks count by interval")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get completed tasks count by interval"))
+		return
+	}
+
+	response := metric.CompletedTasksIntervalResponse{
+		IntervalDays: intervalDays,
+		DateFrom:     dateFromUnix,
+		DateTo:       dateToUnix,
+		DataPoints:   dataPoints,
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }

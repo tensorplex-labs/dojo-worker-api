@@ -34,11 +34,10 @@ enum TaskResultStatus {
     INVALID
 }
 
-enum TaskType {
+enum TaskModality {
     CODE_GENERATION
-    DIALOGUE
-    TEXT_TO_IMAGE
-    TEXT_TO_THREE_D
+    IMAGE
+    THREE_D
 }
 
 model ApiKey {
@@ -83,7 +82,7 @@ model Task {
     expire_at     DateTime
     title         String
     body          String
-    type          TaskType
+    modality      TaskModality
     task_data     Json
     status        TaskStatus
     max_results   Int

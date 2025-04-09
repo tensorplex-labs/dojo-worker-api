@@ -1,5 +1,9 @@
 package metric
 
+import (
+	"time"
+)
+
 type DojoWorkerCountResponse struct {
 	NumDojoWorkers int `json:"numDojoWorkers"`
 }
@@ -32,4 +36,23 @@ type MetricTaskResultsCount struct {
 
 type MetricAvgTaskCompletionTime struct {
 	AverageTaskCompletionTime int `json:"average_task_completion_time"`
+}
+
+type CompletedTasksByTimestampResponse struct {
+	Timestamp         time.Time `json:"timestamp"`
+	NumCompletedTasks int       `json:"numCompletedTasks"`
+}
+
+// IntervalDataPoint represents a single data point with timestamp and count
+type IntervalDataPoint struct {
+	Timestamp         int64 `json:"timestamp"`
+	NumCompletedTasks int   `json:"numCompletedTasks"`
+}
+
+// CompletedTasksIntervalResponse represents the response for interval-based task completion metrics
+type CompletedTasksIntervalResponse struct {
+	IntervalDays int                 `json:"intervalDays"`
+	DateFrom     int64               `json:"dateFrom"`
+	DateTo       int64               `json:"dateTo"`
+	DataPoints   []IntervalDataPoint `json:"dataPoints"`
 }

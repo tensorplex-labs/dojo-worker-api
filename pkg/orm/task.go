@@ -37,7 +37,7 @@ func (o *TaskORM) CreateTask(ctx context.Context, task db.InnerTask, minerUserId
 		db.Task.ExpireAt.Set(task.ExpireAt),
 		db.Task.Title.Set(task.Title),
 		db.Task.Body.Set(task.Body),
-		db.Task.Type.Set(task.Type),
+		db.Task.Modality.Set(task.Modality),
 		db.Task.TaskData.Set(task.TaskData),
 		db.Task.Status.Set(task.Status),
 		db.Task.MaxResults.Set(task.MaxResults),
@@ -80,7 +80,7 @@ func (o *TaskORM) GetById(ctx context.Context, taskId string) (*db.TaskModel, er
 }
 
 // Modified GetTasksByWorkerSubscription with caching
-func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskTypes []db.TaskType) ([]db.TaskModel, int, error) {
+func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId string, offset, limit int, sortQuery db.TaskOrderByParam, taskModalities []db.TaskModality) ([]db.TaskModel, int, error) {
 	var tasks []db.TaskModel
 
 	// Cache miss, proceed with database query
@@ -116,8 +116,8 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		),
 	}
 
-	if len(taskTypes) > 0 {
-		filterParams = append(filterParams, db.Task.Type.In(taskTypes))
+	if len(taskModalities) > 0 {
+		filterParams = append(filterParams, db.Task.Modality.In(taskModalities))
 	}
 
 	tasks, err = o.dbClient.Task.FindMany(
@@ -131,7 +131,7 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 		return nil, 0, err
 	}
 
-	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskTypes, subscriptionKeys)
+	totalTasks, err := o.countTasksByWorkerSubscription(ctx, taskModalities, subscriptionKeys)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error fetching total tasks for worker ID %v", workerId)
 		return nil, 0, err
@@ -144,10 +144,10 @@ func (o *TaskORM) GetTasksByWorkerSubscription(ctx context.Context, workerId str
 
 // This function uses raw queries to calculate count(*) since this functionality is missing from the prisma go client
 // and using findMany with the filter params and then len(tasks) is facing performance issues
-func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes []db.TaskType, subscriptionKeys []string) (int, error) {
-	var taskTypesParam []string
-	for _, taskType := range taskTypes {
-		taskTypesParam = append(taskTypesParam, string(taskType))
+func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskModalities []db.TaskModality, subscriptionKeys []string) (int, error) {
+	var taskModalitiesParam []string
+	for _, taskModality := range taskModalities {
+		taskModalitiesParam = append(taskModalitiesParam, string(taskModality))
 	}
 
 	validSubscriptionKeys := make([]string, 0)
@@ -173,8 +173,8 @@ func (o *TaskORM) countTasksByWorkerSubscription(ctx context.Context, taskTypes 
 	mainQuery := sq.Select("count(*) as total_tasks").
 		From("\"Task\"").
 		Where(sq.Expr(fmt.Sprintf("miner_user_id IN (%s)", subQuery), subQueryArgs...)).
-		// need to do this since TaskType is a custom prisma enum type
-		Where(sq.Expr(fmt.Sprintf("type in ('%s')", strings.Join(taskTypesParam, "', '")))).
+		// need to do this since TaskModality is a custom prisma enum type
+		Where(sq.Expr(fmt.Sprintf("modality in ('%s')", strings.Join(taskModalitiesParam, "', '")))).
 		PlaceholderFormat(sq.Dollar)
 
 	sql, args, err := mainQuery.ToSql()
@@ -371,4 +371,101 @@ func (o *TaskORM) GetNextInProgressTask(ctx context.Context, taskId string, work
 	}
 
 	return nextTask, nil
+}
+
+// GetCompletedTasksCountByIntervals efficiently fetches task counts for multiple intervals in a single query
+func (o *TaskORM) GetCompletedTasksCountByIntervals(ctx context.Context, fromUnix, toUnix int64, intervalDays int) ([]struct {
+	IntervalEnd int64 `json:"interval_end"`
+	Count       int   `json:"count"`
+}, error) {
+	o.clientWrapper.BeforeQuery()
+	defer o.clientWrapper.AfterQuery()
+
+	// Set minimum dateFrom to October 1, 2024 (Unix timestamp: 1727798400)
+	minDateUnix := int64(1727798400) // Oct 1, 2024 00:00:00 UTC
+	if fromUnix < minDateUnix {
+		fromUnix = minDateUnix
+	}
+
+	// Restrict dateTo to current date (now)
+	currentUnix := time.Now().UTC().Unix()
+	if toUnix > currentUnix {
+		toUnix = currentUnix
+	}
+
+	// Convert Unix timestamps to time.Time only for database query
+	// as PostgreSQL needs timestamptz for generate_series
+	fromTime := time.Unix(fromUnix, 0).UTC()
+	toTime := time.Unix(toUnix, 0).UTC()
+
+	// Build a more efficient query using window functions to count tasks in each interval
+	var result []struct {
+		IntervalEnd db.RawString `json:"interval_end"`
+		Count       db.RawString `json:"count"`
+	}
+
+	query := `
+WITH intervals AS (
+  SELECT
+    generate_series(
+      $1::timestamptz,
+      $2::timestamptz,
+      ($3 || ' days')::interval
+    )::timestamptz AS interval_end
+),
+interval_counts AS (
+  SELECT
+    intervals.interval_end,
+    (SELECT COUNT(*) FROM "Task" WHERE status = 'COMPLETED' AND updated_at <= intervals.interval_end) AS total_count
+  FROM
+    intervals
+  ORDER BY
+    intervals.interval_end
+)
+SELECT
+  EXTRACT(EPOCH FROM interval_counts.interval_end)::bigint AS interval_end,
+  total_count::text AS count
+FROM
+  interval_counts;
+`
+	// Execute the query
+	err := o.clientWrapper.Client.Prisma.QueryRaw(
+		query,
+		fromTime,
+		toTime,
+		strconv.Itoa(intervalDays),
+	).Exec(ctx, &result)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute interval count query: %w", err)
+	}
+
+	// Parse the results directly to int64 timestamps
+	parsed := make([]struct {
+		IntervalEnd int64 `json:"interval_end"`
+		Count       int   `json:"count"`
+	}, 0, len(result))
+
+	for _, r := range result {
+		// Parse the Unix timestamp (seconds since epoch)
+		intervalUnix, err := strconv.ParseInt(string(r.IntervalEnd), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse unix timestamp: %w", err)
+		}
+
+		count, err := strconv.Atoi(string(r.Count))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse count: %w", err)
+		}
+
+		parsed = append(parsed, struct {
+			IntervalEnd int64 `json:"interval_end"`
+			Count       int   `json:"count"`
+		}{
+			IntervalEnd: intervalUnix,
+			Count:       count,
+		})
+	}
+
+	return parsed, nil
 }
