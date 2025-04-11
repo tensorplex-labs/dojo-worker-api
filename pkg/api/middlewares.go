@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -347,5 +348,35 @@ func MinerCookieAuthMiddleware() gin.HandlerFunc {
 		log.Info().Msgf("Cookie validated successfully for hotkey %v, session id %v", session.Hotkey, session.SessionId)
 		c.Set("session", session)
 		c.Next()
+	}
+}
+
+func ResourceProfiler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var startMemStats runtime.MemStats
+		runtime.ReadMemStats(&startMemStats)
+
+		startTime := time.Now()
+		c.Next()
+
+		var endMemStats runtime.MemStats
+		runtime.ReadMemStats(&endMemStats)
+
+		duration := time.Since(startTime)
+
+		var memoryAllocated uint64
+		if endMemStats.Alloc > startMemStats.Alloc {
+			memoryAllocated = endMemStats.Alloc - startMemStats.Alloc
+		} else {
+			memoryAllocated = endMemStats.Alloc
+		}
+
+		memoryAllocatedMB := float64(memoryAllocated) / (1048576.0)
+
+		log.Info().Msgf("Request %s took %s and allocated %.2f MB of memory", c.Request.URL.Path, duration, memoryAllocatedMB)
+
+		// see if we wanna store in context
+		c.Set("executionTime", duration)
+		c.Set("memoryAllocated", memoryAllocated)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"dojo-api/db"
 	"dojo-api/pkg/auth"
+	"dojo-api/pkg/event"
 	"dojo-api/pkg/metric"
 	"dojo-api/pkg/miner"
 	"dojo-api/utils"
@@ -70,7 +71,7 @@ func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) mi
 
 func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 	metricService := metric.NewMetricService()
-	// eventService := event.NewEventService()
+	eventService := event.NewEventService()
 	ctx := context.Background()
 
 	// Always update total task results count
@@ -97,25 +98,25 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 	// Handle task completion events and metrics
 	// TODO: reconsider this logic for task completion events, and avg task completion time
 	// TODO: Re-enable this logic for testing not breaking anymore
-	// if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
-	// 	go func() {
-	// 		// Update the task completion event
-	// 		if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
-	// 			log.Error().Err(err).Msg("Failed to create task completion event")
-	// 		} else {
-	// 			log.Info().Msg("Created task completion event")
-	// 		}
-	// 	}()
+	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
+		go func() {
+			// Update the task completion event
+			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+				log.Error().Err(err).Msg("Failed to create task completion event")
+			} else {
+				log.Info().Msg("Created task completion event")
+			}
+		}()
 
-	// 	go func() {
-	// 		// Update the avg task completion
-	// 		if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
-	// 			log.Error().Err(err).Msg("Failed to update average task completion time")
-	// 		} else {
-	// 			log.Info().Msg("Updated average task completion time")
-	// 		}
-	// 	}()
-	// }
+		go func() {
+			// Update the avg task completion
+			if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to update average task completion time")
+			} else {
+				log.Info().Msg("Updated average task completion time")
+			}
+		}()
+	}
 }
 
 // Get the user's IP address from the gin request headers
