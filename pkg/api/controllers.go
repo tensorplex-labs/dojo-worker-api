@@ -303,7 +303,7 @@ func SubmitTaskResultController(c *gin.Context) {
 	cache.DeleteWithSuffix(cache.Keys.TaskResultByWorker, worker.ID)
 
 	// Update the metric data with goroutine
-	handleMetricData(taskData, updatedTask, ctx)
+	handleMetricData(taskData, updatedTask)
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(task.SubmitTaskResultResponse{
 		NumResults: updatedTask.NumResults,
