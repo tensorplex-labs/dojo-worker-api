@@ -69,10 +69,10 @@ func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) mi
 	}
 }
 
-func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel, requestCtx context.Context) {
+func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 	metricService := metric.NewMetricService()
 	eventService := event.NewEventService()
-	ctx, cancel := context.WithTimeout(requestCtx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	// Always update total task results count
 	go func() {
