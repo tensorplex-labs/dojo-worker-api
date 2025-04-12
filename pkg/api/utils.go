@@ -69,17 +69,22 @@ func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) mi
 	}
 }
 
-func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
+func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel, requestCtx context.Context) {
 	metricService := metric.NewMetricService()
 	eventService := event.NewEventService()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(requestCtx, 30*time.Second)
 
 	// Always update total task results count
 	go func() {
+		defer cancel()
 		startTime := time.Now()
 
 		totalUpdateStart := time.Now()
 		if err := metricService.UpdateTotalTaskResultsCount(ctx); err != nil {
+			if ctx.Err() != nil {
+				log.Warn().Msg("Context deadline exceeded while updating total task results count")
+				return
+			}
 			log.Error().Err(err).Msg("Failed to update total tasks results count")
 		} else {
 			log.Info().Msg("Updated total task results count")
@@ -92,6 +97,10 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 		completedTaskDurationStart := time.Now()
 		if updatedTask.NumResults == 1 {
 			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while updating completed task count")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to update completed task count")
 			} else {
 				log.Info().Msg("Updated completed task count")
@@ -107,6 +116,10 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 			// Update the task completion event
 			taskCompletionEventStart := time.Now()
 			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while creating task completion event")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to create task completion event")
 			} else {
 				log.Info().Msg("Created task completion event")
@@ -116,6 +129,10 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 			// Update the avg task completion
 			avgTaskCompletionStart := time.Now()
 			if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while updating average task completion time")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to update average task completion time")
 			} else {
 				log.Info().Msg("Updated average task completion time")
