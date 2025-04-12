@@ -54,7 +54,7 @@ func (o *EventsORM) GetAverageTaskCompletionTime(ctx context.Context) (int, erro
 	defer o.clientWrapper.AfterQuery()
 
 	var avgTime int
-	query := `SELECT AVG(CAST(events_data->>'task_completion_time' AS INTEGER)) FROM "Events" WHERE type = 'task_completion_time'`
+	query := `SELECT AVG(CAST(events_data->>'task_completion_time' AS INTEGER)) FROM "Events" WHERE type = 'TASK_COMPLETION_TIME'`
 
 	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &avgTime)
 	if err != nil {
