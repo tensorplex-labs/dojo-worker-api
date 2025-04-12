@@ -4,6 +4,7 @@ import (
 	"context"
 	"dojo-api/db"
 	"encoding/json"
+	"strconv"
 )
 
 // import cycle not allowed
@@ -53,13 +54,20 @@ func (o *EventsORM) GetAverageTaskCompletionTime(ctx context.Context) (int, erro
 	o.clientWrapper.BeforeQuery()
 	defer o.clientWrapper.AfterQuery()
 
-	var avgTime int
-	query := `SELECT AVG(CAST(events_data->>'task_completion_time' AS INTEGER)) FROM "Events" WHERE type = 'TASK_COMPLETION_TIME'`
+	var results []struct {
+		Avg string `json:"avg"`
+	}
+	query := `SELECT AVG(CAST(events_data->>'task_completion_time' AS INTEGER)) as avg FROM "Events" WHERE type = 'TASK_COMPLETION_TIME'`
 
-	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &avgTime)
+	err := o.clientWrapper.Client.Prisma.QueryRaw(query).Exec(ctx, &results)
 	if err != nil {
 		return 0, err
 	}
 
-	return avgTime, nil
+	avgTime, err := strconv.ParseFloat(results[0].Avg, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(avgTime), nil
 }
