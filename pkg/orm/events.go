@@ -48,3 +48,15 @@ func (o *EventsORM) GetEventsByType(ctx context.Context, eventType db.EventsType
 
 	return events, nil
 }
+
+func (o *EventsORM) GetAverageTaskCompletionTime(ctx context.Context) (int, error) {
+	var avgTime int
+	query := `SELECT AVG(CAST(events_data->>'task_completion_time' AS INTEGER)) FROM "Events" WHERE type = 'task_completion_time'`
+
+	err := o.dbClient.QueryRow(ctx, query, db.EventsTypeTaskCompletionTime).Scan(&avgTime)
+	if err != nil {
+		return 0, err
+	}
+
+	return avgTime, nil
+}
