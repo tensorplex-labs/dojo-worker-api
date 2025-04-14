@@ -111,7 +111,6 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 
 		// Handle task completion events and metrics
 		// TODO: reconsider this logic for task completion events, and avg task completion time
-		// TODO: Re-enable this logic for testing not breaking anymore
 		if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
 			// Update the task completion event
 			taskCompletionEventStart := time.Now()
