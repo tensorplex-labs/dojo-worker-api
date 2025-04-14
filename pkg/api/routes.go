@@ -9,21 +9,20 @@ import (
 func LoginRoutes(router *gin.Engine) {
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	apiV1 := router.Group("/api/v1")
+	apiV1.Use(ResourceProfiler())
 	{
 		worker := apiV1.Group("/worker")
 		{
 			worker.Use(WorkerRateLimiter())
-			worker.Use(ResourceProfiler())
 			worker.POST("/login/auth", WorkerLoginMiddleware(), WorkerLoginController)
 			worker.POST("/partner", WorkerAuthMiddleware(), WorkerPartnerCreateController)
 			worker.PUT("/partner/disable", WorkerAuthMiddleware(), DisableMinerByWorkerController)
 			worker.GET("/partner/list", WorkerAuthMiddleware(), GetWorkerPartnerListController)
 		}
-		apiV1.GET("/auth/:address", GeneralRateLimiter(), ResourceProfiler(), GenerateNonceController)
-		apiV1.PUT("/partner/edit", GeneralRateLimiter(), ResourceProfiler(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
+		apiV1.GET("/auth/:address", GeneralRateLimiter(), GenerateNonceController)
+		apiV1.PUT("/partner/edit", GeneralRateLimiter(), WorkerAuthMiddleware(), UpdateWorkerPartnerController)
 		tasks := apiV1.Group("/tasks")
 		{
-			tasks.Use(ResourceProfiler())
 			tasks.PUT("/submit-result/:task-id", WorkerAuthMiddleware(), SubmitTaskResultController)
 			// TODO: re-enable InMetagraphOnly(), and rate limiter in future
 			tasks.POST("/create-tasks", MinerAuthMiddleware(), CreateTasksController)
@@ -35,7 +34,6 @@ func LoginRoutes(router *gin.Engine) {
 
 		miner := apiV1.Group("/miner")
 		{
-			miner.Use(ResourceProfiler())
 			miner.POST("/session/auth", GeneralRateLimiter(), GenerateCookieAuth)
 
 			apiKeyGroup := miner.Group("/api-key")
@@ -56,7 +54,6 @@ func LoginRoutes(router *gin.Engine) {
 		}
 		metrics := apiV1.Group("/metrics")
 		{
-			metrics.Use(ResourceProfiler())
 			metrics.Use(MetricsRateLimiter())
 			metrics.GET("/dojo-worker-count", GetDojoWorkerCountController)
 			metrics.GET("/completed-tasks-count", GetTotalCompletedTasksController)
