@@ -144,41 +144,6 @@ func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 		endTime := time.Since(startTime)
 		log.Info().Msg("Metric data update duration: " + endTime.String())
 	}()
-
-	// Only update completed task count when task gets its first result
-	// TODO: need to consider race condition
-	// if updatedTask.NumResults == 1 {
-	// 	go func() {
-	// 		if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
-	// 			log.Error().Err(err).Msg("Failed to update completed task count")
-	// 		} else {
-	// 			log.Info().Msg("Updated completed task count")
-	// 		}
-	// 	}()
-	// }
-
-	// Handle task completion events and metrics
-	// TODO: reconsider this logic for task completion events, and avg task completion time
-	// TODO: Re-enable this logic for testing not breaking anymore
-	// if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
-	// 	go func() {
-	// 		// Update the task completion event
-	// 		if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
-	// 			log.Error().Err(err).Msg("Failed to create task completion event")
-	// 		} else {
-	// 			log.Info().Msg("Created task completion event")
-	// 		}
-	// 	}()
-
-	// 	go func() {
-	// 		// Update the avg task completion
-	// 		if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
-	// 			log.Error().Err(err).Msg("Failed to update average task completion time")
-	// 		} else {
-	// 			log.Info().Msg("Updated average task completion time")
-	// 		}
-	// 	}()
-	// }
 }
 
 // Get the user's IP address from the gin request headers
