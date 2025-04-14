@@ -297,7 +297,7 @@ func (t *TaskService) UpdateTaskResults(ctx context.Context, task *db.TaskModel,
 	}
 
 	// Process and scale the scores
-	processedResults, err := ProcessScores(validatedResults, task)
+	processedResults, err := ProcessResults(validatedResults, task)
 	if err != nil {
 		log.Error().Err(err).Msg("Error processing scores")
 		return nil, err
@@ -397,6 +397,7 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 			return fmt.Errorf("invalid text criteria type")
 		}
 
+		// TODO: Add sanitization and max length for text feedback
 		if submitted.TextFeedback == "" {
 			return fmt.Errorf("text feedback is required")
 		}
@@ -408,7 +409,7 @@ func validateCriteria(criteria Criteria, criteriaMap map[CriteriaType]Criteria) 
 	return nil
 }
 
-func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
+func ProcessResults(results []Result, task *db.TaskModel) ([]Result, error) {
 	var taskData TaskData
 	err := json.Unmarshal(task.TaskData, &taskData)
 	if err != nil {
@@ -450,6 +451,17 @@ func ProcessScores(results []Result, task *db.TaskModel) ([]Result, error) {
 					Min:        taskCriteria.Min,
 					Max:        taskCriteria.Max,
 					MinerScore: scaledScore,
+				}
+			case CriteriaTypeText:
+				submitted, ok := submittedCriteria.(TextCriteria)
+				if !ok {
+					return nil, fmt.Errorf("invalid text criteria type for model %s", result.Model)
+				}
+
+				results[i].Criteria[j] = TextCriteria{
+					Type:         CriteriaTypeText,
+					Query:        submitted.Query,
+					TextFeedback: submitted.TextFeedback,
 				}
 			}
 		}
@@ -670,6 +682,10 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 }
 
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
+	if len(files) == 0 {
+		log.Info().Msg("No files to upload")
+		return requestBody, nil
+	}
 	publicURL := os.Getenv("S3_PUBLIC_URL")
 	if publicURL == "" {
 		log.Error().Msg("S3_PUBLIC_URL not set")

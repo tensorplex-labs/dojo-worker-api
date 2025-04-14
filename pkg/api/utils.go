@@ -72,50 +72,77 @@ func buildSubscriptionKeyResponse(subScriptionKeys []db.SubscriptionKeyModel) mi
 func handleMetricData(currentTask *db.TaskModel, updatedTask *db.TaskModel) {
 	metricService := metric.NewMetricService()
 	eventService := event.NewEventService()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	// Always update total task results count
 	go func() {
+		defer cancel()
+		startTime := time.Now()
+
+		totalUpdateStart := time.Now()
 		if err := metricService.UpdateTotalTaskResultsCount(ctx); err != nil {
+			if ctx.Err() != nil {
+				log.Warn().Msg("Context deadline exceeded while updating total task results count")
+				return
+			}
 			log.Error().Err(err).Msg("Failed to update total tasks results count")
 		} else {
 			log.Info().Msg("Updated total task results count")
+			totalUpdateDuration := time.Since(totalUpdateStart)
+			log.Info().Msg("Total task results count update duration: " + totalUpdateDuration.String())
 		}
-	}()
 
-	// Only update completed task count when task gets its first result
-	// TODO: need to consider race condition
-	if updatedTask.NumResults == 1 {
-		go func() {
+		// Only update completed task count when task gets its first result
+		// TODO: need to consider race condition
+		completedTaskDurationStart := time.Now()
+		if updatedTask.NumResults == 1 {
 			if err := metricService.UpdateCompletedTaskCount(ctx); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while updating completed task count")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to update completed task count")
 			} else {
 				log.Info().Msg("Updated completed task count")
+				completedTaskDuration := time.Since(completedTaskDurationStart)
+				log.Info().Msg("Completed task count update duration: " + completedTaskDuration.String())
 			}
-		}()
-	}
+		}
 
-	// Handle task completion events and metrics
-	// TODO: reconsider this logic for task completion events, and avg task completion time
-	if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
-		go func() {
+		// Handle task completion events and metrics
+		// TODO: reconsider this logic for task completion events, and avg task completion time
+		if (currentTask.Status != db.TaskStatusCompleted) && updatedTask.Status == db.TaskStatusCompleted {
 			// Update the task completion event
+			taskCompletionEventStart := time.Now()
 			if err := eventService.CreateTaskCompletionEvent(ctx, *updatedTask); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while creating task completion event")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to create task completion event")
 			} else {
 				log.Info().Msg("Created task completion event")
+				taskCompletionEvent := time.Since(taskCompletionEventStart)
+				log.Info().Msg("Task completion event update duration: " + taskCompletionEvent.String())
 			}
-		}()
-
-		go func() {
 			// Update the avg task completion
+			avgTaskCompletionStart := time.Now()
 			if err := metricService.UpdateAvgTaskCompletionTime(ctx); err != nil {
+				if ctx.Err() != nil {
+					log.Warn().Msg("Context deadline exceeded while updating average task completion time")
+					return
+				}
 				log.Error().Err(err).Msg("Failed to update average task completion time")
 			} else {
 				log.Info().Msg("Updated average task completion time")
+				avgTaskCompletionDuration := time.Since(avgTaskCompletionStart)
+				log.Info().Msg("Avg task completion time update duration: " + avgTaskCompletionDuration.String())
 			}
-		}()
-	}
+		}
+
+		endTime := time.Since(startTime)
+		log.Info().Msg("Metric data update duration: " + endTime.String())
+	}()
 }
 
 // Get the user's IP address from the gin request headers
