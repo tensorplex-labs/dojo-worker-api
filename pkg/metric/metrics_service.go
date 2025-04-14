@@ -141,31 +141,13 @@ func (metricService *MetricService) UpdateAvgTaskCompletionTime(ctx context.Cont
 	eventORM := orm.NewEventsORM()
 	metricORM := orm.NewMetricsORM()
 
-	events, err := eventORM.GetEventsByType(ctx, db.EventsTypeTaskCompletionTime)
+	// calculate average task completion time directly in db
+	avgCompletionTime, err := eventORM.GetAverageTaskCompletionTime(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get task completion time events")
+		log.Error().Err(err).Msg("Failed to get average task completion time")
 		return err
 	}
 
-	// Check if there are any events to prevent divide by zero
-	if len(events) == 0 {
-		log.Warn().Msg("No task completion events found, skipping average calculation")
-		return nil
-	}
-
-	totalCompletionTime, err := CalculateTotalTaskCompletionTime(events)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to calculate total task completion time")
-		return err
-	}
-
-	// Add null check for totalCompletionTime
-	if totalCompletionTime == nil {
-		log.Error().Msg("Total completion time is nil")
-		return err
-	}
-
-	avgCompletionTime := *totalCompletionTime / len(events)
 	newMetricData := MetricAvgTaskCompletionTime{AverageTaskCompletionTime: avgCompletionTime}
 	log.Info().Interface("AvgTaskCompletionTime", newMetricData).Msg("Updating average task completion time metric")
 

@@ -682,6 +682,10 @@ func ProcessRequestBody(c *gin.Context) (CreateTaskRequest, error) {
 }
 
 func ProcessFileUpload(requestBody CreateTaskRequest, files []*multipart.FileHeader) (CreateTaskRequest, error) {
+	if len(files) == 0 {
+		log.Info().Msg("No files to upload")
+		return requestBody, nil
+	}
 	publicURL := os.Getenv("S3_PUBLIC_URL")
 	if publicURL == "" {
 		log.Error().Msg("S3_PUBLIC_URL not set")

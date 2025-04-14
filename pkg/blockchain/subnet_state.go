@@ -164,7 +164,7 @@ func (s *SubnetStateSubscriber) GetSubnetState(subnetId int) *SubnetState {
 				log.Trace().Msgf("AxonInfo empty hotkey, %+v", currParticipant)
 				return
 			}
-			stake, err := s.substrateService.TotalHotkeyStake(currParticipant.Hotkey, subnetId)
+			stake, err := s.substrateService.TotalHotkeyAlpha(currParticipant.Hotkey, subnetId)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting total hotkey stake")
 				return

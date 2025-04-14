@@ -12,7 +12,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -143,13 +142,6 @@ func (s *SubstrateService) GetStorageRequest(path string, params url.Values) (*S
 		}
 
 		lastErr = err
-
-		// Check for TotalHotkeyStake not found error - no need to retry instead try TotalHotkeyAlpha
-		// TODO: this is a temporary fix, we can just use TotalHotkeyAlpha in the future when dTAO is live
-		if strings.Contains(err.Error(), "Could not find storage item (\\\"totalHotkeyStake\\\") in metadata") {
-			log.Debug().Err(err).Msg("TotalHotkeyStake not found, trying TotalHotkeyAlpha")
-			return nil, err
-		}
 
 		// Don't sleep on the last attempt
 		if attempt < maxRetries {
@@ -371,28 +363,21 @@ func (s *SubstrateService) CheckIsRegistered(subnetUid int, hotkey string) (bool
 	return storageResponseValue, nil
 }
 
-func (s *SubstrateService) TotalHotkeyStake(hotkey string, subnetId int) (float64, error) {
+func (s *SubstrateService) TotalHotkeyAlpha(hotkey string, subnetId int) (float64, error) {
 	cacheKey := fmt.Sprintf(CacheKeyTotalStakeTemplate, hotkey)
 	cachedTotalStake, err := getCachedData[float64](s.cache, cacheKey)
 	if err == nil && cachedTotalStake != nil {
 		return *cachedTotalStake, nil
 	}
 
-	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyStake", s.substrateApiUrl)
+	path := fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyAlpha", s.substrateApiUrl)
 	params := url.Values{}
 	params.Add("keys[]", hotkey)
+	params.Add("keys[]", strconv.Itoa(subnetId))
 	storageResponse, err := s.GetStorageRequest(path, params)
-
-	// If first attempt fails, try TotalHotkeyAlpha
-	if err != nil || storageResponse == nil || storageResponse.Value == nil {
-		log.Debug().Msgf("TotalHotkeyStake not found for %s, trying TotalHotkeyAlpha", hotkey)
-		path = fmt.Sprintf("%s/pallets/subtensorModule/storage/TotalHotkeyAlpha", s.substrateApiUrl)
-		params.Add("keys[]", strconv.Itoa(subnetId))
-		storageResponse, err = s.GetStorageRequest(path, params)
-		if err != nil {
-			log.Error().Err(err).Msgf("Error getting total hotkey stake for hotkey %s from both endpoints", hotkey)
-			return 0, err
-		}
+	if err != nil {
+		log.Error().Err(err).Msgf("Error getting total hotkey alpha stake for hotkey %s", hotkey)
+		return 0, err
 	}
 
 	totalHotkeyStake, err := strconv.Atoi(storageResponse.Value.(string))
