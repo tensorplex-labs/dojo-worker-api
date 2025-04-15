@@ -24,14 +24,14 @@ var (
 	clientExpiry time.Time
 
 	// Concurrency limiter for Athena queries
-	// Fixed at 20 concurrent queries to prevent overwhelming the Athena service
-	queryLimiter = make(chan struct{}, 2)
+	// Fixed at 40 concurrent queries to prevent overwhelming the Athena service
+	queryLimiter = make(chan struct{}, 40)
 )
 
-// TTL of 30 minutes is reasonable for read-only operations
+// To create new Athena client after 30 minutes of inactivity for new queries
 const clientCacheTTL = 30 * time.Minute
 
-// Parameter represents a named parameter for Athena queries
+// Struct for named parameters for Athena queries
 type Parameter struct {
 	Name  string
 	Value any
@@ -78,6 +78,8 @@ func getClient(ctx context.Context) (*athena.Client, *utils.AthenaConfig, error)
 // ExecuteAthenaQuery executes a query in AWS Athena and returns the results.
 // It handles query execution, polling for completion, and retrieving results.
 // This function respects the concurrent query limit.
+//
+// Use this if you don't need to return a JSON-formatted result.
 //
 // It can be used in two ways:
 //  1. With a regular query string: ExecuteAthenaQuery(ctx, "SELECT * FROM table")

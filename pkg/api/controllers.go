@@ -1485,6 +1485,17 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
 }
 
+// GetAnalyticsTaskListController godoc
+//
+//	@Summary		Get list of tasks for analytics
+//	@Description	Retrieves a list of tasks from the analytics table
+//	@Tags			Analytics
+//	@Produce		json
+//	@Param			createdAfter	query		string	false	"Created after timestamp as Unix timestamp (seconds since epoch)"
+//	@Success		200				{object}	ApiResponse{body=[]map[string]any}	"List of tasks retrieved successfully"
+//	@Failure		400				{object}	ApiResponse								"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse								"Failed to get list of tasks for analytics"
+//	@Router			/analytics/tasks [get]
 func GetAnalyticsTaskListController(c *gin.Context) {
 	// Get the createdAt parameter from the URL query
 	createdAfterParam := c.Query("createdAfter")
@@ -1558,22 +1569,34 @@ func GetAnalyticsTaskListController(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultSuccessResponse(result))
 }
 
+// GetAnalyticsTaskItemByIdController godoc
+//
+//	@Summary		Get analytics for a task by task ID
+//	@Description	Retrieves analytics for a task by providing the task ID
+//	@Tags			Analytics
+//	@Produce		json
+//	@Param			task-id		path		string	true	"Task ID"
+//	@Param			createdAt	query		string	true	"createdAt timestamp as Unix timestamp (seconds since epoch)"
+//	@Success		200				{object}	ApiResponse{body=map[string]any}	"Analytics for the task retrieved successfully"
+//	@Failure		400				{object}	ApiResponse								"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse								"Failed to get analytics for this task"
+//	@Router			/analytics/task/{task-id} [get]
 func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 	taskId := c.Param("task-id")
-	createdAfterParam := c.Query("createdAfter")
+	createdAtParam := c.Query("createdAt")
 
-	// Require timestamp parameter
-	if createdAfterParam == "" {
-		log.Error().Msg("No createdAfter timestamp provided")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("createdAfter timestamp is required"))
+	// Require timestamp parameter to be used for Athena partitions
+	if createdAtParam == "" {
+		log.Error().Msg("No createdAt timestamp provided")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("createdAt timestamp is required"))
 		return
 	}
 
 	// Parse the timestamp
-	unixTimestamp, err := strconv.ParseInt(createdAfterParam, 10, 64)
+	unixTimestamp, err := strconv.ParseInt(createdAtParam, 10, 64)
 	if err != nil {
-		log.Error().Err(err).Str("createdAfter", createdAfterParam).Msg("Invalid createdAfter format")
-		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid createdAfter format. Use UNIX timestamp"))
+		log.Error().Err(err).Str("createdAt", createdAtParam).Msg("Invalid createdAt format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid createdAt format. Use UNIX timestamp"))
 		return
 	}
 	// Generate date from Unix timestamp for partition predicates
@@ -1643,7 +1666,8 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 		return
 	}
 
-	// Continue with the regular query as before
+	// Calculate the raw score analytics for the task
+	// Provides raw score distribution, average raw score, standard deviation, min, max, 10th percentile, median, and 90th percentile for each completion
 	getAnalyticsTaskQuery := fmt.Sprintf(`
 	WITH
 	  raw_score_table AS (

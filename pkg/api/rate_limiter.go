@@ -25,11 +25,13 @@ var (
 type RateLimiterKey string
 
 const (
-	WorkerRateLimiterKey    RateLimiterKey = "dojo_worker_api:limiter:worker"
-	WriteTaskRateLimiterKey RateLimiterKey = "dojo_worker_api:limiter:task_write"
-	ReadTaskRateLimiterKey  RateLimiterKey = "dojo_worker_api:limiter:task_read"
-	MetricsRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:metrics"
-	GeneralRateLimiterKey   RateLimiterKey = "dojo_worker_api:limiter:general"
+	WorkerRateLimiterKey          RateLimiterKey = "dojo_worker_api:limiter:worker"
+	WriteTaskRateLimiterKey       RateLimiterKey = "dojo_worker_api:limiter:task_write"
+	ReadTaskRateLimiterKey        RateLimiterKey = "dojo_worker_api:limiter:task_read"
+	MetricsRateLimiterKey         RateLimiterKey = "dojo_worker_api:limiter:metrics"
+	GeneralRateLimiterKey         RateLimiterKey = "dojo_worker_api:limiter:general"
+	AthenaReadRateLimiterKey      RateLimiterKey = "dojo_worker_api:limiter:athena_read"
+	AthenaAnalyticsRateLimiterKey RateLimiterKey = "dojo_worker_api:limiter:athena_analytics"
 )
 
 type LimiterConfig struct {
@@ -62,6 +64,14 @@ func WorkerRateLimiter() gin.HandlerFunc {
 	return getRateLimiterMiddleware(WorkerRateLimiterKey)
 }
 
+func AthenaReadRateLimiter() gin.HandlerFunc {
+	return getRateLimiterMiddleware(AthenaReadRateLimiterKey)
+}
+
+func AthenaAnalyticsRateLimiter() gin.HandlerFunc {
+	return getRateLimiterMiddleware(AthenaAnalyticsRateLimiterKey)
+}
+
 func InitializeLimiters() {
 	once.Do(func() {
 		cache := cache.GetCacheInstance()
@@ -91,6 +101,16 @@ func InitializeLimiters() {
 				key:    GeneralRateLimiterKey,
 				rate:   limiter.Rate{Period: 1 * time.Hour, Limit: 3600},
 				prefix: string(GeneralRateLimiterKey),
+			},
+			{
+				key:    AthenaReadRateLimiterKey,
+				rate:   limiter.Rate{Period: 1 * time.Minute, Limit: 30},
+				prefix: string(AthenaReadRateLimiterKey),
+			},
+			{
+				key:    AthenaAnalyticsRateLimiterKey,
+				rate:   limiter.Rate{Period: 1 * time.Minute, Limit: 15},
+				prefix: string(AthenaAnalyticsRateLimiterKey),
 			},
 		}
 
