@@ -1548,7 +1548,7 @@ func GetAnalyticsTaskListController(c *gin.Context) {
 		targetYear, targetMonth, targetDay = daysAgo14.Year(), int(daysAgo14.Month()), daysAgo14.Day()
 	}
 
-	getAnalyticsTaskListQuery = baseQuery + " AND CAST(year AS integer) >= :year AND (CAST(year AS integer) > :year OR CAST(month AS integer) >= :month) AND (CAST(year AS integer) > :year OR CAST(month AS integer) > :month OR CAST(day AS integer) >= :day)"
+	getAnalyticsTaskListQuery = baseQuery + " AND DATE(CONCAT(CAST(year AS VARCHAR), '-', LPAD(CAST(month AS VARCHAR), 2, '0'), '-', LPAD(CAST(day AS VARCHAR), 2, '0'))) >= DATE(CONCAT(CAST(:year AS VARCHAR), '-', LPAD(CAST(:month AS VARCHAR), 2, '0'), '-', LPAD(CAST(:day AS VARCHAR), 2, '0')))"
 	params = append(params,
 		athena.Parameter{Name: "year", Value: targetYear},
 		athena.Parameter{Name: "month", Value: targetMonth},
