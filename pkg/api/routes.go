@@ -64,7 +64,7 @@ func LoginRoutes(router *gin.Engine) {
 		analytics := apiV1.Group("/analytics")
 		{
 			analytics.GET("/task-analytics-list", AthenaReadRateLimiter(), GetAnalyticsTaskListController)
-			analytics.GET("/task-analytics/:task-id", AthenaAnalyticsRateLimiter(), GetAnalyticsTaskItemByIdController)
+			analytics.GET("/task-analytics/:taskId", AthenaAnalyticsRateLimiter(), GetAnalyticsTaskItemByIdController)
 		}
 	}
 }

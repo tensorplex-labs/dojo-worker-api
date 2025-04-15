@@ -1575,14 +1575,14 @@ func GetAnalyticsTaskListController(c *gin.Context) {
 //	@Description	Retrieves analytics for a task by providing the task ID
 //	@Tags			Analytics
 //	@Produce		json
-//	@Param			task-id		path		string	true	"Task ID"
+//	@Param			taskId		path		string	true	"Task ID"
 //	@Param			createdAt	query		string	true	"createdAt timestamp as Unix timestamp (seconds since epoch)"
 //	@Success		200				{object}	ApiResponse{body=map[string]any}	"Analytics for the task retrieved successfully"
 //	@Failure		400				{object}	ApiResponse								"Invalid parameters"
 //	@Failure		500				{object}	ApiResponse								"Failed to get analytics for this task"
-//	@Router			/analytics/task/{task-id} [get]
+//	@Router			/analytics/task/{taskId} [get]
 func GetAnalyticsTaskItemByIdController(c *gin.Context) {
-	taskId := c.Param("task-id")
+	taskId := c.Param("taskId")
 	createdAtParam := c.Query("createdAt")
 
 	// Require timestamp parameter to be used for Athena partitions
@@ -1653,7 +1653,7 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 
 	// Check if the table is empty
 	if rowCountResult == 0 {
-		log.Info().Str("taskId", taskId).Msg("No task found with the provided task-id")
+		log.Info().Str("taskId", taskId).Msg("No task found with the provided taskId")
 
 		// Drop the table before returning
 		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
@@ -1662,7 +1662,7 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop empty analytics task table")
 		}
 
-		c.JSON(http.StatusNotFound, defaultErrorResponse("No task found with the provided task-id"))
+		c.JSON(http.StatusNotFound, defaultErrorResponse("No task found with the provided taskId"))
 		return
 	}
 
