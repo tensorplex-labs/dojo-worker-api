@@ -1519,9 +1519,6 @@ func GetAnalyticsTaskListController(c *gin.Context) {
 		FROM dojo_analytics
 		WHERE 1=1`
 
-	var getAnalyticsTaskListQuery string // the final query to be executed
-	var params []athena.Parameter        // the parameters to be added to the base query
-
 	// Add createdAfter filter (if provided, will return task with createdAt after the provided timestamp)
 	// If no timestamp is provided, will return tasks created in the last 14 days
 	// Must be provided as UNIX timestamp
@@ -1548,17 +1545,15 @@ func GetAnalyticsTaskListController(c *gin.Context) {
 		targetYear, targetMonth, targetDay = daysAgo14.Year(), int(daysAgo14.Month()), daysAgo14.Day()
 	}
 
-	getAnalyticsTaskListQuery = baseQuery + " AND DATE(CONCAT(CAST(year AS VARCHAR), '-', LPAD(CAST(month AS VARCHAR), 2, '0'), '-', LPAD(CAST(day AS VARCHAR), 2, '0'))) >= DATE(CONCAT(CAST(:year AS VARCHAR), '-', LPAD(CAST(:month AS VARCHAR), 2, '0'), '-', LPAD(CAST(:day AS VARCHAR), 2, '0')))"
-	params = append(params,
-		athena.Parameter{Name: "year", Value: targetYear},
-		athena.Parameter{Name: "month", Value: targetMonth},
-		athena.Parameter{Name: "day", Value: targetDay})
+	getAnalyticsTaskListQuery := baseQuery + " AND DATE(CONCAT(CAST(year AS VARCHAR), '-', LPAD(CAST(month AS VARCHAR), 2, '0'), '-', LPAD(CAST(day AS VARCHAR), 2, '0'))) >= DATE(CONCAT(CAST(:year AS VARCHAR), '-', LPAD(CAST(:month AS VARCHAR), 2, '0'), '-', LPAD(CAST(:day AS VARCHAR), 2, '0')))"
+	params := []athena.Parameter{
+		{Name: "year", Value: targetYear},
+		{Name: "month", Value: targetMonth},
+		{Name: "day", Value: targetDay},
+	}
 
 	// Expecting an array of jsons, each json contains a task item
-	var result []map[string]any
-	var err error
-
-	result, err = athena.ProcessAthenaQueryIntoJSON[[]map[string]any](c, getAnalyticsTaskListQuery, params...)
+	result, err := athena.ProcessAthenaQueryIntoJSON[[]map[string]any](c, getAnalyticsTaskListQuery, params...)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get list of tasks for analytics")
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get list of tasks for analytics"))
