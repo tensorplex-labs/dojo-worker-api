@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -268,4 +270,83 @@ func generateUniqueFilename(originalFilename string) string {
 	name := strings.TrimSuffix(originalFilename, ext)
 	timestamp := time.Now().UnixNano()
 	return fmt.Sprintf("%s_%d%s", name, timestamp, ext)
+}
+
+// AthenaConfig holds configuration for Athena queries
+type AthenaConfig struct {
+	Database         string
+	Workgroup        string
+	OutputLocation   string
+	MaxExecutionTime time.Duration
+	PollingInterval  time.Duration
+	MaxRetries       int
+}
+
+// DefaultAthenaConfig creates a configuration with default values
+func DefaultAthenaConfig() AthenaConfig {
+	return AthenaConfig{
+		Database:         "default",
+		Workgroup:        "primary",
+		OutputLocation:   os.Getenv("ATHENA_OUTPUT_LOCATION"),
+		MaxExecutionTime: 60 * time.Second,
+		PollingInterval:  2 * time.Second,
+		MaxRetries:       3,
+	}
+}
+
+// GetAthenaClient creates an AWS Athena client using the provided context
+func GetAthenaClient(ctx context.Context) (*athena.Client, *AthenaConfig, error) {
+	if ctx == nil {
+		return nil, nil, fmt.Errorf("context cannot be nil")
+	}
+
+	// Get default configuration
+	athenaConfig := DefaultAthenaConfig()
+
+	// Validate the required OutputLocation
+	if athenaConfig.OutputLocation == "" {
+		return nil, nil, fmt.Errorf("ATHENA_OUTPUT_LOCATION not set")
+	}
+
+	// Load optional variables
+	if dbName := os.Getenv("ATHENA_DATABASE"); dbName != "" {
+		athenaConfig.Database = dbName
+	}
+
+	if workgroup := os.Getenv("ATHENA_WORKGROUP"); workgroup != "" {
+		athenaConfig.Workgroup = workgroup
+	}
+
+	// Get AWS region
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		return nil, nil, fmt.Errorf("AWS_REGION not set")
+	}
+
+	// Create AWS configuration
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(awsRegion),
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxAttempts(retry.NewStandard(), athenaConfig.MaxRetries)
+		}),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create and return Athena client
+	startTime := time.Now()
+	client := athena.NewFromConfig(awsCfg)
+	createTime := time.Since(startTime)
+
+	log.Info().
+		Str("database", athenaConfig.Database).
+		Str("workgroup", athenaConfig.Workgroup).
+		Str("outputLocation", athenaConfig.OutputLocation).
+		Dur("createTime", createTime).
+		Msg("Athena client created")
+
+	// metrics.RecordDuration("athena.client.create", createTime)
+
+	return client, &athenaConfig, nil
 }
