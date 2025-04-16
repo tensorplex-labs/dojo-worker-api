@@ -1629,18 +1629,23 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 		return
 	}
 
+	// Use defer for robust table cleanup
+	defer func() {
+		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
+		// Use a background context or derive from request if needed for long-running cleanup
+		_, dropErr := athena.ExecuteAthenaQuery(context.Background(), dropTableQuery)
+		if dropErr != nil {
+			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop analytics task table in defer")
+		} else {
+			log.Info().Str("tableName", tableName).Msg("Successfully dropped temporary table in defer")
+		}
+	}()
+
 	// Check if any rows were added to the temporary table
 	rowCountQuery := fmt.Sprintf(`SELECT COUNT(*) as row_count FROM %s`, tableName)
 	rowCountResult, err := athena.ProcessAthenaQueryIntoJSON[int](c, rowCountQuery)
 	if err != nil {
 		log.Error().Err(err).Str("tableName", tableName).Msg("Failed to count rows in filtered table")
-
-		// Drop the table before returning
-		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
-		_, dropErr := athena.ExecuteAthenaQuery(c, dropTableQuery)
-		if dropErr != nil {
-			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop analytics task table after error")
-		}
 
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to verify task existence"))
 		return
@@ -1649,13 +1654,6 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 	// Check if the table is empty
 	if rowCountResult == 0 {
 		log.Info().Str("taskId", taskId).Msg("No task found with the provided taskId")
-
-		// Drop the table before returning
-		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
-		_, dropErr := athena.ExecuteAthenaQuery(c, dropTableQuery)
-		if dropErr != nil {
-			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop empty analytics task table")
-		}
 
 		c.JSON(http.StatusNotFound, defaultErrorResponse("No task found with the provided taskId"))
 		return
@@ -1819,23 +1817,8 @@ func GetAnalyticsTaskItemByIdController(c *gin.Context) {
 	taskAnalyticsItem, err := athena.ProcessAthenaQueryIntoJSON[map[string]any](c, getAnalyticsTaskQuery)
 	if err != nil {
 		log.Error().Err(err).Str("tableName", tableName).Msg("Failed to get analytics for this task")
-
-		// Drop the table before returning
-		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
-		_, dropErr := athena.ExecuteAthenaQuery(c, dropTableQuery)
-		if dropErr != nil {
-			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop analytics task table after query error")
-		}
-
 		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get analytics for this task"))
 		return
-	}
-
-	// Drop the temporary table
-	dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
-	_, dropErr := athena.ExecuteAthenaQuery(c, dropTableQuery)
-	if dropErr != nil {
-		log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop analytics task table")
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(taskAnalyticsItem))
