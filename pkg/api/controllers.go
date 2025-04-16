@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"dojo-api/db"
+	"dojo-api/pkg/athena"
 	"dojo-api/pkg/auth"
 	"dojo-api/pkg/blockchain/siws"
 	"dojo-api/pkg/cache"
@@ -1482,4 +1483,343 @@ func GetCompletedTasksCountByIntervalController(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, defaultSuccessResponse(response))
+}
+
+// GetAnalyticsTaskListController godoc
+//
+//	@Summary		Get list of tasks for analytics
+//	@Description	Retrieves a list of tasks from the analytics table
+//	@Tags			Analytics
+//	@Produce		json
+//	@Param			createdAfter	query		string	false	"Created after timestamp as Unix timestamp (seconds since epoch)"
+//	@Success		200				{object}	ApiResponse{body=[]map[string]any}	"List of tasks retrieved successfully"
+//	@Failure		400				{object}	ApiResponse								"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse								"Failed to get list of tasks for analytics"
+//	@Router			/analytics/tasks [get]
+func GetAnalyticsTaskListController(c *gin.Context) {
+	// Get the createdAt parameter from the URL query
+	createdAfterParam := c.Query("createdAfter")
+
+	// Base query (without day filter)
+	baseQuery := `SELECT
+		ARRAY_AGG(CAST(MAP(
+			ARRAY ['validator_hotkey', 'validator_task_id', 'prompt', 'scored_hotkeys', 'absent_hotkeys', 'num_scored_hotkeys', 'num_absent_hotkeys', 'completion_rate', 'created_at'], 
+			ARRAY [
+				CAST(validator_hotkey AS JSON), 
+				CAST(validator_task_id AS JSON), 
+				CAST(prompt AS JSON), 
+				CAST(scored_hotkeys AS JSON), 
+				CAST(absent_hotkeys AS JSON),
+				CAST(cardinality(scored_hotkeys) AS JSON),
+				CAST(cardinality(absent_hotkeys) AS JSON),
+				CAST(CAST(cardinality(scored_hotkeys) as double) / (cardinality(scored_hotkeys) + cardinality(absent_hotkeys)) * 100 AS JSON),
+				CAST(created_at AS JSON)
+			]
+		) AS JSON)) AS task_item_list
+		FROM dojo_analytics
+		WHERE 1=1`
+
+	// Add createdAfter filter (if provided, will return task with createdAt after the provided timestamp)
+	// If no timestamp is provided, will return tasks created in the last 14 days
+	// Must be provided as UNIX timestamp
+	var targetYear, targetMonth, targetDay int
+	if createdAfterParam != "" {
+		unixTimestamp, err := strconv.ParseInt(createdAfterParam, 10, 64)
+		if err != nil {
+			log.Error().Err(err).Str("createdAfter", createdAfterParam).Msg("Invalid createdAfter format")
+			c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid createdAfter format. Use UNIX timestamp"))
+			return
+		}
+
+		// Generate date from Unix timestamp and add partition predicates
+		targetDate := time.Unix(unixTimestamp, 0).UTC()
+		targetYear, targetMonth, targetDay = targetDate.Year(), int(targetDate.Month()), targetDate.Day()
+
+	} else {
+		// Default to last 14 days if no timestamp is provided
+		log.Debug().Msg("No timestamp provided, using default 14-day filter")
+
+		// Calculate partition values for 14 days ago
+		now := time.Now().UTC()
+		daysAgo14 := now.AddDate(0, 0, -14)
+		targetYear, targetMonth, targetDay = daysAgo14.Year(), int(daysAgo14.Month()), daysAgo14.Day()
+	}
+
+	getAnalyticsTaskListQuery := baseQuery + " AND DATE(CONCAT(CAST(year AS VARCHAR), '-', LPAD(CAST(month AS VARCHAR), 2, '0'), '-', LPAD(CAST(day AS VARCHAR), 2, '0'))) >= DATE(CONCAT(CAST(:year AS VARCHAR), '-', LPAD(CAST(:month AS VARCHAR), 2, '0'), '-', LPAD(CAST(:day AS VARCHAR), 2, '0')))"
+	params := []athena.Parameter{
+		{Name: "year", Value: targetYear},
+		{Name: "month", Value: targetMonth},
+		{Name: "day", Value: targetDay},
+	}
+
+	// Expecting an array of jsons, each json contains a task item
+	result, err := athena.ProcessAthenaQueryIntoJSON[[]map[string]any](c, getAnalyticsTaskListQuery, params...)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get list of tasks for analytics")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get list of tasks for analytics"))
+		return
+	}
+
+	// Return the result directly
+	c.JSON(http.StatusOK, defaultSuccessResponse(result))
+}
+
+// GetAnalyticsTaskItemByIdController godoc
+//
+//	@Summary		Get analytics for a task by task ID
+//	@Description	Retrieves analytics for a task by providing the task ID
+//	@Tags			Analytics
+//	@Produce		json
+//	@Param			taskId		path		string	true	"Task ID"
+//	@Param			createdAt	query		string	true	"createdAt timestamp as Unix timestamp (seconds since epoch)"
+//	@Success		200				{object}	ApiResponse{body=map[string]any}	"Analytics for the task retrieved successfully"
+//	@Failure		400				{object}	ApiResponse								"Invalid parameters"
+//	@Failure		500				{object}	ApiResponse								"Failed to get analytics for this task"
+//	@Router			/analytics/task/{taskId} [get]
+func GetAnalyticsTaskItemByIdController(c *gin.Context) {
+	taskId := c.Param("taskId")
+	createdAtParam := c.Query("createdAt")
+
+	// Require timestamp parameter to be used for Athena partitions
+	if createdAtParam == "" {
+		log.Error().Msg("No createdAt timestamp provided")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("createdAt timestamp is required"))
+		return
+	}
+
+	// Parse the timestamp
+	unixTimestamp, err := strconv.ParseInt(createdAtParam, 10, 64)
+	if err != nil {
+		log.Error().Err(err).Str("createdAt", createdAtParam).Msg("Invalid createdAt format")
+		c.JSON(http.StatusBadRequest, defaultErrorResponse("Invalid createdAt format. Use UNIX timestamp"))
+		return
+	}
+	// Generate date from Unix timestamp for partition predicates
+	targetDate := time.Unix(unixTimestamp, 0).UTC()
+	targetYear, targetMonth, targetDay := targetDate.Year(), int(targetDate.Month()), targetDate.Day()
+
+	// Generate a unique table name using the task ID and a UUID
+	uniqueId := uuid.New().String()
+	tableName := fmt.Sprintf("filtered_dojo_analytics_task_%s_%s",
+		strings.ReplaceAll(taskId, "-", "_"),
+		strings.ReplaceAll(uniqueId, "-", "_"))
+
+	// Ensure table name is valid for Athena
+	if len(tableName) > 128 {
+		tableName = tableName[:128]
+	}
+
+	// Create a task-specific temporary table with partition filters
+	createFilteredDojoAnalyticsTaskQuery := fmt.Sprintf(`CREATE TABLE %s AS 
+        SELECT * FROM dojo_analytics 
+        WHERE validator_task_id = :task_id
+        AND CAST(year AS integer) = :year 
+        AND CAST(month AS integer) = :month 
+        AND CAST(day AS integer) = :day`, tableName)
+
+	// Execute query with parameters including partition predicates
+	_, err = athena.ExecuteAthenaQuery(c, createFilteredDojoAnalyticsTaskQuery,
+		athena.Parameter{Name: "task_id", Value: taskId},
+		athena.Parameter{Name: "year", Value: targetYear},
+		athena.Parameter{Name: "month", Value: targetMonth},
+		athena.Parameter{Name: "day", Value: targetDay})
+	if err != nil {
+		log.Error().Err(err).Str("tableName", tableName).Msg("Failed to create filtered dojo analytics task")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to create filtered dojo analytics task"))
+		return
+	}
+
+	// Use defer for robust table cleanup
+	defer func() {
+		dropTableQuery := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)
+		// Use a background context or derive from request if needed for long-running cleanup
+		_, dropErr := athena.ExecuteAthenaQuery(context.Background(), dropTableQuery)
+		if dropErr != nil {
+			log.Error().Err(dropErr).Str("tableName", tableName).Msg("Failed to drop analytics task table in defer")
+		} else {
+			log.Info().Str("tableName", tableName).Msg("Successfully dropped temporary table in defer")
+		}
+	}()
+
+	// Check if any rows were added to the temporary table
+	rowCountQuery := fmt.Sprintf(`SELECT COUNT(*) as row_count FROM %s`, tableName)
+	rowCountResult, err := athena.ProcessAthenaQueryIntoJSON[int](c, rowCountQuery)
+	if err != nil {
+		log.Error().Err(err).Str("tableName", tableName).Msg("Failed to count rows in filtered table")
+
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to verify task existence"))
+		return
+	}
+
+	// Check if the table is empty
+	if rowCountResult == 0 {
+		log.Info().Str("taskId", taskId).Msg("No task found with the provided taskId")
+
+		c.JSON(http.StatusNotFound, defaultErrorResponse("No task found with the provided taskId"))
+		return
+	}
+
+	// Calculate the raw score analytics for the task
+	// Provides raw score distribution, average raw score, standard deviation, min, max, 10th percentile, median, and 90th percentile for each completion
+	getAnalyticsTaskQuery := fmt.Sprintf(`
+	WITH
+	  raw_score_table AS (
+	    SELECT
+	      validator_task_id,
+	      s.criterion_id,
+	      mr.hotkey,
+	      Cast(
+	        Json_extract_scalar(Json_parse(s.scores), '$.raw_score') AS DECIMAL(5, 2)
+	      ) * 4 AS raw_score
+	    FROM
+	      %s
+	      CROSS JOIN Unnest (miner_responses) AS t (mr)
+	      CROSS JOIN Unnest (mr.scores) AS t (s)
+	  ),
+	  raw_score_distribution_table AS (
+	    SELECT
+	      validator_task_id,
+	      criterion_id,
+	      cast(
+	        array_agg(
+	          map(
+	            array['hotkey', 'raw_score'],
+	            array[hotkey, CAST(raw_score AS varchar)]
+	          )
+	        ) AS json
+	      ) AS raw_score_distribution
+	    FROM
+	      raw_score_table
+	    GROUP BY
+	      validator_task_id,
+	      criterion_id
+	  ),
+	  raw_score_stats_table AS (
+	    SELECT
+	      validator_task_id,
+	      criterion_id,
+	      avg(raw_score) AS average_raw_score,
+	      stddev_samp(raw_score) AS stddev_samp_raw_score,
+	      min(raw_score) AS min_raw_score,
+	      max(raw_score) AS max_raw_score,
+	      approx_percentile(raw_score, 0.1) AS ten_percentile,
+	      approx_percentile(raw_score, 0.5) AS median,
+	      approx_percentile(raw_score, 0.9) AS ninety_percentile
+	    FROM
+	      raw_score_table
+	    GROUP BY
+	      validator_task_id,
+	      criterion_id
+	  ),
+	  raw_score_combined_table AS (
+	    SELECT
+	      s.validator_task_id,
+	      s.criterion_id,
+	      cast(
+	        map(
+	          array[
+	            'raw_score_distribution',
+	            'average_raw_score',
+	            'stddev_samp_raw_score',
+	            'min_raw_score',
+	            'max_raw_score',
+	            'ten_percentile',
+	            'median',
+	            'ninety_percentile'
+	          ],
+	          array[
+	            raw_score_distribution,
+	            cast(average_raw_score as json),
+	            cast(stddev_samp_raw_score as json),
+	            cast(min_raw_score as json),
+	            cast(max_raw_score as json),
+	            cast(ten_percentile as json),
+	            cast(median as json),
+	            cast(ninety_percentile as json)
+	          ]
+	        ) AS json
+	      ) AS score_dict
+	    FROM
+	      raw_score_stats_table s
+	      INNER JOIN raw_score_distribution_table d ON (
+	        s.validator_task_id = d.validator_task_id
+	        AND s.criterion_id = d.criterion_id
+	      )
+	  )
+	SELECT
+	  cast(
+	    map(
+	      array[
+	        'validator_hotkey',
+	        'validator_task_id',
+	        'prompt',
+	        'completions',
+	        'created_at'
+	      ],
+	      array[
+	        CAST(validator_hotkey AS JSON),
+	        CAST(dojo.validator_task_id AS JSON),
+	        CAST(prompt AS JSON),
+	        CAST(
+	          ARRAY_AGG(
+	            CAST(
+	              MAP(
+	                ARRAY[
+	                  'completion_item',
+	                  'ground_truth_rank',
+	                  'model_name',
+	                  'criterion'
+	                ],
+	                array[
+	                  json_parse(c.completion),
+	                  CAST(gt.rank_id AS JSON),
+	                  cast(c.model AS JSON),
+	                  cast(
+	                    ARRAY[
+	                      MAP(
+	                        ARRAY['criterion_id', 'criteria_type', 'score'],
+	                        array[
+	                          CAST(cn.id AS JSON),
+	                          CAST(cn.criteria_type AS JSON),
+	                          rs.score_dict
+	                        ]
+	                      )
+	                    ] AS json
+	                  )
+	                ]
+	              ) AS json
+	            )
+	          ) AS json
+	        ),
+			CAST(created_at AS JSON)
+	      ]
+	    ) AS json
+	  ) AS task
+	FROM
+	  %s dojo
+	  CROSS JOIN unnest (completions) AS t (c)
+	  CROSS JOIN unnest (c.criterion) AS t (cn)
+	  CROSS JOIN unnest (ground_truths) AS t (gt)
+	  LEFT JOIN raw_score_combined_table rs ON (
+	    rs.validator_task_id = dojo.validator_task_id
+	    AND rs.criterion_id = cn.id
+	  )
+	WHERE
+	  1 = 1
+	  AND gt.obfuscated_model_id = c.completion_id
+	GROUP BY
+	  validator_hotkey,
+	  dojo.validator_task_id,
+	  prompt,
+	  created_at
+	`, tableName, tableName)
+
+	taskAnalyticsItem, err := athena.ProcessAthenaQueryIntoJSON[map[string]any](c, getAnalyticsTaskQuery)
+	if err != nil {
+		log.Error().Err(err).Str("tableName", tableName).Msg("Failed to get analytics for this task")
+		c.JSON(http.StatusInternalServerError, defaultErrorResponse("Failed to get analytics for this task"))
+		return
+	}
+
+	c.JSON(http.StatusOK, defaultSuccessResponse(taskAnalyticsItem))
 }

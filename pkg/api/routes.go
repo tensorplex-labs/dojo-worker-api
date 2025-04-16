@@ -61,5 +61,10 @@ func LoginRoutes(router *gin.Engine) {
 			metrics.GET("/average-task-completion-time", GetAvgTaskCompletionTimeController)
 			metrics.GET("/completed-tasks-by-interval", GetCompletedTasksCountByIntervalController)
 		}
+		analytics := apiV1.Group("/analytics")
+		{
+			analytics.GET("/task-analytics-list", AthenaReadRateLimiter(), GetAnalyticsTaskListController)
+			analytics.GET("/task-analytics/:taskId", AthenaAnalyticsRateLimiter(), GetAnalyticsTaskItemByIdController)
+		}
 	}
 }
