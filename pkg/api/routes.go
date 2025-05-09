@@ -9,6 +9,7 @@ import (
 func LoginRoutes(router *gin.Engine) {
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	apiV1 := router.Group("/api/v1")
+	apiV1.Use(ResourceProfiler())
 	{
 		worker := apiV1.Group("/worker")
 		{
