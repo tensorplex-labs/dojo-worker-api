@@ -9,6 +9,7 @@ on:
       - dev
       - staging
       - main
+      - junk/cleanup
 
 jobs:
   docker_publish:
