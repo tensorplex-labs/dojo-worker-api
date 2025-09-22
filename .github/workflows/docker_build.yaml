@@ -14,7 +14,7 @@ on:
 jobs:
   docker_publish:
     name: Docker Build
-    runs-on: self-hosted
+    runs-on: arc-runner-set
     permissions:
       contents: read
       packages: write
